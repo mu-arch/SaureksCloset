@@ -74,3 +74,80 @@ Observed:
 - All generic virtual-display/info fields read by the probe are zero despite the visible staff; routing cannot depend on those fields for this player. Keep using the real inventory item identity as requested, and inspect the player's native virtual getters if renderer-side metadata is needed.
 
 Follow-up local disassembly identifies 0x60b590 as the native move path (thiscall, two stack arguments, ret 8). It chooses storage/hand points via 0x47a070, finds the existing child, retains it (0x710390), detaches (0x713020), attaches (0x712f70), and releases the temporary reference (0x7103a0). It also updates the hand pose. This is the relevant transition path; the earlier 0x47a0c0 loader alone was insufficient. Evidence retained in research/weaponry-captures/native-draw-move.asm. No new hook has been enabled yet.
+
+## 3.4.24 stored bow height
+
+Bows (weapon kind 4/subclass 2, including Laminated Recurve Bow 2507) at
+ranged-back point 27 receive a -0.35 model-unit translation along their
+parent character's up axis. Guns, crossbows, quivers and hand attachments
+retain their existing transforms. The adjustment applies only to a registered
+Closet extra or routed ranged child, in the world and independent previews.
+
+Exact-build evidence: CM2 update 0x714260 takes a matrix, scale vector,
+lighting vector and float (thiscall, ret 16). It multiplies its local +0xBC
+matrix by the input into +0xFC at 0x714389. The recursive child call at
+0x71875C receives the animated attachment matrix. The hook only adjusts a
+local copy at that call site (return 0x718761), using the parent's +0xFC up
+basis so character scale/rotation are preserved. Shared model data, bone
+positions and stored child matrices are never overwritten. No accumulation
+or additional model reload occurs; moving to a hand automatically bypasses
+the adjustment. Both new hook/callsite signatures are verified.
+
+Tests exercise the actual adjustment with Laminated Recurve, gun exclusion,
+world and preview ownership, draw/sheath-point exclusion, unrelated children,
+rotated/scaled parent bases, unchanged input and repeated-frame stability.
+ASan/UBSan simulation passes. The 0.35-unit visual offset is an initial
+adjustment based on the reported high Orc placement; in-game visual fitting
+remains to be checked.
+
+## 3.4.26 stored bow centering
+
+The user confirmed the height correction worked; the original placement
+was also left of center. Keep the -0.35 local-Z offset and add -0.20 local-Y
+(toward character-right) using the parent matrix. This is a separate lateral
+adjustment, not a reversal of the height correction. Scope and draw behavior
+are unchanged. Simulation verifies both offsets, unchanged inputs and centering
+that follows a rotated/scaled character. The exact visual fit needs an in-game
+check, particularly the reported Orc/Laminated Recurve combination.
+
+## 3.4.29 model-authored bow back placement
+
+Replaces the 3.4.24/26 universal lateral/vertical translation. The old point-27
+position minus (0, 0.20, 0.35) cannot center all models: original Y is about
+0.167 for male Gnomes, 0.359 for male Tauren, and 0.194 for female Night Elves.
+The correction also ignored each animated spine's movement.
+
+Vanilla bows such as 2507 have sheath type 0, so the client supplies no dedicated
+stored-bow point. Closet continues using logical point 27 for its ranged slot,
+but now places the bow grip at the character model's authored center-back anchor
+(point 28, normally used for a sheathed shield). Only the translation comes
+from that anchor; the bow retains point 27's animated orientation. A shield
+still owns its independent logical point 28; there is no reattachment, extra
+reference, player-field write, or change to ranged draw/callback behavior.
+
+`tools/audit_bow_attachments.py` reads the installed patch-2, patch and model
+archives in priority order. All 16 playable race/gender M2 files contain point
+28. It validates the lookup, actual ID, bone index and coordinates against
+`tests/bow_attachment_fixtures.h`. No per-race offsets are embedded in the DLL.
+The active parent model supplies its own lookup and animated bone matrix, so
+race overrides, world models and independent outfit previews resolve correctly.
+
+Exact build-5875 layout verified against 0x712CB0, 0x712DE0 and the recursive
+update at 0x71868F..0x718756: model+0x30 -> data+0x130 -> M2 header; attachment
+array at +0x104/+0x108, lookup at +0x10C/+0x110, 48-byte attachment records,
+bone index at record+4, position at +8; animated 64-byte matrices at model+0x94.
+The parent has completed bone evaluation before recursive child updates. The
+replacement translation uses that same space; calling the public position API
+inside this hook could recursively update the parent and also applies a scene
+transform, so the hook only reads the already-computed bone data. Bounds,
+missing-point, ID, finite-value and matrix checks retain the stock placement
+when data is unavailable. No new native calls or hooks are introduced.
+
+Validation: all 16 installed model fixtures; actual hook simulation under
+ASan/UBSan for every model in world and preview contexts, with scale, rotation,
+body movement, preserved orientation, repeated-frame stability, missing data,
+draw exclusion, non-bow exclusion, identity checks and existing ownership tests.
+Weapon routing tests, 37,803 Lua 5.0.3 assertions, real-body regression, installed
+executable signatures and Windows x86 DLL build all pass. This establishes the
+new anchor selection and transforms; live clipping/visual fit still needs an
+in-game check and is not claimed from the simulations.

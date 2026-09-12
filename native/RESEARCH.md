@@ -52,3 +52,71 @@ Renderer 30006 adds an explicitly requested read-only weapon attachment probe. N
 ## 3.4.0 weapon implementation
 
 See WEAPONRY.md and WeaponRenderer.h for the newly enabled, exact-build attachment hooks. Renderer 30400 introduces separate physical positions, native animation-timed routing based on actual equipment, retained extra children and independent preview ownership. Expanded BuildSignatures.h verifies every newly called/hooked native entry point before enabling any hooks. This is implemented and locally simulated, with in-client visual verification still outstanding.
+
+
+## 3.4.22 preview composition correction
+
+A matching live appearance now follows the stock CM2Scene::CloneModel and
+CCharacterComponent clone paths. Matching compares race, sex, skin, face,
+hair style/color and facial features, checks the descriptor model reference,
+and rejects a pending live body revision. Different saved bodies retain the
+independent model/fresh-compositor path. No player fields are changed.
+
+Preview readiness used to mean only that Initialize returned. Build 5875's
+DressUpModel update at 0x504470 calls CCharacterComponent::Update at 0x477860.
+That routine waits for assets (0x476EB0/0x476F30), applies geosets, builds the
+skin texture and returns false at 0x477A5C until ready. The new hook observes
+its result for registered preview compositors; it does not invoke extra
+updates or change the stock update. Signature verification covers the hook.
+
+The addon no longer schedules a second copy after 1.5 seconds with this bridge.
+Normal show/body-change invalidation remains because PlayerModel OnHide releases
+its model and OnShow may create a new stock clone. Renderer 30422 also exposes
+SaureksClosetInspectPreview for /closet diagnose, recording composition status,
+clone/fresh path, actual body fields and pending texture mask.
+
+Validation: Lua 5.0.3 regression suite, native registry/body-match tests, DLL
+cross-compilation and executable signature checks. In-game appearance and
+animation stability still require testing in the Windows client.
+
+## 3.4.28 true appearance field correction
+
+The real-body reader used absolute update-field indices 0xB5/0xB6, which
+are spell-cost multipliers. Their usual float 1.0 bytes decode into zero or
+out-of-range appearance choices, making the Body controls display 1 after
+Use True Model. Build 5875 PLAYER_BYTES and PLAYER_BYTES_2 are 0xC1/0xC2:
+OBJECT_END (6) + UNIT_END relative offset (0xB6) + player offsets 5/6.
+See https://github.com/cmangos/mangos-classic/blob/master/src/game/Entities/UpdateFields.h.
+The snapshot now reads those correct fields; no player fields are written.
+
+Validation: tests/test_native_body.py compiles the production snapshot and
+bodyInfo functions against a synthetic player-field fixture with ordinary
+spell-cost multipliers and distinct real appearance bytes. It fails with the
+previous source and passes after this correction, including character changes
+and valid zero choices. The Lua 5.0.3 suite passes 37,803 assertions, and the
+Windows x86 DLL builds with warnings as errors. In-game validation remains.
+
+## 3.4.30 preview lifecycle and responsiveness (Lua only)
+
+Preview progression now runs on each UI update, separately from the 0.5-second
+world synchronization timer. Renderer-backed previews start copying immediately
+and use native status plus the compositor dirty mask to wait for body/dressing
+completion. A post-dress reveal phase exposes the staged model once, after at
+least one subsequent update; readiness/weapon retries do not repeat Undress.
+Older renderer fallbacks retain their existing bounded timing behavior.
+
+Independent model previews ignore world model notifications when the requested
+body is unchanged. The key includes actual native customization for True Model,
+so actual body changes still invalidate correctly. Moving between wardrobe pages
+keeps the model instance. Resizing between left/doublewide panel registrations
+uses stock SetLeftFrame/SetDoublewideFrame without hiding the wardrobe: the old
+HideUIPanel/ShowUIPanel cycle destroyed native DressUpModel instances on every
+neighbor open/close. Duplicate outfit requests coalesce by effective appearance.
+Late item data retries only the missing item instead of redressing every slot.
+
+Tests simulate delayed native readiness, post-dress dirty textures, sub-0.5-second
+progression, duplicate world notifications, real-body changes, rapid draft/cancel
+sequences, persistent model identity across tab and neighbor changes, one saved
+preview copy per request, and partial item-cache retries. Lua 5.0.3 regression
+suite passes. Native renderer remains 30429; an in-game UI reload loads this fix.
+Actual frame timing and visual appearance still require in-game confirmation.

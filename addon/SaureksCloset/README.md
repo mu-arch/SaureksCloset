@@ -32,6 +32,8 @@ The wardrobe shows your character in a live 3D preview, with armor slots arrange
 
 ![Body and appearance controls beside the character preview](Screenshots/2.png)
 
+**Use True Model** is checked while using your character's real appearance. The controls start with your actual settings. Changing a setting enables body customization and clears the check; clicking **Use True Model** restores your real appearance. Saved looks remember whether they use a custom body.
+
 ### Weaponry
 
 ![Waist, back, shield, ranged weapon, and quiver appearance slots](Screenshots/3.png)
@@ -101,3 +103,18 @@ Several custom weapons can be displayed at once. When you draw weapons, matching
 
 Weaponry is still being refined. Some combinations may clip, and attachment positions cannot yet be adjusted manually. The **Bags** view is a placeholder; bag appearance customization is not available yet.
 
+
+## Settings and updates
+
+The **Settings** tab shows the addon version over the supplied wardrobe artwork.
+Its **Internet Settings** button opens the update-check preference, and **Links**
+opens GitHub, downloads, and support Discord. **Version Details** shows the
+addon and loaded/required DLL versions, along with the update status.
+**Automatically check for updates** is on by default and is saved for your account.
+Uncheck it to disable GitHub checks; the Check for updates button is disabled too.
+
+The addon always checks whether the loaded DLL matches its code. If the files do
+not match, or GitHub has a newer version, chat and the main window title show
+**Update Available**. Open **Settings > Version Details** for version details and the
+download page. Install the addon and DLL from the same release, then fully exit
+WoW and restart through VanillaFixes. Update checks do not install anything.
