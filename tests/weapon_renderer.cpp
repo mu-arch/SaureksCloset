@@ -145,8 +145,38 @@ int main(){
     moveWeaponHook(pointer(player.unit),nullptr,0,1);assert(findChildHook(pointer(player.model),nullptr,30)==staff);
     // The preview has independent instances and cannot alter world ownership.
     previews.entries[0].model=0x6000;previews.entries[0].guid=player.guid;previews.entries[0].token=8;previews.entries[0].status=1;memory[0x6010]=1;
+    // A stock clone carries both native hand/sheath children and addon-owned
+    // storage children, but the copied children have no preview ownership entry.
+    std::vector<std::uintptr_t> inherited;
+    for(unsigned point:{0u,1u,2u,26u,27u,28u,29u,30u,31u,32u,33u}){
+        factory(pointer(0x6000),point,"","",0);
+        inherited.push_back(address(find(pointer(0x6000),point)));
+    }
+    factory(pointer(0x6000),5,"","",0);
+    const auto ornament=find(pointer(0x6000),5);
+    const auto worldHead=memory[player.model+0x1DC];const int worldStaffRefs=refs[address(staff)];
+    discardInheritedPreviewWeapons(player.model); // Never operate on the world.
+    assert(memory[player.model+0x1DC]==worldHead&&refs[address(staff)]==worldStaffRefs);
+    discardInheritedPreviewWeapons(0x6000);
+    for(auto child:inherited)assert(!refs[child]);
+    assert(find(pointer(0x6000),5)==ornament&&refs[address(ornament)]==1);
+    assert(memory[player.model+0x1DC]==worldHead&&refs[address(staff)]==worldStaffRefs);
+    // An unexpected shared source-list pointer must not detach world children.
+    previews.entries[1].model=0x7000;previews.entries[1].guid=player.guid;
+    memory[0x71DC]=worldHead;
+    discardInheritedPreviewWeapons(0x7000);
+    assert(memory[player.model+0x1DC]==worldHead&&refs[address(staff)]==worldStaffRefs);
+    previews.entries[1]={};memory[0x71DC]=0;
     auto preview=request(8,s);assert(setWeapons(&preview)==1);auto* pc=weaponContext(0x6000);assert(pc);
     for(unsigned i=0;i<7;i++)assert(pc->extra[i]&&pc->extra[i]!=c->extra[i]);
+    discardInheritedPreviewWeapons(0x6000); // Repeated cleanup preserves owned extras.
+    for(unsigned i=0;i<7;i++){
+        unsigned children=0;
+        for(auto child=memory[0x61DC];child;child=memory[child+0x1E4])
+            if(memory[child+0x1D0]==weaponPoints[i])++children;
+        assert(children==1&&refs[address(pc->extra[i])]==2);
+    }
+
     // Use each race/gender's actual authored anchor, with independent world
     // and preview model data. Animated bone matrices include scale/orientation.
     const std::array<float,16> identity{{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};

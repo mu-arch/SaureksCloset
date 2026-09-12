@@ -131,6 +131,7 @@ static void __fastcall matrixHook(void* model,void*,const float* matrix){
     }
     matrixOriginal(model,matrix);
 }
+static void discardInheritedPreviewWeapons(std::uintptr_t model);
 // Only the explicit, bracketed addon SetUnit call can substitute a preview model.
 static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned flags){
     if(previewArmed&&previewThread==GetCurrentThreadId()&&
@@ -139,7 +140,9 @@ static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned f
         Player p;
         if(!snapshot(p)||p.model!=reinterpret_cast<std::uintptr_t>(source)||!p.component||!previews.freeEntry())return nullptr;
         std::array<std::uint32_t,91> descriptor;
-        const bool copyAppearance=read(p.component+0x18,descriptor)&&descriptor[8]==p.model&&
+        unsigned loaded=0,dirty=1;
+        const bool copyAppearance=read(p.model+0x10,loaded)&&loaded&&
+            read(p.component+0x10,dirty)&&!dirty&&read(p.component+0x18,descriptor)&&descriptor[8]==p.model&&
             previewBodyMatches(descriptor,requestedPreview)&&(!applies(p)||state.composed==state.revision);
         // Preserve the stock model/texture clone when the requested body is already visible.
         // A different saved body still needs its own model and fresh compositor.
@@ -168,6 +171,10 @@ static bool __fastcall cloneComponentHook(void* component,void*,void* model,void
         // Caller already retained the model for this component, just as for the stock clone.
         // Initialize a new compositor; never copy source texture caches for a different race.
         const bool ok=entry->copiedAppearance?cloneComponentOriginal(component,model,source):initOriginal(component,copy.data());
+        // The stock clone can include world weapons at our custom sheath points.
+        // Undress only knows stock points, so strip those inherited children
+        // before the preview is dressed with its independently owned weapons.
+        if(ok&&entry->copiedAppearance)discardInheritedPreviewWeapons(entry->model);
         entry->component=ok?reinterpret_cast<std::uintptr_t>(component):0;
         entry->status=ok?0:-1;return ok;
     }
@@ -315,7 +322,7 @@ static int __fastcall weaponryProbe(void* L){
 }
 #include "WeaponRenderer.h"
 #include "UpdateChecker.h"
-static int __fastcall version(void* L){return result(L,30433);}
+static int __fastcall version(void* L){return result(L,30436);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){

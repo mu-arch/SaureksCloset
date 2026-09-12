@@ -155,14 +155,17 @@ function V:CopyWardrobeModel(target)
     target.weaponToken=nil
     if self:WeaponRendererAvailable() then
         local c=VanityStudioCharacter;local b=c.enabled and c.body or self:NativeBody()
-        if not b then error("Player appearance not ready") end
+        if not b then return false end
         local started,status=pcall(SaureksClosetBeginPreview,b.race,b.sex,b.skin,b.face,b.hairStyle,b.hairColor,b.facial)
+        if started and (status==-1 or status==-4) then return false end
         if not started or status~=1 then error("Preview is not ready") end
         local copied=pcall(target.SetUnit,target,"player")
         local ended,token=pcall(SaureksClosetEndPreview)
+        if copied and ended and token==-1 then return false end
         if not copied or not ended or not token or token<1 then error("Preview could not be created") end
         target.weaponToken=token
     else target:SetUnit("player") end
+    return true
 end
 function V:DressWeaponPlacements(target,weapons,overrides)
     if not target.weaponToken or not self:WeaponRendererAvailable() then return true end

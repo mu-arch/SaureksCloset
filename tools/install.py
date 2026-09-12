@@ -78,8 +78,8 @@ def install(game,source,bridge,backup_root,receipt_path,expected_client_sha):
         assert digest(native)==digest(bridge) and config.read_bytes()==updated
         assert digest(game/'WoW.exe')==expected_client_sha
         files[DLL]=digest(native)
-        receipt={'name':"Saurek's Closet",'version':'3.4.35','installed_to':str(target),'backup':str(backup),
-                 'body_bridge':'Addon 3.4.35 requires renderer 30433. Replace both addon and DLL, then fully restart through VanillaFixes. Settings contains automatic update checks and loaded-DLL compatibility details.',
+        receipt={'name':"Saurek's Closet",'version':'3.4.36','installed_to':str(target),'backup':str(backup),
+                 'body_bridge':'Addon 3.4.36 requires renderer 30436. Replace both addon and DLL, then fully restart through VanillaFixes. Settings contains automatic update checks and loaded-DLL compatibility details.',
                  'loader_updated':updated!=original,'migrated_saved_variables':[str(new) for old,new in migrations],
                  'files_sha256':files}
         receipt_path.write_text(json.dumps(receipt,indent=2)+'\n')

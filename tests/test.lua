@@ -973,6 +973,30 @@ do
     check(copies==count+1,"Changed real appearance invalidates the preview once")
     SaureksClosetRealBody=reader
     V:RefreshPreviewForModelEvent();for i=1,3 do frame() end
+    -- Race/gender rebuilds temporarily remove the live model. Keep retrying the
+    -- staging copy without another appearance edit and without recopying once ready.
+    local originalBegin=SaureksClosetBeginPreview
+    local pendingCopies=3
+    SaureksClosetBeginPreview=function(...)
+        if pendingCopies>0 then pendingCopies=pendingCopies-1;return -1 end
+        return originalBegin(unpack(arg))
+    end
+    local requestedRace=V:BodyDraft().race==2 and 1 or 2
+    count=copies
+    V:SelectBodyValue("race",requestedRace)
+    for i=1,30 do frame() end
+    check(copies==count+1 and V.model.previewBody.race==requestedRace and not V.previewBaseDirty,"Race changes retry temporary model unavailability and reveal the new race without a second edit")
+    pendingCopies=2;count=copies
+    local requestedSex=V:BodyDraft().sex==0 and 1 or 0
+    V:SelectBodyValue("sex",requestedSex)
+    for i=1,30 do frame() end
+    check(copies==count+1 and V.model.previewBody.sex==requestedSex and not V.previewBaseDirty,"Gender changes retry and settle with one successful model copy")
+    SaureksClosetBeginPreview=function() return -1 end
+    V:InvalidatePreviewModel(0,true)
+    for i=1,520 do frame() end
+    check(not V.previewBaseDirty and V.previewError,"Unavailable models stop retrying after the loading deadline")
+    SaureksClosetBeginPreview=originalBegin
+    V:InvalidatePreviewModel(0,true);for i=1,4 do frame() end
     -- Stock panel resizing must not invoke native model OnHide at all.
     local hide=V.frame.Hide;local hides=0
     V.frame.Hide=function(self) hides=hides+1;hide(self) end

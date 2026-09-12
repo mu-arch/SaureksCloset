@@ -25,6 +25,10 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 
 ![Wardrobe and searchable item appearance browser](Screenshots/1.png)
 
+### Expanded weapon positioning, and fixes for Blizzard's 1.12 weapon sheathing bugs
+
+![Wardrobe and searchable item appearance browser](Screenshots/5.png)
+
 ### Body customization
 
 ![Body and appearance controls beside the character preview](Screenshots/2.png)

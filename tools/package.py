@@ -2,7 +2,7 @@
 from pathlib import Path
 import hashlib,json,zipfile,re
 root=Path(__file__).resolve().parents[1]
-version='3.4.35'
+version='3.4.36'
 addon=root/'addon/SaureksCloset'
 assert re.search(r'V.VERSION = "([^"]+)"',(addon/'Core.lua').read_text()).group(1)==version
 assert re.search(r'## Version: ([^\n]+)',(addon/'SaureksCloset.toc').read_text()).group(1)==version
@@ -18,6 +18,7 @@ payload.update({'SaureksCloset.dll':root/'native/SaureksCloset.dll','README.md':
                 'LICENSE.txt':root/'native/LICENSE','MINHOOK-LICENSE.txt':root/'native/vendor/minhook/LICENSE.txt'})
 payload.update({'install.py':root/'tools/install.py','CLIENT-BUILD.json':root/'native/CLIENT-BUILD.json'})
 payload['update-version.txt']=root/'update-version.txt'
+payload.update({str(p.relative_to(root)):p for p in (root/'Screenshots').glob('*.png')})
 payload['Interface/AddOns/SaureksCloset/Installation instructions/SaureksCloset.dll']=root/'native/SaureksCloset.dll'
 # Publish the existing README exactly as written by its owner.
 readme_bytes=payload['README.md'].read_bytes()
@@ -28,7 +29,7 @@ with zipfile.ZipFile(root/f'SaureksCloset-{version}.zip','w',zipfile.ZIP_DEFLATE
   else:z.write(p,name)
  z.writestr('FILES-SHA256.json',json.dumps(manifest,indent=2)+'\n')
 source={'update-version.txt':root/'update-version.txt'}
-for folder in ['addon','native','tools','tests']:
+for folder in ['addon','native','tools','tests','Screenshots']:
  for p in (root/folder).rglob('*'):
   if not p.is_file() or any(part in ('build','__pycache__','.git') for part in p.parts):continue
   if p.suffix in ('.dll','.o','.pyc') or p.name in ('BodyState.h','body_state.cpp'):continue

@@ -98,6 +98,21 @@ static void releaseExtras(WeaponContext& c){
 static void forgetWeapons(std::uintptr_t model){
     if(auto* c=weaponContext(model)){releaseExtras(*c);*c={};}
 }
+static void discardInheritedPreviewWeapons(std::uintptr_t parent){
+    const auto* preview=previews.find(parent);
+    if(!preview||preview->guid!=getPlayer())return;
+    const auto* context=weaponContext(parent);
+    std::uintptr_t child=0;read(parent+0x1DC,child);
+    for(unsigned n=0;child&&n<128;++n){
+        unsigned point=0;std::uintptr_t owner=0,next=0;
+        if(!read(child+0x1CC,owner)||owner!=parent||!read(child+0x1D0,point)||!read(child+0x1E4,next))return;
+        const bool weaponPoint=point<=2||(point>=26&&point<=33);
+        if(weaponPoint&&(!context||!ownedExtra(*context,reinterpret_cast<void*>(child))))
+            detachChild(reinterpret_cast<void*>(child));
+        if(next==child)return;
+        child=next;
+    }
+}
 static void* __fastcall findChildHook(void* parent,void*,unsigned point){
     const auto* c=weaponContext(reinterpret_cast<std::uintptr_t>(parent));
     if(!c)return findChildOriginal(parent,point);

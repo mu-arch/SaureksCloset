@@ -84,14 +84,22 @@ function V:RefreshPreview()
     local now=GetTime()
     if self.previewBaseDirty then
         if now<(self.previewCaptureAt or 0) then return end
-        local ok=pcall(function()
+        local ok,copied=pcall(function()
             V.previewBuffer:SetAlpha(0)
-            V:CopyWardrobeModel(V.previewBuffer)
+            if not V:CopyWardrobeModel(V.previewBuffer) then return false end
             V.previewBuffer:SetRotation(V.model.rotation or .61)
             V.previewDressingModel=V.previewBuffer
+            return true
         end)
+        -- Changing race/sex temporarily removes the world model. A failed first
+        -- snapshot is pending work, not a reason to abandon the requested body.
+        if ok and not copied and now<(self.previewDeadline or now) then
+            self.previewCaptureAt=now+.05
+            self.previewNote:SetText("Loading preview...")
+            return
+        end
         self.previewBaseDirty=nil
-        if not ok then
+        if not ok or not copied then
             self.previewError="Preview unavailable. Close and reopen the wardrobe."
             self.previewNote:SetText(self.previewError);self.model:SetAlpha(1);return
         end

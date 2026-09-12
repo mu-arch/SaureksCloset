@@ -1,5 +1,5 @@
 local V=VanityStudio
-V.REQUIRED_RENDERER=30433
+V.REQUIRED_RENDERER=30436
 V.websiteURLs={"https://github.com/mu-arch/SaureksCloset","https://github.com/mu-arch/SaureksCloset/releases","https://discord.gg/6mfxCdNbM6"}
 function V:VersionParts(version)
     local _,_,major,minor,patch=string.find(version or "","^(%d+)%.(%d+)%.(%d+)$")

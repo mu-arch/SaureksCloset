@@ -64,6 +64,7 @@ function V:UpdateOutfitPreview()
             local copied=pcall(self.outfitBuffer.SetUnit,self.outfitBuffer,"player")
             -- Always end the scope, including Lua API errors. It cannot affect later SetUnit calls.
             local ended,token=pcall(SaureksClosetEndPreview)
+            if copied and ended and token==-1 then return end
             if not copied or not ended or not token or token<1 then
                 self.detailPending=nil;self.detailPreviewNote:SetText("Outfit preview unavailable. Close and reopen this outfit.");return
             end

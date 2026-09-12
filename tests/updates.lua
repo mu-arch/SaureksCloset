@@ -2,8 +2,8 @@ local now,starts,enabled,remote=0,0,false,{1}
 local messages={}
 GetTime=function() return now end
 VanityStudioDB={}
-VanityStudio={VERSION="3.4.33",Message=function(self,value) table.insert(messages,value) end}
-SaureksClosetRendererVersion=function() return 30433 end
+VanityStudio={VERSION="3.4.36",Message=function(self,value) table.insert(messages,value) end}
+SaureksClosetRendererVersion=function() return VanityStudio.REQUIRED_RENDERER end
 SaureksClosetSetUpdateChecks=function(value) enabled=value==1;return 1 end
 SaureksClosetStartUpdateCheck=function() assert(enabled);starts=starts+1;return 1 end
 SaureksClosetPollUpdateCheck=function() return unpack(remote) end
@@ -15,21 +15,21 @@ V:InitializeUpdates()
 assert(VanityStudioDB.autoCheckUpdates==true and enabled and starts==0)
 assert(not V.updateMismatch and table.getn(messages)==0)
 now=3;V:UpdateUpdates();assert(starts==1 and V.updatePolling)
-remote={2,3,4,34,30434,0};now=3.3;V:UpdateUpdates()
+remote={2,3,4,37,V.REQUIRED_RENDERER+1,0};now=3.3;V:UpdateUpdates()
 assert(V.remoteUpdateAvailable and title.text=="Saurek's Closet (Update Available)")
 assert(table.getn(messages)==1)
 V:CheckForUpdates(true);now=4;V:UpdateUpdates();assert(table.getn(messages)==1)
 V:CheckForUpdates(true);local before=starts
 V:SetAutoUpdates(false);remote={2,9,9,9,90909,0};now=50;V:UpdateUpdates()
-assert(not enabled and not V.updatePolling and starts==before and V.remoteRelease.addon=="3.4.34")
+assert(not enabled and not V.updatePolling and starts==before and V.remoteRelease.addon=="3.4.37")
 assert(V:CheckForUpdates(true)==false and starts==before)
 V:InitializeUpdates();now=100;V:UpdateUpdates();assert(not enabled and starts==before)
 -- Local mismatch detection stays enabled even when networking is disabled.
-SaureksClosetRendererVersion=function() return 30432 end
+SaureksClosetRendererVersion=function() return V.REQUIRED_RENDERER-1 end
 V:CheckLocalRenderer();assert(V.updateMismatch and table.getn(messages)==2)
 V:CheckLocalRenderer();assert(table.getn(messages)==2)
 SaureksClosetRendererVersion=nil;V:CheckLocalRenderer();assert(V.updateMismatch and table.getn(messages)==3)
-SaureksClosetRendererVersion=function() return 30433 end
+SaureksClosetRendererVersion=function() return V.REQUIRED_RENDERER end
 V:CheckLocalRenderer();assert(not V.updateMismatch)
 V:SetAutoUpdates(true);now=104;remote={2,3,4,15,30400,0};V:UpdateUpdates()
 assert(not V.remoteUpdateAvailable and title.text=="Saurek's Closet")

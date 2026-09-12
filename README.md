@@ -23,19 +23,23 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 
 ### Wardrobe & item browser
 
-![Wardrobe and searchable item appearance browser](addon/SaureksCloset/Screenshots/1.png)
+![Wardrobe and searchable item appearance browser](Screenshots/1.png)
+
+### Expanded weapon positioning, and fixes for Blizzard's 1.12 weapon sheathing bugs
+
+![Wardrobe and searchable item appearance browser](Screenshots/5.png)
 
 ### Body customization
 
-![Body and appearance controls beside the character preview](addon/SaureksCloset/Screenshots/2.png)
+![Body and appearance controls beside the character preview](Screenshots/2.png)
 
 ### Weaponry
 
-![Waist, back, shield, ranged weapon, and quiver appearance slots](addon/SaureksCloset/Screenshots/3.png)
+![Waist, back, shield, ranged weapon, and quiver appearance slots](Screenshots/3.png)
 
 ### Saved Looks
 
-![Saved looks with portraits, customized-slot counts, and an active-look indicator](addon/SaureksCloset/Screenshots/4.png)
+![Saved looks with portraits, customized-slot counts, and an active-look indicator](Screenshots/4.png)
 
 ## Installation
 

@@ -5,7 +5,7 @@ V.bodyLabels={skin="Skin color",face="Face",hairStyle="Hair style",hairColor="Ha
 function V:BodyAvailable()
     if type(SaureksClosetRendererVersion)~="function" then return false end
     local ok,version=pcall(SaureksClosetRendererVersion)
-    return ok and (version==30001 or version==30002 or version==30003 or version==30004 or version==30005 or version==30006 or version==30400 or version==30422 or version==30424 or version==30426 or version==30428 or version==30429 or version==30431 or version==30432 or version==30433) and type(SaureksClosetSetAppearance)=="function" and type(SaureksClosetClearAppearance)=="function" and type(SaureksClosetRealBody)=="function"
+    return ok and (version==30001 or version==30002 or version==30003 or version==30004 or version==30005 or version==30006 or version==30400 or version==30422 or version==30424 or version==30426 or version==30428 or version==30429 or version==30431 or version==30432 or version==30433 or version==30436) and type(SaureksClosetSetAppearance)=="function" and type(SaureksClosetClearAppearance)=="function" and type(SaureksClosetRealBody)=="function"
 end
 function V:BodyValues(body,key)
     local d=VanityStudioBodyOptions[body.race] and VanityStudioBodyOptions[body.race][body.sex]
