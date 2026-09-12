@@ -1,6 +1,6 @@
 <div align="center">
 
-# Saurek's Closet - A new look for your adventures in Azeroth
+# Saurek's Closet - A damn fine 1.12.1 Morph
 
 **World of Warcraft 1.12.1 · Build 5875**
 
@@ -52,9 +52,13 @@ The wardrobe shows your character in a live 3D preview, with armor slots arrange
 ### Install the release
 
 1. Fully close World of Warcraft and extract the release ZIP.
+
 2. Copy the `SaureksCloset` folder into `Interface/AddOns/`.
+
 3. Open the addon's **[Installation instructions](Installation%20instructions/)** folder. Copy the included `SaureksCloset.dll` into your main game folder, beside `WoW.exe`. The short [setup guide](Installation%20instructions/READ%20ME.txt) explains where to drag it.
+
 4. Add `SaureksCloset.dll` to `dlls.txt`, after `VanillaHelpers.dll`. Keep any other DLL entries you already use.
+
 5. Launch through VanillaFixes, enable **Saurek's Closet** in the AddOns list, and log in.
 
 Your installation should contain:
