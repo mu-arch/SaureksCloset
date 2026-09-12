@@ -1,0 +1,22 @@
+SAUREK'S CLOSET - DLL INSTALLATION
+
+1. Fully close World of Warcraft.
+2. Open your main WoW folder: the folder containing WoW.exe.
+3. Copy or drag SaureksCloset.dll from this folder into that WoW folder.
+   Replace the existing SaureksCloset.dll if asked.
+   It belongs beside WoW.exe, NOT inside Interface or AddOns.
+4. Open dlls.txt in the WoW folder. Add this line after VanillaHelpers.dll
+   if it is not already there:
+
+   SaureksCloset.dll
+
+   Keep your other DLL entries. Do not add duplicate entries.
+5. Start WoW through VanillaFixes and enable Saurek's Closet in AddOns.
+
+VanillaFixes and VanillaHelpers must already be installed.
+This is for the supported Windows 1.12.1 client, build 5875.
+
+The addon folder stays in Interface/AddOns/SaureksCloset.
+The DLL copy in this instructions folder is only for installation;
+WoW will not load it from here. Reloading the UI is not enough after
+replacing a DLL - fully restart the game.

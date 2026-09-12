@@ -1,0 +1,8 @@
+{
+  "source": "https://github.com/cmangos/classic-db",
+  "revision": "22b51464f1625f6ef6275771de1f5466c6f5d19e",
+  "dump": "Full_DB/ClassicDB_1_12_1_z2815.sql.gz",
+  "sha256": "4f92db520868ab4e566726f68b5b2e380ae781209beaf22237b4f7f04600d0c0",
+  "count": 9665,
+  "scope": "Visible vanilla armor, shirts, tabards, shields and weapons; includes unused/developer entries present in the database. Server custom items are not included."
+}

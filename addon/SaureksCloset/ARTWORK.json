@@ -1,0 +1,230 @@
+[
+  {
+    "source": "about_bg.png",
+    "source_sha256": "f501b6a3e80f78da15bc973be4196ae150e669f85a2bf11084163cc8141e1260",
+    "texture": "About.tga",
+    "crop": [
+      0,
+      142,
+      1086,
+      1306
+    ],
+    "size": [
+      512,
+      512
+    ],
+    "bytes": 786476
+  },
+  {
+    "source": "logo.png",
+    "source_sha256": "6b49a1e397e7164966aa9fc938eda5ee73a27ece8cf6c405c2153efdf76fc174",
+    "texture": "Logo.tga",
+    "crop": [
+      102,
+      88,
+      1152,
+      1138
+    ],
+    "size": [
+      128,
+      128
+    ],
+    "bytes": 65580
+  },
+  {
+    "source": "mini_logo.png",
+    "source_sha256": "dcea13b2e81b1bb2be273f270ae4c1a0f7bd10f707bfb40ccb599e9e2ad577eb",
+    "texture": "MiniLogo.tga",
+    "crop": [
+      6,
+      14,
+      1224,
+      1232
+    ],
+    "size": [
+      64,
+      64
+    ],
+    "bytes": 16428
+  },
+  {
+    "source": "tools/build_hidden_slot_icon.py",
+    "generated": true,
+    "source_sha256": "d9f317bbe668a659ce7964324fa81226c25c5f57f1868aae1d7fefad8757d79a",
+    "texture": "HiddenSlot.tga",
+    "size": [
+      64,
+      64
+    ],
+    "bytes": 16428
+  },
+  {
+    "source": "tools/build_visible_slot_icon.py",
+    "generated": true,
+    "source_sha256": "877d3feaa1ad11dc315b8f99f5fad1a84e6b95edc56c49fc745eeec175f2f73b",
+    "texture": "VisibleSlot.tga",
+    "size": [
+      64,
+      64
+    ],
+    "bytes": 16428
+  },
+  {
+    "source": "BG4.png",
+    "source_sha256": "7763cb32764131a29225d1290ea1ebe02f48983dfe8a1a9a1b1d77cd08243a43",
+    "texture": "Main.tga",
+    "layout": "Centered crop: 47,0,1206,1254",
+    "size": [
+      512,
+      512
+    ],
+    "bytes": 786476
+  },
+  {
+    "source": "armor_slot_decorations.png",
+    "source_sha256": "099f788a1c0c436b922dd5a559219aeb1c9cbac418dc21fc654f19345cc7f62f",
+    "texture": "ArmorSlots.tga",
+    "layout": "Complete decoration frame: 0,0,1200,1310",
+    "size": [
+      512,
+      512
+    ],
+    "bytes": 1048620
+  },
+  {
+    "source": "armor_slot_decorations.png",
+    "source_sha256": "099f788a1c0c436b922dd5a559219aeb1c9cbac418dc21fc654f19345cc7f62f",
+    "texture": "ArmorSlotsTL.tga",
+    "layout": "Quadrant of ArmorSlots.tga",
+    "crop": [
+      0,
+      0,
+      256,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188
+  },
+  {
+    "source": "armor_slot_decorations.png",
+    "source_sha256": "099f788a1c0c436b922dd5a559219aeb1c9cbac418dc21fc654f19345cc7f62f",
+    "texture": "ArmorSlotsTR.tga",
+    "layout": "Quadrant of ArmorSlots.tga",
+    "crop": [
+      256,
+      0,
+      512,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188
+  },
+  {
+    "source": "armor_slot_decorations.png",
+    "source_sha256": "099f788a1c0c436b922dd5a559219aeb1c9cbac418dc21fc654f19345cc7f62f",
+    "texture": "ArmorSlotsBL.tga",
+    "layout": "Quadrant of ArmorSlots.tga",
+    "crop": [
+      0,
+      256,
+      256,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188
+  },
+  {
+    "source": "armor_slot_decorations.png",
+    "source_sha256": "099f788a1c0c436b922dd5a559219aeb1c9cbac418dc21fc654f19345cc7f62f",
+    "texture": "ArmorSlotsBR.tga",
+    "layout": "Quadrant of ArmorSlots.tga",
+    "crop": [
+      256,
+      256,
+      512,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188
+  },
+  {
+    "source": "generic_window_decoration.png",
+    "source_sha256": "1a6701c27cabe54939046769e1f90f2e9f181fef9b50f7cbfeeb4077e56a26f1",
+    "texture": "GenericTrimTL.tga",
+    "layout": "Complete frame, scaled to 512x512 and split into four panels; source alpha preserved",
+    "crop": [
+      0,
+      0,
+      256,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188
+  },
+  {
+    "source": "generic_window_decoration.png",
+    "source_sha256": "1a6701c27cabe54939046769e1f90f2e9f181fef9b50f7cbfeeb4077e56a26f1",
+    "texture": "GenericTrimTR.tga",
+    "layout": "Complete frame, scaled to 512x512 and split into four panels; source alpha preserved",
+    "crop": [
+      256,
+      0,
+      512,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188
+  },
+  {
+    "source": "generic_window_decoration.png",
+    "source_sha256": "1a6701c27cabe54939046769e1f90f2e9f181fef9b50f7cbfeeb4077e56a26f1",
+    "texture": "GenericTrimBL.tga",
+    "layout": "Complete frame, scaled to 512x512 and split into four panels; source alpha preserved",
+    "crop": [
+      0,
+      256,
+      256,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188
+  },
+  {
+    "source": "generic_window_decoration.png",
+    "source_sha256": "1a6701c27cabe54939046769e1f90f2e9f181fef9b50f7cbfeeb4077e56a26f1",
+    "texture": "GenericTrimBR.tga",
+    "layout": "Complete frame, scaled to 512x512 and split into four panels; source alpha preserved",
+    "crop": [
+      256,
+      256,
+      512,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188
+  }
+]

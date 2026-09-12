@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="VANITYSTUDIO_TOGGLE" header="VANITYSTUDIO">VanityStudio:Toggle()</Binding>
+  <Binding name="VANITYSTUDIO_PREVIOUS">VanityStudio:CycleOutfit(-1)</Binding>
+  <Binding name="VANITYSTUDIO_NEXT">VanityStudio:CycleOutfit(1)</Binding>
+</Bindings>

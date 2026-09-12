@@ -1,0 +1,15 @@
+# Local build products and private game files
+.DS_Store
+__pycache__/
+*.pyc
+*.o
+/native/build/
+/research/
+/backups/
+/INSTALL-RECEIPT.json
+*.zip
+*.dll
+!/addon/SaureksCloset/Installation instructions/SaureksCloset.dll
+WTF/
+WDB/
+*.exe
