@@ -64,6 +64,8 @@ function methods:SetValue(v)
     if self.scripts.OnValueChanged then local old=this;this=self;self.scripts.OnValueChanged();this=old end
 end
 function methods:GetValue() return self.value end
+function methods:SetChecked(value) self.checked=value and true or false end
+function methods:GetChecked() return self.checked and 1 or nil end
 function methods:IsOwned() return false end
 function methods:GetButtonState() return "NORMAL" end
 function methods:ClearModel() self.clears=(self.clears or 0)+1;self.loaded=nil end
@@ -205,6 +207,7 @@ dofile("addon/SaureksCloset/ItemIcons.lua")
 dofile("addon/SaureksCloset/BodyData.lua")
 dofile("addon/SaureksCloset/WeaponData.lua")
 dofile("addon/SaureksCloset/Core.lua")
+dofile("addon/SaureksCloset/Updates.lua")
 dofile("addon/SaureksCloset/Weaponry.lua")
 dofile("addon/SaureksCloset/Body.lua")
 dofile("addon/SaureksCloset/Preview.lua")
@@ -215,6 +218,7 @@ local V=VanityStudio
 VanityStudioDB={outfits={["Legacy armor"]={[1]=16955}}}
 event="ADDON_LOADED"; arg1="SaureksCloset"; V.events.scripts.OnEvent()
 check(V.ready,"Addon initialization")
+check(V:UsingTrueModel() and VanityStudioCharacter.body==nil,"First run defaults to True Model without creating a body override")
 check(VanityStudioDB.outfits["Legacy armor"].version==2 and VanityStudioDB.outfits["Legacy armor"].slots[1]==16955,"Legacy outfits migrate without losing armor")
 check(table.getn(VanityStudioCatalog)==9665,"Complete pinned catalog")
 local head=V.slots[1][1][1]
@@ -263,14 +267,14 @@ VanityStudioDB.favorites[head]=true
 check(table.getn(V:Filter(1,"",nil,nil,true))==1,"Favorite filter")
 for _,item in ipairs(V:Filter(5,"",4,404,false)) do check(item[4]==4 and item[6]==4,"Quality and material filters") end
 V:Toggle(true)
-check(V.tabButtons.character:GetText()=="Wardrobe" and V.tabButtons.outfits:GetText()=="Saved Looks" and V.tabButtons.about:GetText()=="About","Primary tabs use the new navigation labels")
+check(V.tabButtons.character:GetText()=="Wardrobe" and V.tabButtons.outfits:GetText()=="Saved Looks" and V.tabButtons.settings:GetText()=="Settings","Primary tabs use the new navigation labels")
 local savedTab=V.tabButtons.outfits
 local initialTabWidth=savedTab:GetWidth()
 for i=1,3 do savedTab:Hide();savedTab:Show() end
 check(savedTab:GetWidth()==initialTabWidth and getglobal(savedTab:GetName().."Text"):GetWidth()>=savedTab:GetTextWidth()+12,"Saved Looks retains full single-line text width and padding across repeated shows")
 click(V.wardrobeSelector)
-check(table.getn(menuEntries)==4 and menuEntries[3].text=="Weaponry" and menuEntries[4].text=="Bags" and not menuEntries[1].isTitle and menuEntries[1].text=="Outfit" and menuEntries[1].checked and menuEntries[2].text=="Body","Wardrobe selector shows Outfit and Race with the active choice checked")
-click(getglobal("DropDownList1Button2"))
+check(table.getn(menuEntries)==4 and menuEntries[2].text=="Weaponry" and menuEntries[4].text=="Bags" and not menuEntries[1].isTitle and menuEntries[1].text=="Outfit" and menuEntries[1].checked and menuEntries[3].text=="Body","Wardrobe selector orders Outfit, Weaponry, Body, Bags with the active choice checked")
+click(getglobal("DropDownList1Button3"))
 check(V.tab=="body" and V.pagesByName.body:IsVisible() and V.wardrobeSelectorLabel:GetText()=="Body" and not DropDownList1:IsShown(),"Race selection switches pages and closes the menu")
 click(V.tabButtons.outfits)
 check(V.tab=="outfits" and not V.wardrobeSelectorBox:IsVisible(),"Saved Looks hides the wardrobe selector")
@@ -278,8 +282,8 @@ click(V.tabButtons.character)
 check(V.tab=="body" and V.wardrobeSelectorBox:IsVisible(),"Returning to Wardrobe restores its selected page")
 click(V.wardrobeSelector);click(getglobal("DropDownList1Button1"))
 check(V.tab=="armor" and V.pagesByName.armor:IsVisible() and V.wardrobeSelectorLabel:GetText()=="Outfit","Outfit choice returns to the outfit editor")
-click(V.tabButtons.about)
-check(V.pagesByName.about:IsVisible() and not V.wardrobeSelectorBox:IsVisible(),"About hides the wardrobe selector")
+click(V.tabButtons.settings)
+check(V.pagesByName.settings:IsVisible() and not V.wardrobeSelectorBox:IsVisible(),"Settings hides the wardrobe selector")
 click(V.tabButtons.character)
 click(V.wardrobeSelector);HideUIPanel(V.frame)
 check(not DropDownList1:IsShown(),"Closing Wardrobe dismisses the page dropdown")
@@ -298,19 +302,25 @@ local manifest=assert(io.open("addon/SaureksCloset/SaureksCloset.toc","r"))
 local manifestText=manifest:read("*a");manifest:close()
 local _,_,releaseVersion=string.find(manifestText,"## Version: ([^\n]+)")
 check(V.VERSION==releaseVersion,"Loaded code version matches the release manifest")
-check(V.aboutVersion:GetText()=="- Version "..releaseVersion.." -","About displays the loaded release even when client metadata is stale")
-V:SetTab("about")
-check(V.aboutMaxOffset>0 and V.aboutScroll:IsVisible(),"Long About copy has a visible scrollbar")
-V:SetAboutOffset(-100);check(V.aboutOffset==0 and V.aboutScrollUp.disabled,"About scrolling clamps at the top")
-click(V.aboutScrollDown);check(V.aboutOffset==32 and V.aboutViewport.verticalScroll==32,"About arrow scrolls the clipped content")
-arg1=-1;V.pagesByName.about.scripts.OnMouseWheel()
-check(V.aboutOffset==80,"About supports mouse-wheel scrolling")
-V.aboutScroll:SetValue(V.aboutMaxOffset)
-check(V.aboutOffset==V.aboutMaxOffset and V.aboutScrollDown.disabled,"Dragging to the end disables the bottom arrow")
-V:SetAboutOffset(99999);check(V.aboutOffset==V.aboutMaxOffset,"About cannot scroll past the final paragraph")
-local aboutText="";for _,block in ipairs(V.aboutBlocks) do aboutText=aboutText..block.text:GetText().."\n" end
-check(string.find(aboutText,"Welcome, traveler!",1,true) and string.find(aboutText,"6mfxCdNbM6",1,true) and string.find(aboutText,"- Yours, Saurek",1,true),"About includes the supplied welcome, support invite and signature")
-V:SetAboutOffset(0);V:SetTab("armor")
+check(V.settingsVersion:GetText()=="Version "..releaseVersion,"Settings displays the loaded release even when client metadata is stale")
+V:SetTab("settings")
+click(V.settingsNavigationButtons.privacy)
+check(V.settingsInfoWindow:IsShown() and V.infoPages.privacy:IsVisible(),"Internet Settings opens a separate window")
+check(V.autoUpdatesCheckbox:IsVisible(),"Automatic update preference is visible in Internet Settings")
+check(not V.infoPages.about and not V.pagesByName.about and not V.aboutBlocks,"About page and content are removed")
+check(V.autoUpdatesCheckbox:GetChecked()==1,"Automatic checks are checked on first installation")
+V.autoUpdatesCheckbox:SetChecked(nil);click(V.autoUpdatesCheckbox)
+check(VanityStudioDB.autoCheckUpdates==false and V.checkUpdatesButton.disabled and not V.updateDue,"Unchecking automatic updates disables and unschedules network checks")
+V.autoUpdatesCheckbox:SetChecked(true);click(V.autoUpdatesCheckbox)
+check(VanityStudioDB.autoCheckUpdates==true and not V.checkUpdatesButton.disabled and V.updateDue,"Checking automatic updates re-enables checks")
+click(V.settingsNavigationButtons.updates)
+check(V.infoPages.updates:IsVisible() and not V.infoPages.privacy:IsVisible() and not V.autoUpdatesCheckbox:IsVisible(),"Version Details opens directly and keeps the preference in Internet Settings")
+check(V.settingsInfoWindow.title:GetText()=="Version Details","Version window has its own title")
+click(V.settingsNavigationButtons.links)
+check(V.infoPages.links:IsVisible() and V.websiteAddress:GetText()==V.websiteURLs[1],"Links page exposes the verified project address")
+click(V.settingsInfoWindow.close)
+check(not V.settingsInfoWindow:IsShown() and V.frame:IsShown(),"Closing the information window leaves the main addon window open")
+V:SetTab("armor")
 check(V.frame.width==384 and V.frame.height==512,"Native character-sheet dimensions")
 check(V.frame.scripts.OnDragStart==nil,"Main window is fixed")
 check(V.model and V.model:IsVisible(),"DressUpModel restored")
@@ -454,7 +464,7 @@ function SaureksClosetSetAppearance(race,sex,skin,face,hair,color,facial)
 end
 function SaureksClosetClearAppearance() renderedBody=nil;return 1 end
 check(V:BodyAvailable(),"Shipped renderer API enables body controls")
-for _,compatible in ipairs({30001,30002,30003,30004,30005,30006,30400}) do
+for _,compatible in ipairs({30001,30002,30003,30004,30005,30006,30400,30422,30424,30426}) do
     testedRenderer=compatible;check(V:BodyAvailable(),"Released compatible renderer enables body customization")
 end
 for _,incompatible in ipairs({0,30000,30007,40000,"30400"}) do
@@ -622,6 +632,66 @@ check(VanityStudioCharacter.body.race==arrowRace and not V.editingBody,"Failed a
 bodyFailure=nil
 click(V.realBodyButton)
 check(VanityStudioCharacter.body==nil and renderedBody==nil,"Reset body still restores the native appearance")
+check(V:UsingTrueModel() and V.trueModelCheck:IsShown() and V.trueModelLabel:GetText()=="Use True Model","Real body is an explicit checked control")
+local nativeBodyReader=SaureksClosetRealBody
+local originalCharacter=V:Copy(VanityStudioCharacter)
+local trueBody=V:NormalizeBody({race=2,sex=0})
+for _,key in ipairs(V.bodyKeys) do
+    local values=V:BodyValues(trueBody,key);trueBody[key]=values[table.getn(values)]
+end
+SaureksClosetRealBody=function() return trueBody.race,trueBody.sex,trueBody.skin,trueBody.face,trueBody.hairStyle,trueBody.hairColor,trueBody.facial end
+local callsBeforeTrueBody=bodyCalls
+V.trueBody={race=1,sex=0,skin=0,face=0,hairStyle=0,hairColor=0,facial=0}
+V.bodyControlValues=V:Copy(V.trueBody)
+V:RefreshBody()
+for _,key in ipairs({"race","sex","skin","face","hairStyle","hairColor","facial"}) do
+    check(V.bodyControlValues[key]==trueBody[key],"True Model explicitly sets every control value from the current character")
+end
+check(V:BodyDraft().race==2 and not VanityStudioCharacter.body and bodyCalls==callsBeforeTrueBody,"Opening Body uses the real Orc without enabling customization")
+for _,key in ipairs(V.bodyKeys) do check(V:BodyDraft()[key]==trueBody[key],"True Model preserves the player's actual appearance settings") end
+V:SelectBodyValue("race",2)
+check(V:UsingTrueModel() and bodyCalls==callsBeforeTrueBody,"Selecting the existing real race does not create an override")
+click(V.realBodyButton)
+check(V:UsingTrueModel() and bodyCalls==callsBeforeTrueBody,"Clicking the checked True Model control is idempotent")
+local previousSkin=trueBody.skin;trueBody.skin=255
+check(V:NativeBody().skin==255,"Real player data is never silently replaced by catalog defaults")
+trueBody.skin=previousSkin
+SaureksClosetRealBody=function() return -1 end
+click(V.realBodyButton)
+V:RefreshBody()
+check(V:BodyDraft()==nil and V.bodyRows.race.button.disabled,"Unavailable real data waits instead of inventing a default human")
+check(not V:SelectBodyValue("hairStyle",1) and V:UsingTrueModel(),"Editing before real data loads cannot enable a default body")
+SaureksClosetRealBody=function() return trueBody.race,trueBody.sex,trueBody.skin,trueBody.face,trueBody.hairStyle,trueBody.hairColor,trueBody.facial end
+local bodyTickArg=arg1;arg1=.5;V.events.scripts.OnUpdate();arg1=bodyTickArg
+check(not V.trueBodyPending and V.bodyControlValues and V.bodyControlValues.race==2,"A late character-data arrival populates the controls without reopening the page")
+V:RefreshBody();click(V.bodyRows.skin.next)
+check(not V:UsingTrueModel() and not V.trueModelCheck:IsShown() and VanityStudioCharacter.body.race==2,"First real change clears the check and starts from the actual Orc")
+local customizedLook=V:CurrentLook();check(customizedLook.body~=nil,"Customized saved looks retain body settings")
+local clearBody=SaureksClosetClearAppearance
+SaureksClosetClearAppearance=function() return -4 end
+click(V.realBodyButton)
+check(VanityStudioCharacter.body~=nil and not V.trueModelCheck:IsShown(),"Failed reset preserves customization and does not falsely check True Model")
+SaureksClosetClearAppearance=clearBody
+local armorBeforeReset=VanityStudioCharacter.selected;local weaponsBeforeReset=VanityStudioCharacter.weapons
+click(V.realBodyButton)
+check(V:UsingTrueModel() and V.trueModelCheck:IsShown() and V:BodyDraft().skin==trueBody.skin,"True Model resets controls and restores the check")
+for _,key in ipairs({"race","sex","skin","face","hairStyle","hairColor","facial"}) do
+    check(V.bodyControlValues[key]==trueBody[key] and V.trueBody[key]==trueBody[key],"Reset repopulates all seven appearance values from the character")
+end
+-- Reset must re-read even when already checked, not reuse a previous snapshot.
+trueBody=V:NormalizeBody({race=4,sex=1,skin=2,face=3,hairStyle=4,hairColor=3,facial=0})
+click(V.realBodyButton)
+for _,key in ipairs({"race","sex","skin","face","hairStyle","hairColor","facial"}) do
+    check(V.bodyControlValues[key]==trueBody[key],"Repeated True Model reset replaces every value with the latest real character data")
+end
+check(V:CurrentLook().body==nil and VanityStudioCharacter.selected==armorBeforeReset and VanityStudioCharacter.weapons==weaponsBeforeReset,"Real-body looks save without body overrides and reset preserves armor and weapons")
+VanityStudioDB.outfits["True model regression"]=V:CurrentLook()
+VanityStudioDB.outfits["Custom model regression"]=customizedLook
+check(V:LoadOutfit("Custom model regression") and not V.trueModelCheck:IsShown(),"Loading a custom-body look restores the unchecked state")
+check(V:LoadOutfit("True model regression") and V.trueModelCheck:IsShown(),"Loading a real-body look restores the checked state")
+VanityStudioDB.outfits["True model regression"]=nil;VanityStudioDB.outfits["Custom model regression"]=nil
+VanityStudioCharacter=originalCharacter;SaureksClosetRealBody=nativeBodyReader;V:Sync();V:Refresh()
+
 V:SetTab("armor")
 -- Simulate an asynchronous player-model clone that initially contains default robes.
 local setUnit=methods.SetUnit;local undress=methods.Undress
@@ -644,7 +714,7 @@ local function previewTick()
         end
     end
     V:UpdatePreviewLoading()
-    check(V.model.alpha~=0 and not V.model.pendingPreviewModel,"Visible model never disappears or shows an unfinished clone")
+    check((V.model.alpha==0 and (V.previewBaseDirty or V.previewDressAt)) or (V.model.alpha~=0 and not V.model.pendingPreviewModel),"Opening stays hidden while loading; a visible model never exposes an unfinished clone")
 end
 V:Select(1,head);V:Select(5,0);V:SetEnabled(true)
 for i=1,8 do previewTick() end
@@ -676,6 +746,13 @@ check(not V.previewBaseDirty,"Other units cannot reset the player's preview")
 local savedArg=arg1;event="UNIT_MODEL_CHANGED";arg1="player";V.events.scripts.OnEvent();arg1=savedArg
 check(V.previewBaseDirty,"Player model events schedule a fresh clone")
 for i=1,8 do previewTick() end
+-- A compositor-aware bridge must not replace a finished model on a timer.
+SaureksClosetInspectPreview=function() return 1 end
+V:InvalidatePreviewModel(0,true)
+local trackedClones=clones
+for i=1,10 do previewTick() end
+check(clones==trackedClones+1 and not V.previewRecoveries,"Tracked preview composes once without a delayed replacement")
+SaureksClosetInspectPreview=nil
 methods.SetUnit=setUnit;methods.Undress=undress
 V:OpenBrowser(1)
 check(V.searchHint:IsShown() and V.query=="" and V.searchHint:GetText()=="Search Item DB...","Correct placeholder is visible but never becomes the search query")
@@ -806,13 +883,13 @@ check(weaponWorld[3]==beforeWorld[3] and table.getn(calls)==callsBefore,"Browsin
 check(V.model.weaponToken and V.model.weaponToken>0,"Wardrobe preview has an independently owned model token")
 check(not scopeArmed,"Wardrobe preview always closes the native copy scope")
 local last=weaponCalls[table.getn(weaponCalls)]
-check(last.token>0 and last.values[3]==0,"Preview API receives the draft layout independently")
+check(last.token>0 and last.values[3]==35,"Clearing the draft appearance previews the equipped staff independently")
 V:CloseBrowser();V:SetEnabled(false)
 for i=1,7 do check(weaponWorld[i]==0,"Toggle removes all attached cosmetic weapons") end
 V:SetEnabled(true)
 for i,slot in ipairs(V.weaponOrder) do check(weaponWorld[i]==weaponIDs[slot],"Toggle restores all saved attachments") end
 V:ClearAll()
-for i=1,7 do check(weaponWorld[i]==0,"Reset clears native attachments") end
+for i=1,7 do check(weaponWorld[i]==(i==3 and 35 or 0),"Reset clears customs and restores the equipped staff") end
 -- Ranged appearance alone stays on the back; no fake equipped weapon is reported.
 V:Select(106,weaponIDs[106]);check(V:PreviewWeaponRoutes(VanityStudioCharacter.weapons)[18]==nil,"Cosmetic ranged weapon is not drawn without real ranged equipment")
 V:ClearAll();V:Select(16,35)
@@ -820,6 +897,115 @@ check(V:Select(101,weaponIDs[101]),"A legacy weapon look can be edited with phys
 check(not VanityStudioCharacter.selected[16] and VanityStudioCharacter.weapons[103]==35,"Legacy staff is moved to a back position before clearing its old inventory override")
 for _,call in ipairs(calls) do check(call.slot<100,"Physical positions never reach SetUnitVisibleItemID") end
 V:ClearAll();real[16]=nil;real[18]=nil
+
+-- Reported client failure: real sword 4939 and bow 2507 disappear when stored.
+do
+    V:ClearAll();real[16]=4939;real[18]=2507
+    V:SyncWeapons()
+    check(weaponWorld[3]==4939 and weaponWorld[6]==2507,"Real sword and bow receive independent back homes without any custom selections")
+    check(not next(VanityStudioCharacter.weapons),"Equipped fallbacks never become saved transmogs")
+    local defaults=V:PreviewWeapons();local routes=V:PreviewWeaponRoutes(defaults)
+    check(defaults[103]==4939 and defaults[106]==2507 and routes[16]==103 and routes[18]==106,"Wardrobe routes real items once instead of also using native TryOn placements")
+    local quiver=V.slots[107][1][1]
+    V:Select(107,quiver)
+    check(weaponWorld[3]==4939 and weaponWorld[6]==2507 and weaponWorld[7]==quiver,"Forced quiver preserves both real stored weapons")
+    V:Select(106,2506)
+    check(weaponWorld[6]==2506,"Explicit compatible bow appearance replaces the real bow")
+    V:ClearSlot(106)
+    check(weaponWorld[6]==2507 and not VanityStudioCharacter.weapons[106],"Clearing bow transmog restores actual bow without saving it")
+    local equippedBefore=real[18];real[18]=2506;V:SyncWeapons()
+    check(weaponWorld[6]==2506,"Changing real equipment updates fallback without an appearance edit")
+    real[18]=equippedBefore
+    V:SetEnabled(false)
+    for i=1,7 do check(weaponWorld[i]==0,"Disabling releases custom and fallback routes") end
+    V:SetEnabled(true)
+    check(weaponWorld[3]==4939 and weaponWorld[6]==2507,"Re-enabling repairs actual weapon storage")
+    check(not V:EffectiveWeapons({}, {[16]=0,[18]=0})[106] and not V:EffectiveWeapons({}, {[16]=0,[18]=0})[103],"Explicit legacy hides suppress equipped fallback")
+    local savedLook={slots={},weapons={}}
+    local outfitWeapons=V:EffectiveWeapons(savedLook.weapons,savedLook.slots)
+    check(outfitWeapons[103]==4939 and outfitWeapons[106]==2507 and not next(savedLook.weapons),"Uncustomized outfit previews use real weapons without modifying the outfit")
+    real[16]=25;real[17]=25;real[18]=nil
+    local dual=V:EffectiveWeapons({})
+    check(dual[101]==25 and dual[102]==25,"Identical dual-wield items each retain a separate storage home")
+    real[17]=143
+    local shield=V:EffectiveWeapons({})
+    check(shield[102]==25 and shield[105]==143,"Equipped shield and one-handed weapon use separate positions")
+    real[16]=999999;real[17]=nil
+    check(not next(V:EffectiveWeapons({})),"Unknown real items are left to the client without guessed models")
+    real[16]=nil;real[18]=nil;V:ClearAll()
+end
+
+-- Preview scheduling: one copy, native composition gates, no event/timer snaps.
+do
+    V:CloseOutfitDetails();V:CloseBrowser();V:SetTab("armor")
+    local originalSetUnit=methods.SetUnit;local originalUndress=methods.Undress
+    local originalStatus=SaureksClosetPreviewStatus;local originalInspect=SaureksClosetInspectPreview
+    local copies,dresses=0,0;local ready=false;local dirty=0
+    function methods:SetUnit(unit) copies=copies+1;originalSetUnit(self,unit) end
+    function methods:Undress() dresses=dresses+1;originalUndress(self) end
+    function SaureksClosetPreviewStatus(token) return ready and 1 or 0 end
+    function SaureksClosetInspectPreview(token) return ready and 1 or 0,1,1,0,0,0,0,0,0,dirty end
+    local function frame()
+        now=now+.016
+        local old=arg1;arg1=.016;V.events.scripts.OnUpdate();arg1=old
+    end
+    V:HidePreviewUntilReady();V:InvalidatePreviewModel(.25,true);V:RefreshPreview()
+    check(copies==1,"Tracked preview starts immediately without the quarter-second delay")
+    local before=dresses
+    for i=1,4 do frame();V:RefreshPreviewForModelEvent() end
+    check(copies==1 and dresses==before and V.model.alpha==0,"Duplicate world notifications cannot restart an unfinished independent preview")
+    ready=true;frame()
+    check(dresses==before+1 and V.previewReveal and V.model.alpha==0,"Preview advances within a screen frame, then waits after dressing before reveal")
+    dirty=1;frame();check(V.model.alpha==0,"A dirty outfit compositor is not exposed")
+    dirty=0;frame()
+    check(V.model.alpha==1 and not V.previewDressAt and not V.previewReveal,"Finished preview is revealed exactly once")
+    local settled=V.model;local count=copies;before=dresses
+    for i=1,10 do V:RefreshPreviewForModelEvent();frame() end
+    V:SetTab("body");V:SetTab("weaponry");V:SetTab("armor");frame()
+    check(copies==count and dresses==before and V.model==settled,"Same-body notifications and wardrobe page changes preserve the finished model")
+    V:DraftSlot(1,head);V:DraftSlot(1,other);V:CancelDraft();V:RefreshPreview()
+    for i=1,3 do frame() end
+    check(copies==count and not V.previewReveal and V.previewSignature,"Rapid item changes and cancellation settle without another model copy")
+    -- A real appearance change still requests one fresh model.
+    local reader=SaureksClosetRealBody
+    SaureksClosetRealBody=function() return 2,0,1,2,3,4,5 end
+    V:RefreshPreviewForModelEvent();for i=1,3 do frame() end
+    check(copies==count+1,"Changed real appearance invalidates the preview once")
+    SaureksClosetRealBody=reader
+    V:RefreshPreviewForModelEvent();for i=1,3 do frame() end
+    -- Stock panel resizing must not invoke native model OnHide at all.
+    local hide=V.frame.Hide;local hides=0
+    V.frame.Hide=function(self) hides=hides+1;hide(self) end
+    count=copies
+    V:OpenBrowser(1);V:CloseBrowser();for i=1,3 do frame() end
+    check(hides==0 and copies==count,"Opening/closing the item browser keeps the wardrobe and its model alive")
+    -- Saved-outfit loads use the same readiness gate and coalesce identical work.
+    V:OpenOutfitDetails("Seven placements")
+    ready=false;count=copies;frame()
+    for i=1,4 do V:StartOutfitPreview();frame() end
+    check(copies==count+1 and V.outfitModel.alpha==0,"Saved outfit creates one hidden copy despite repeated loading requests")
+    ready=true;frame();dirty=1;frame()
+    check(V.detailPending and V.detailPending.phase=="reveal" and V.outfitModel.alpha==0,"Saved outfit remains hidden until its dressed textures finish")
+    dirty=0;frame()
+    check(not V.detailPending and V.outfitModel.alpha==1,"Saved outfit reveals a finished model")
+    count=copies;before=dresses
+    for i=1,10 do V:StartOutfitPreview();frame() end
+    check(copies==count and dresses==before,"Repeated saved-outfit refresh requests leave a completed preview alone")
+    local info=GetItemInfo
+    GetItemInfo=function(id) if id==head then return nil end return info(id) end
+    V.detailMissing={[head]=true};V.detailItemRetries=0;V.detailRetryAt=now
+    frame();check(dresses==before,"Missing saved-outfit items retry without undressing the whole model")
+    V:CloseOutfitDetails()
+    check(hides==0,"Opening/closing saved previews never hides the wardrobe for layout")
+    V.frame.Hide=hide
+    V.previewWaiting={[head]=true};V.previewRequests[head]={last=now-3,attempts=1}
+    before=dresses;frame()
+    check(dresses==before,"Missing wardrobe items retry without undressing the whole model")
+    GetItemInfo=info
+    frame()
+    methods.SetUnit=originalSetUnit;methods.Undress=originalUndress
+    SaureksClosetPreviewStatus=originalStatus;SaureksClosetInspectPreview=originalInspect
+end
 
 local seen={}
 for _,item in ipairs(VanityStudioCatalog) do

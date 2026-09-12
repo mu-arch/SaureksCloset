@@ -2,7 +2,7 @@
 VanityStudio = { index = {}, slots = {}, applied = {}, pending = {}, errors = {} }
 local V = VanityStudio
 -- Read from reloaded code; client addon metadata can retain the startup version.
-V.VERSION = "3.4.15"
+V.VERSION = "3.4.34"
 V.UNSAVED = {} -- Runtime key; the single draft itself lives in character saved variables.
 V.slotOrder = {1,3,15,4,5,19,9,10,6,7,8,16,17,18}
 V.slotNames = {[1]="Head",[3]="Shoulders",[4]="Shirt",[5]="Chest",[6]="Waist",[7]="Legs",[8]="Feet",[9]="Wrists",[10]="Hands",[15]="Back",[16]="Main hand",[17]="Off hand",[18]="Ranged",[19]="Tabard"}
@@ -94,9 +94,14 @@ function V:Initialize()
         if not outfit.slots then VanityStudioDB.outfits[name] = {version=2,slots=self:Copy(outfit)} end
     end
     if c.body then c.body = self:NormalizeBody(c.body) end
+    -- First run has no body override. Populate real appearance values as soon
+    -- as the player is available, without activating body customization.
+    self.trueBody=nil;self.bodyControlValues=nil
+    self:RefreshTrueBody()
     if c.outfitDirty then self:TrackUnsaved() end
     self.ready = true
     self:CreateLauncher()
+    self:InitializeUpdates()
 end
 
 -- Three states: nil removes the override; 0 explicitly hides; positive ID replaces it.
@@ -380,6 +385,7 @@ SlashCmdList["VANITYSTUDIO"] = function(msg)
     elseif msg == "retry" then V:Retry()
     elseif msg == "weaponscan" then V:StartWeaponryCapture()
     elseif msg == "diagnose" then V:Diagnose()
+    elseif msg == "updates" then V:Toggle(true);V:OpenInfoPage("updates")
     elseif msg == "home" then V:Toggle(true)
     else V:Toggle() end
 end
@@ -395,9 +401,10 @@ V.events:SetScript("OnEvent", function()
     elseif V.ready and event == "UNIT_PORTRAIT_UPDATE" and arg1 == "player" then
         V:RefreshPortraits()
     elseif V.ready and event == "UNIT_MODEL_CHANGED" and arg1 == "player" then
-        V:RefreshPortraits();V:InvalidatePreviewModel(.25,true)
+        V:RefreshTrueBody();V:RefreshBody()
+        V:RefreshPortraits();V:RefreshPreviewForModelEvent()
     elseif V.ready and (event == "PLAYER_ENTERING_WORLD" or (event == "UNIT_INVENTORY_CHANGED" and arg1 == "player")) then
-        if event == "PLAYER_ENTERING_WORLD" then V.applied = {}; V.appliedRace = nil end
+        if event == "PLAYER_ENTERING_WORLD" then V.applied = {}; V.appliedRace = nil;V:RefreshTrueBody();V:RefreshBody() end
         if event == "PLAYER_ENTERING_WORLD" then V:RefreshPortraits();V:InvalidatePreviewModel(.25,true) end
         V.needsSync = true
         if V.outfitDetails and V.outfitDetails:IsShown() then V:StartOutfitPreview() end
@@ -406,10 +413,15 @@ end)
 local elapsed = 0
 V.events:SetScript("OnUpdate", function()
     if not V.ready then return end
+    V:UpdateUpdates()
     if V.weaponryCapture then V:UpdateWeaponryCapture() end
+    V:UpdatePreviewLoading()
     elapsed = elapsed + arg1
     if elapsed < .5 then return end
     elapsed = 0
+    if V.trueBodyPending and V:BodyAvailable() and V:RefreshTrueBody() then
+        V:RefreshBody()
+    end
     local pending = false
     for slot,p in pairs(V.pending) do
         if GetTime() - p.started < 11 or GetItemInfo(p.id) then pending = true end
@@ -419,6 +431,5 @@ V.events:SetScript("OnUpdate", function()
         V:Sync()
         V:Refresh()
     end
-    if next(VanityStudioCharacter.weapons or {}) then V:SyncWeapons() end
-    V:UpdatePreviewLoading()
+    if VanityStudioCharacter.enabled or next(VanityStudioCharacter.weapons or {}) then V:SyncWeapons() end
 end)

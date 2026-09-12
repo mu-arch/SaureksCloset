@@ -47,9 +47,11 @@ struct State {
 using CloneModel=void* (__thiscall *)(void*,void*,unsigned);
 using CreateModel=void* (__thiscall *)(void*,const char*,unsigned);
 using CloneComponent=bool (__thiscall *)(void*,void*,void*);
+using UpdateComponent=bool (__thiscall *)(void*,int);
 using DestroyModel=void (__thiscall *)(void*);
 static CloneModel cloneModelOriginal=nullptr;
 static CloneComponent cloneComponentOriginal=nullptr;
+static UpdateComponent updateComponentOriginal=nullptr;
 static DestroyModel destroyModelOriginal=nullptr;
 static const auto createModel=reinterpret_cast<CreateModel>(0x707350);
 static const auto releaseModel=reinterpret_cast<DestroyModel>(0x7103A0);
@@ -72,10 +74,12 @@ struct Player {
 static bool snapshot(Player& p){
     p.guid=getPlayer();if(!p.guid)return false;
     p.unit=reinterpret_cast<std::uintptr_t>(objectPtr(0x10,nullptr,p.guid,0));
+    // Build 5875: PLAYER_BYTES = OBJECT_END (6) + UNIT_END (0xB6) + 5.
+    // 0xB5/0xB6 are spell-cost multipliers, not player appearance fields.
     unsigned type=0;std::uint64_t guid=0;
     return p.unit&&read(p.unit+0x14,type)&&type==4&&read(p.unit+8,p.fields)&&p.fields&&
         read(p.fields,guid)&&guid==p.guid&&read(p.fields+0x83*4,p.display)&&read(p.fields+0x84*4,p.native)&&
-        read(p.fields+0x24*4,p.identity)&&read(p.fields+0xB5*4,p.body)&&read(p.fields+0xB6*4,p.facial)&&
+        read(p.fields+0x24*4,p.identity)&&read(p.fields+0xC1*4,p.body)&&read(p.fields+0xC2*4,p.facial)&&
         read(p.unit+0xD8,p.model)&&read(p.unit+0xD30,p.component);
 }
 static bool applies(const Player& p){
@@ -134,9 +138,16 @@ static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned f
         previewArmed=false;
         Player p;
         if(!snapshot(p)||p.model!=reinterpret_cast<std::uintptr_t>(source)||!p.component||!previews.freeEntry())return nullptr;
-        // The stock scene factory owns allocation/loading; the UI owns the returned reference.
-        void* model=createModel(scene,requestedPreview.model()->filename,flags);
-        if(model)previewToken=previews.bind(reinterpret_cast<std::uintptr_t>(model),p.guid,requestedPreview);
+        std::array<std::uint32_t,91> descriptor;
+        const bool copyAppearance=read(p.component+0x18,descriptor)&&descriptor[8]==p.model&&
+            previewBodyMatches(descriptor,requestedPreview)&&(!applies(p)||state.composed==state.revision);
+        // Preserve the stock model/texture clone when the requested body is already visible.
+        // A different saved body still needs its own model and fresh compositor.
+        void* model=copyAppearance?cloneModelOriginal(scene,source,flags):createModel(scene,requestedPreview.model()->filename,flags);
+        if(model){
+            previewToken=previews.bind(reinterpret_cast<std::uintptr_t>(model),p.guid,requestedPreview);
+            if(auto* entry=previews.find(reinterpret_cast<std::uintptr_t>(model)))entry->copiedAppearance=copyAppearance;
+        }
         return model;
     }
     return cloneModelOriginal(scene,source,flags);
@@ -150,12 +161,28 @@ static bool __fastcall cloneComponentHook(void* component,void*,void* model,void
            !read(reinterpret_cast<std::uintptr_t>(source)+0x18,descriptor)){
             entry->status=-1;releaseModel(model);return false;
         }
+        if(entry->copiedAppearance&&!previewBodyMatches(descriptor,entry->body)){
+            entry->status=-1;releaseModel(model);return false;
+        }
         const auto copy=previewDescriptor(descriptor,entry->body,static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(model)));
         // Caller already retained the model for this component, just as for the stock clone.
         // Initialize a new compositor; never copy source texture caches for a different race.
-        const bool ok=initOriginal(component,copy.data());entry->status=ok?1:-1;return ok;
+        const bool ok=entry->copiedAppearance?cloneComponentOriginal(component,model,source):initOriginal(component,copy.data());
+        entry->component=ok?reinterpret_cast<std::uintptr_t>(component):0;
+        entry->status=ok?0:-1;return ok;
     }
     return cloneComponentOriginal(component,model,source);
+}
+static bool __fastcall updateComponentHook(void* component,void*,int wait){
+    const bool ready=updateComponentOriginal(component,wait);
+    // Initialize only queues skin/hair assets. The stock update returns true once
+    // textures and geosets have been composed; publish that result to the UI.
+    for(auto& entry:previews.entries)if(entry.model&&entry.component==reinterpret_cast<std::uintptr_t>(component)){
+        std::uintptr_t model=0;
+        if(read(entry.component+0x38,model)&&model==entry.model)entry.status=ready?1:0;
+        else entry.status=-1;
+    }
+    return ready;
 }
 static void forgetWeapons(std::uintptr_t model);
 static void __fastcall destroyModelHook(void* model,void*){
@@ -244,6 +271,20 @@ static int __fastcall previewStatus(void* L){
     if(!std::isfinite(token)||token<1||token>2147483647||token!=static_cast<unsigned>(token))return result(L,-1);
     return result(L,previews.query(static_cast<unsigned>(token),getPlayer()));
 }
+static int __fastcall inspectPreview(void* L){
+    if(!isNumber(L,1))return result(L,-1);
+    const double token=toNumber(L,1);
+    for(const auto& entry:previews.entries)if(entry.model&&entry.token==token&&entry.guid==getPlayer()){
+        std::array<unsigned,9> body{};unsigned dirty=0;std::uintptr_t model=0;
+        if(!entry.component||!read(entry.component+0x38,model)||model!=entry.model||
+           !read(entry.component+0x18,body)||!read(entry.component+0x10,dirty))return result(L,-1);
+        const double values[]={double(entry.status),entry.copiedAppearance?1.0:0.0,
+            double(body[0]),double(body[1]),double(body[3]),double(body[5]),double(body[7]),double(body[2]),double(body[6]),double(dirty)};
+        for(auto value:values)pushNumber(L,value);
+        return sizeof(values)/sizeof(values[0]);
+    }
+    return result(L,-1);
+}
 // An explicitly requested, bounded read-only capture. Selector -1 returns the
 // player weapon summary; 0..63 returns one attached child. Stay under Lua 5.0's
 // 20 guaranteed result stack slots. The capture itself does not modify attachments.
@@ -273,7 +314,8 @@ static int __fastcall weaponryProbe(void* L){
     return sizeof(values)/sizeof(values[0]);
 }
 #include "WeaponRenderer.h"
-static int __fastcall version(void* L){return result(L,30400);}
+#include "UpdateChecker.h"
+static int __fastcall version(void* L){return result(L,30433);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
@@ -284,9 +326,14 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
         registerOriginal("SaureksClosetBeginPreview",reinterpret_cast<std::uintptr_t>(&beginPreview));
         registerOriginal("SaureksClosetEndPreview",reinterpret_cast<std::uintptr_t>(&endPreview));
         registerOriginal("SaureksClosetPreviewStatus",reinterpret_cast<std::uintptr_t>(&previewStatus));
+        registerOriginal("SaureksClosetInspectPreview",reinterpret_cast<std::uintptr_t>(&inspectPreview));
         registerOriginal("SaureksClosetInspect",reinterpret_cast<std::uintptr_t>(&inspect));
         registerOriginal("SaureksClosetSetWeapons",reinterpret_cast<std::uintptr_t>(&setWeapons));
         registerOriginal("SaureksClosetWeaponryProbe",reinterpret_cast<std::uintptr_t>(&weaponryProbe));
+        registerOriginal("SaureksClosetSetUpdateChecks",reinterpret_cast<std::uintptr_t>(&setUpdateChecks));
+        registerOriginal("SaureksClosetStartUpdateCheck",reinterpret_cast<std::uintptr_t>(&startUpdateCheck));
+        registerOriginal("SaureksClosetPollUpdateCheck",reinterpret_cast<std::uintptr_t>(&pollUpdateCheck));
+        registerOriginal("SaureksClosetOpenWebsite",reinterpret_cast<std::uintptr_t>(&openWebsite));
     }
 }
 static bool compatible(){
@@ -300,13 +347,16 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     if(!compatible()||MH_Initialize()!=MH_OK)return TRUE;
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
+        {0x714260,reinterpret_cast<void*>(&updateAttachedHook),reinterpret_cast<void**>(&updateAttachedOriginal)},
         {0x47A0C0,reinterpret_cast<void*>(&weaponComposeHook),reinterpret_cast<void**>(&weaponComposeOriginal)},
         {0x47A070,reinterpret_cast<void*>(&sheathPointHook),reinterpret_cast<void**>(&sheathPointOriginal)},
         {0x60B590,reinterpret_cast<void*>(&moveWeaponHook),reinterpret_cast<void**>(&moveWeaponOriginal)},
+        {0x60B770,reinterpret_cast<void*>(&rebuildWeaponHook),reinterpret_cast<void**>(&rebuildWeaponOriginal)},
         {0x712F00,reinterpret_cast<void*>(&findChildHook),reinterpret_cast<void**>(&findChildOriginal)},
         {0x7130A0,reinterpret_cast<void*>(&clearChildrenHook),reinterpret_cast<void**>(&clearChildrenOriginal)},
         {0x707400,reinterpret_cast<void*>(&cloneModelHook),reinterpret_cast<void**>(&cloneModelOriginal)},
         {0x476CB0,reinterpret_cast<void*>(&cloneComponentHook),reinterpret_cast<void**>(&cloneComponentOriginal)},
+        {0x477860,reinterpret_cast<void*>(&updateComponentHook),reinterpret_cast<void**>(&updateComponentOriginal)},
         {0x70E170,reinterpret_cast<void*>(&destroyModelHook),reinterpret_cast<void**>(&destroyModelOriginal)},
         {0x600320,reinterpret_cast<void*>(&nameHook),reinterpret_cast<void**>(&nameOriginal)},
         {0x476B90,reinterpret_cast<void*>(&initHook),reinterpret_cast<void**>(&initOriginal)},

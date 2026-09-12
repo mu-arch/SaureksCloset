@@ -3,12 +3,11 @@ local V=VanityStudio
 function V:DraftSlot(slot,id)
     if not self.slotNames[slot] or (id~=nil and not self:Compatible(id,slot)) then return false end
     self.draft={slot=slot,id=id}
-    self.previewSignature=nil
     self:Refresh()
     return true
 end
 function V:CancelDraft()
-    self.draft=nil;self.previewSignature=nil;self.previewWaiting=nil
+    self.draft=nil;self.previewWaiting=nil
 end
 function V:CommitDraft()
     local draft=self.draft
@@ -32,21 +31,49 @@ function V:PreviewItems()
     return items
 end
 -- A live player rebuild and a dressing-room clone can finish on different frames.
--- Wait before cloning, then dress on a later update; use bounded recovery copies.
+-- Independent previews use native readiness; older bridges retain timed recovery.
 function V:InvalidatePreviewModel(delay,recover)
     local now=GetTime()
-    self.previewBaseDirty=true;self.previewCaptureAt=now+(delay or 0)
+    local tracked=self:WeaponRendererAvailable()
+    self.previewBaseDirty=true;self.previewCaptureAt=now+(tracked and 0 or (delay or 0))
+    self.previewReveal=nil;self.previewDeadline=now+8
     self.previewDressAt=nil;self.previewDressingModel=nil;self.previewSignature=nil
-    self.previewRecoveries=recover and {now+1.5} or nil
+    -- The new bridge tracks composition explicitly. A timed second copy replaces
+    -- an already-correct character and restarts its animation for no reason.
+    tracked=tracked or type(SaureksClosetInspectPreview)=="function"
+    self.previewRecoveries=recover and not tracked and {now+1.5} or nil
 end
 function V:PreviewBodyKey()
     local c=VanityStudioCharacter;local key=c.enabled and "enabled" or "disabled"
-    local b=c.enabled and c.body
+    local b=c.enabled and c.body or self:NativeBody()
     if b then
         key=key..":"..b.race..":"..b.sex
         for _,name in ipairs(self.bodyKeys) do key=key..":"..b[name] end
     end
     return key
+end
+-- Check current composition after dressing as well as after SetUnit.
+function V:PreviewModelReady(target,after)
+    if after and GetTime()<=after then return false end
+    if not target.weaponToken then return true end
+    local ok,status=pcall(SaureksClosetPreviewStatus,target.weaponToken)
+    if not ok or status~=1 then return false end
+    if type(SaureksClosetInspectPreview)=="function" then
+        local details={pcall(SaureksClosetInspectPreview,target.weaponToken)}
+        if not details[1] or details[2]~=1 or (type(details[11])=="number" and details[11]~=0) then return false end
+    end
+    return true
+end
+function V:RefreshPreviewForModelEvent()
+    -- Independent previews already contain their requested body. World armor
+    -- rebuild notifications must not restart their model/animation.
+    if self:WeaponRendererAvailable() then self:RefreshPreview()
+    else self:InvalidatePreviewModel(.25,true) end
+end
+function V:HidePreviewUntilReady()
+    if not self.uiReady then return end
+    self.model:SetAlpha(0);self.previewBuffer:SetAlpha(0)
+    self.previewNote:SetText("Loading preview...")
 end
 function V:RefreshPreview()
     if not self.model or not self.model:IsVisible() then return end
@@ -68,7 +95,7 @@ function V:RefreshPreview()
             self.previewError="Preview unavailable. Close and reopen the wardrobe."
             self.previewNote:SetText(self.previewError);self.model:SetAlpha(1);return
         end
-        self.previewDressAt=now+.1;self.previewSignature=nil
+        self.previewDressAt=now+(self.previewBuffer.weaponToken and 0 or .1);self.previewSignature=nil
         return
     end
     if self.previewDressAt and now<self.previewDressAt then return end
@@ -76,12 +103,30 @@ function V:RefreshPreview()
     local routes=self:PreviewWeaponRoutes(weapons)
     local signature=key..self:WeaponSignature(weapons)
     for _,slot in ipairs(self.slotOrder) do signature=signature..":"..items[slot] end
-    if signature==self.previewSignature then return end
-    local target=self.previewDressingModel or self.model
-    if target.weaponToken and SaureksClosetPreviewStatus(target.weaponToken)~=1 then
-        if now>(self.previewDressAt or now)+8 then self.previewDressAt=nil;self.previewBaseDirty=true;self.previewCaptureAt=now+2 end
+    if self.previewReveal and self.previewReveal.signature==signature then
+        local reveal=self.previewReveal
+        if now>(self.previewDeadline or now+8) then
+            self.previewReveal=nil;self.previewDressAt=nil;self.previewDressingModel=nil
+            self.previewNote:SetText("Preview could not finish loading. Close and reopen the wardrobe.");return
+        end
+        if not self:PreviewModelReady(reveal.target,reveal.at) then return end
+        local ok,ready=pcall(self.DressWeaponPlacements,self,reveal.target,weapons)
+        if not ok or not ready then return end
+        local previous=self.model;local target=reveal.target
+        target.rotation=previous.rotation or .61;target:SetRotation(target.rotation)
+        if target~=previous then previous:SetAlpha(0);self.model=target;self.previewBuffer=previous end
+        target:SetAlpha(1)
+        self.previewSignature=signature;self.previewError=nil;self.previewReveal=nil;self.previewDressAt=nil;self.previewDressingModel=nil
+        self.previewNote:SetText(next(self.previewWaiting or {}) and "Some item data is unavailable." or "")
         return
     end
+    if signature==self.previewSignature and not self.previewDressingModel and not self.previewReveal then return end
+    local target=self.previewDressingModel or self.model
+    if target.weaponToken and not self:PreviewModelReady(target) then
+        if now>(self.previewDeadline or now+8) then self.previewDressAt=nil;self.previewDressingModel=nil;self.previewNote:SetText("Preview could not finish loading. Close and reopen the wardrobe.") end
+        return
+    end
+    self.previewReveal=nil
     local ok=pcall(function()
         -- Reuse the finished clone for item previews; do not recreate it per item.
         target:Undress()
@@ -103,6 +148,11 @@ function V:RefreshPreview()
         V:DressWeaponPlacements(target,weapons)
         target:SetRotation(V.model.rotation or .61)
     end)
+    if ok and target.weaponToken then
+        self.previewReveal={target=target,signature=signature,at=now}
+        self.previewDressAt=now;self.previewDeadline=now+8
+        return
+    end
     self.previewDressAt=nil;self.previewDressingModel=nil
     if ok and target~=self.model then
         local previous=self.model;target.rotation=previous.rotation or .61
@@ -127,7 +177,14 @@ function V:UpdatePreviewLoading()
     for id,_ in pairs(self.previewWaiting or {}) do
         local request=self.previewRequests[id]
         if GetItemInfo(id) or (request and request.attempts<3 and GetTime()-request.last>=2) then
-            self.previewSignature=nil;self:RefreshPreview();return
+            -- A late item response must not undress and rebuild the whole outfit.
+            pcall(self.model.TryOn,self.model,tostring(id))
+            if GetItemInfo(id) then self.previewWaiting[id]=nil
+            else
+                self:RequestItem(id)
+                self.previewRequests[id]={last=GetTime(),attempts=request.attempts+1}
+            end
         end
     end
+    if self.previewWaiting and not next(self.previewWaiting) and not self.previewError then self.previewNote:SetText("") end
 end

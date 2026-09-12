@@ -2,14 +2,20 @@
 from pathlib import Path
 import hashlib,json,zipfile,re
 root=Path(__file__).resolve().parents[1]
-version='3.4.15'
+version='3.4.34'
 addon=root/'addon/SaureksCloset'
 assert re.search(r'V.VERSION = "([^"]+)"',(addon/'Core.lua').read_text()).group(1)==version
 assert re.search(r'## Version: ([^\n]+)',(addon/'SaureksCloset.toc').read_text()).group(1)==version
+dll_version=int(re.search(r'static int __fastcall version\(void\* L\)\{return result\(L,(\d+)\);\}',(root/'native/SaureksCloset.cpp').read_text()).group(1))
+required=int(re.search(r'V.REQUIRED_RENDERER=(\d+)',(addon/'Updates.lua').read_text()).group(1))
+assert dll_version==required,'Addon requires a different DLL version'
+(root/'update-version.txt').write_text('schema=1\naddon='+version+'\ndll='+str(dll_version)+'\n')
 payload={f'Interface/AddOns/SaureksCloset/{p.relative_to(addon).as_posix()}':p for p in addon.rglob('*') if p.is_file()}
 payload.update({'SaureksCloset.dll':root/'native/SaureksCloset.dll','README.md':root/'addon/SaureksCloset/README.md',
                 'LICENSE.txt':root/'native/LICENSE','MINHOOK-LICENSE.txt':root/'native/vendor/minhook/LICENSE.txt'})
 payload.update({'install.py':root/'tools/install.py','CLIENT-BUILD.json':root/'native/CLIENT-BUILD.json'})
+payload['update-version.txt']=root/'update-version.txt'
+payload['Interface/AddOns/SaureksCloset/Installation instructions/SaureksCloset.dll']=root/'native/SaureksCloset.dll'
 readme=payload['README.md'].read_text()
 for ref in ['Screenshots/', 'Installation%20instructions/', 'CATALOG-COPYRIGHT.md', 'CATALOG-LICENSE.md', 'ARTWORK.json']:
  readme=readme.replace(']('+ref,'](Interface/AddOns/SaureksCloset/'+ref)
@@ -20,7 +26,7 @@ with zipfile.ZipFile(root/f'SaureksCloset-{version}.zip','w',zipfile.ZIP_DEFLATE
   if name=='README.md':z.writestr(name,readme_bytes)
   else:z.write(p,name)
  z.writestr('FILES-SHA256.json',json.dumps(manifest,indent=2)+'\n')
-source={}
+source={'update-version.txt':root/'update-version.txt'}
 for folder in ['addon','native','tools','tests']:
  for p in (root/folder).rglob('*'):
   if not p.is_file() or any(part in ('build','__pycache__','.git') for part in p.parts):continue

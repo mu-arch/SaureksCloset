@@ -1,19 +1,24 @@
 #pragma once
 #include "WeaponState.h"
+#include "BowPlacement.h"
 // Included after the bridge's player reader, registry and Lua result helpers.
 using WeaponCompose=int (__fastcall *)(void*,void*,unsigned,unsigned,unsigned,unsigned,unsigned);
 using SheathPoint=int (__fastcall *)(unsigned,unsigned);
 using MoveWeapon=void (__thiscall *)(void*,unsigned,unsigned);
+using RebuildWeapon=void (__thiscall *)(void*,unsigned);
 using FindChild=void* (__thiscall *)(void*,unsigned);
 using ClearChildren=void (__thiscall *)(void*,unsigned);
 using AttachChild=void (__thiscall *)(void*,void*,unsigned);
 using HasPoint=bool (__thiscall *)(void*,unsigned);
 using LoadChild=void (__fastcall *)(void*,unsigned,const char*,const char*,unsigned);
+using UpdateAttachedModel=void (__thiscall *)(void*,const float*,const float*,const float*,float);
 static WeaponCompose weaponComposeOriginal=nullptr;
 static SheathPoint sheathPointOriginal=nullptr;
 static MoveWeapon moveWeaponOriginal=nullptr;
+static RebuildWeapon rebuildWeaponOriginal=nullptr;
 static FindChild findChildOriginal=nullptr;
 static ClearChildren clearChildrenOriginal=nullptr;
+static UpdateAttachedModel updateAttachedOriginal=nullptr;
 #ifndef SAUREKS_WEAPON_TEST
 template<typename T> static T weaponFunction(std::uintptr_t address){return reinterpret_cast<T>(address);}
 #endif
@@ -38,6 +43,50 @@ static WeaponContext* weaponContext(std::uintptr_t model){
     return nullptr;
 }
 static bool ownedExtra(const WeaponContext& c,void* child){for(auto p:c.extra)if(p&&p==child)return true;return false;}
+static bool positionStoredBow(void* child,const float* attachment,std::array<float,16>& adjusted){
+    std::uintptr_t parent=0;unsigned point=0;
+    const auto model=reinterpret_cast<std::uintptr_t>(child);
+    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point)||point!=weaponPoints[5])return false;
+    const auto* c=weaponContext(parent);
+    if(!c||c->guid!=getPlayer())return false;
+    const auto* asset=weaponAsset(c->selection.items[5]);
+    if(!asset||asset->kind!=4||asset->subclass!=2)return false;
+    if(c->extra[5]!=child&&(c->token||c->routes[2]!=5||findChildOriginal(reinterpret_cast<void*>(parent),point)!=child))return false;
+    std::array<float,3> back;
+    if(!animatedBackPosition(parent,back)||!read(reinterpret_cast<std::uintptr_t>(attachment),adjusted))return false;
+    // Keep the ranged sheath's animated orientation, but center the bow's grip
+    // on this model's authored back anchor. Logical point 27 stays independent
+    // of shields at 28, preserving ownership and native draw/sheath callbacks.
+    for(unsigned axis=0;axis<3;++axis)adjusted[12+axis]=back[axis];
+    return true;
+}
+static bool positionStoredBackWeapon(void* child,std::array<float,16>& adjusted){
+    std::uintptr_t parent=0;unsigned point=0;
+    const auto model=reinterpret_cast<std::uintptr_t>(child);
+    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point)||(point!=30&&point!=31))return false;
+    const auto* c=weaponContext(parent);
+    if(!c||c->guid!=getPlayer())return false;
+    const unsigned position=point==30?2:3;
+    const auto* asset=weaponAsset(c->selection.items[position]);
+    if(!asset||asset->kind!=2||asset->sheath!=1)return false;
+    if(c->extra[position]!=child){
+        if(c->token)return false;
+        bool routed=false;for(auto route:c->routes)if(route==static_cast<int>(position))routed=true;
+        if(!routed||findChildOriginal(reinterpret_cast<void*>(parent),point)!=child)return false;
+    }
+    // Points 30/31 have a staff-style pose. Keep those independent logical
+    // homes, but draw type-1 two-handers using the model's sword pose at 26/27.
+    // The full animated transform preserves both the grip position and angle.
+    return animatedAttachmentMatrix(parent,point==30?26:27,adjusted);
+}
+static void __fastcall updateAttachedHook(void* model,void*,const float* matrix,const float* scale,const float* lighting,float alpha){
+    std::array<float,16> adjusted;
+    // Exact recursive child update after the animated attachment is resolved.
+    if(reinterpret_cast<std::uintptr_t>(__builtin_return_address(0))==0x718761&&
+       (positionStoredBackWeapon(model,adjusted)||positionStoredBow(model,matrix,adjusted)))
+        updateAttachedOriginal(model,adjusted.data(),scale,lighting,alpha);
+    else updateAttachedOriginal(model,matrix,scale,lighting,alpha);
+}
 static void releaseExtras(WeaponContext& c){
     const auto extra=c.extra;c.extra.fill(nullptr);
     for(auto child:extra)if(child){
@@ -88,6 +137,7 @@ static void* weaponDisplay(const WeaponAsset* asset){
 static int __fastcall weaponComposeHook(void* parent,void* display,unsigned slot,unsigned sheath,unsigned stored,unsigned shield,unsigned rangedRight){
     auto* c=weaponContext(reinterpret_cast<std::uintptr_t>(parent));
     const int old=scopedSheathPoint;
+    scopedSheathPoint=-1;
     if(c&&!c->token&&c->guid==getPlayer()&&slot>=15&&slot<=17){
         const int route=c->routes[slot-15];
         if(route>=0){
@@ -101,9 +151,22 @@ static int __fastcall weaponComposeHook(void* parent,void* display,unsigned slot
 static void __fastcall moveWeaponHook(void* unit,void*,unsigned role,unsigned stored){
     std::uintptr_t parent=0;read(reinterpret_cast<std::uintptr_t>(unit)+0xD8,parent);
     auto* c=weaponContext(parent);const int old=scopedSheathPoint;
+    // A ranged move can rebuild melee weapons recursively. Each role must
+    // choose its own home instead of inheriting the outer ranged override.
+    scopedSheathPoint=-1;
     if(c&&!c->token&&c->unit==reinterpret_cast<std::uintptr_t>(unit)&&c->guid==getPlayer()&&role<3&&c->routes[role]>=0)
         scopedSheathPoint=weaponPoints[c->routes[role]];
     moveWeaponOriginal(unit,role,stored);scopedSheathPoint=old;
+}
+static void __fastcall rebuildWeaponHook(void* unit,void*,unsigned role){
+    std::uintptr_t parent=0;read(reinterpret_cast<std::uintptr_t>(unit)+0xD8,parent);
+    auto* c=weaponContext(parent);const int old=scopedSheathPoint;
+    scopedSheathPoint=-1;
+    if(c&&!c->token&&c->unit==reinterpret_cast<std::uintptr_t>(unit)&&c->guid==getPlayer()&&role<3&&c->routes[role]>=0)
+        scopedSheathPoint=weaponPoints[c->routes[role]];
+    // The client's missing-child fallback also computes the sheath point for
+    // weapon effects before composing. Scope that entire role's rebuild.
+    rebuildWeaponOriginal(unit,role);scopedSheathPoint=old;
 }
 static bool ensureExtras(WeaponContext& c){
     bool complete=true;

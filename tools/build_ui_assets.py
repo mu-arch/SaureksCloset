@@ -7,11 +7,10 @@ p=argparse.ArgumentParser();p.add_argument('source_directory',type=Path);p.add_a
 out=root/'addon/SaureksCloset/Textures';out.mkdir(exist_ok=True)
 # Main crop removes the supplied outer header/footer; native WoW borders remain in the UI.
 assets=[('main_bg.png','Main.tga',(12,145,1022,1229),(512,512)),
-        ('about_bg.png','About.tga',(0,142,1086,1306),(512,512)),
         ('vanillacloset_logo.png','Logo.tga',(102,88,1152,1138),(128,128))]
 manifest=root/'addon/SaureksCloset/ARTWORK.json'
 existing=json.loads(manifest.read_text()) if manifest.exists() else []
-report=[entry for entry in existing if entry.get('generated')]
+report=[entry for entry in existing if entry.get('generated') or entry['texture'] in ('SettingsTL.tga','SettingsTR.tga','SettingsBL.tga','SettingsBR.tga')]
 if a.mini_logo:
  assets.append((str(a.mini_logo),'MiniLogo.tga',(6,14,1224,1232),(64,64)))
 else:

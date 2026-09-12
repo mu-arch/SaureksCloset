@@ -13,9 +13,18 @@ int main(){
     std::array<std::uint32_t,91> original;for(unsigned i=0;i<91;++i)original[i]=0xabc000+i;
     const auto copy=previewDescriptor(original,body,0x7890);
     assert(original[8]==0xabc008&&copy[8]==0x7890);
+    assert(previewBodyMatches(copy,body));
+    // A changed race, gender, skin, face, or hair must never reuse the live caches.
+    for(unsigned field:{0,1,2,3,5,6,7}){
+        auto different=copy;++different[field];assert(!previewBodyMatches(different,body));
+    }
+    auto equipment=copy;++equipment[10];assert(previewBodyMatches(equipment,body));
+    registry.find(0x1234)->component=0x4567;
+    registry.find(0x1234)->copiedAppearance=true;
     for(unsigned i=0;i<91;++i)if(i!=0&&i!=1&&i!=2&&i!=3&&i!=5&&i!=6&&i!=7&&i!=8)assert(copy[i]==original[i]);
     registry.forget(0x1234);assert(registry.query(token,77)==-1);
     const auto next=registry.bind(0x1234,77,body);assert(next!=token&&registry.query(token,77)==-1);
+    assert(!registry.find(0x1234)->component&&!registry.find(0x1234)->copiedAppearance);
     for(unsigned i=1;i<registry.entries.size();++i)assert(registry.bind(0x1234+i,77,body));
     assert(!registry.bind(0x9999,77,body));registry.forget(0x1236);assert(registry.bind(0x9999,77,body));
     std::puts("PASS: bounded preview registry, ownership, stale tokens, release/reuse and copied descriptors.");

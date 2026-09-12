@@ -78,6 +78,30 @@ function V:RealWeaponItems()
     end
     return real
 end
+-- Vanilla bows have no native sheath, and the two-handed sword home (26)
+-- collides with quivers. Reserve separate homes for real equipped weapons too.
+-- These fallbacks are renderer inputs only; saved choices remain untouched.
+function V:EffectiveWeapons(weapons,overrides)
+    local effective=self:Copy(weapons or {})
+    local c=VanityStudioCharacter
+    if not overrides then overrides=c.enabled and c.selected or {} end
+    local real=self:RealWeaponItems();local routes=self:RawPreviewWeaponRoutes(effective)
+    for role=1,3 do
+        local asset=SaureksClosetWeaponAssets[real[role]]
+        -- Preserve legacy inventory overrides, including explicitly hidden slots.
+        if asset and not routes[role+15] and overrides[role+15]==nil then
+            local choices
+            if role==3 and asset[1]==4 then choices={106}
+            elseif asset[1]==3 then choices={105}
+            elseif asset[1]==2 then choices=role==1 and {103,104} or {104,103}
+            elseif asset[1]==1 then choices=role==1 and {102,101,103,104} or {101,102,104,103} end
+            for _,slot in ipairs(choices or {}) do
+                if not effective[slot] then effective[slot]=real[role];break end
+            end
+        end
+    end
+    return effective
+end
 function V:ApplyWeaponRenderer(token,weapons)
     if not self:WeaponRendererAvailable() then return false end
     local w=weapons or {};local real=self:RealWeaponItems()
@@ -86,7 +110,7 @@ function V:ApplyWeaponRenderer(token,weapons)
 end
 function V:SyncWeapons()
     local c=VanityStudioCharacter
-    local weapons=c.enabled and c.weapons or {}
+    local weapons=c.enabled and self:EffectiveWeapons(c.weapons,c.selected) or {}
     if not self:WeaponRendererAvailable() then return end
     -- Native synchronization is idempotent. This also restores children after
     -- model changes without cloning/reloading the character every update.
@@ -96,14 +120,18 @@ end
 function V:PreviewWeapons()
     local c=VanityStudioCharacter;local weapons=self:Copy(c.enabled and c.weapons or {})
     if self.draft and self:IsWeaponPosition(self.draft.slot) then weapons[self.draft.slot]=self.draft.id end
-    return weapons
+    return self:EffectiveWeapons(weapons)
 end
-function V:WeaponSignature(weapons)
+function V:WeaponSignature(weapons,overrides)
+    weapons=self:EffectiveWeapons(weapons,overrides)
     local text=""
     for _,slot in ipairs(self.weaponOrder) do text=text..":"..((weapons or {})[slot] or 0) end
     return text
 end
-function V:PreviewWeaponRoutes(weapons)
+function V:PreviewWeaponRoutes(weapons,overrides)
+    return self:RawPreviewWeaponRoutes(self:EffectiveWeapons(weapons,overrides))
+end
+function V:RawPreviewWeaponRoutes(weapons)
     local real=self:RealWeaponItems();local routes,used={},{}
     local order={{102,101,103,104,105,106,107},{101,102,104,103,105,106,107},{106,101,102,103,104,105,107}}
     for role=1,3 do
@@ -136,9 +164,9 @@ function V:CopyWardrobeModel(target)
         target.weaponToken=token
     else target:SetUnit("player") end
 end
-function V:DressWeaponPlacements(target,weapons)
+function V:DressWeaponPlacements(target,weapons,overrides)
     if not target.weaponToken or not self:WeaponRendererAvailable() then return true end
-    local ok,status=self:ApplyWeaponRenderer(target.weaponToken,weapons)
+    local ok,status=self:ApplyWeaponRenderer(target.weaponToken,self:EffectiveWeapons(weapons,overrides))
     if not ok and status~=0 then error("Weapon preview unavailable") end
     return ok
 end

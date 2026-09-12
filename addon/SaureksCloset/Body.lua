@@ -5,7 +5,7 @@ V.bodyLabels={skin="Skin color",face="Face",hairStyle="Hair style",hairColor="Ha
 function V:BodyAvailable()
     if type(SaureksClosetRendererVersion)~="function" then return false end
     local ok,version=pcall(SaureksClosetRendererVersion)
-    return ok and (version==30001 or version==30002 or version==30003 or version==30004 or version==30005 or version==30006 or version==30400) and type(SaureksClosetSetAppearance)=="function" and type(SaureksClosetClearAppearance)=="function" and type(SaureksClosetRealBody)=="function"
+    return ok and (version==30001 or version==30002 or version==30003 or version==30004 or version==30005 or version==30006 or version==30400 or version==30422 or version==30424 or version==30426 or version==30428 or version==30429 or version==30431 or version==30432 or version==30433) and type(SaureksClosetSetAppearance)=="function" and type(SaureksClosetClearAppearance)=="function" and type(SaureksClosetRealBody)=="function"
 end
 function V:BodyValues(body,key)
     local d=VanityStudioBodyOptions[body.race] and VanityStudioBodyOptions[body.race][body.sex]
@@ -28,15 +28,37 @@ end
 function V:NativeBody()
     if not self:BodyAvailable() then return nil end
     local ok,race,sex,skin,face,hair,color,facial=pcall(SaureksClosetRealBody)
-    if not ok or race==-1 then self.bodyError="Character is not ready yet.";return nil end
-    return self:NormalizeBody({race=race,sex=sex,skin=skin,face=face,hairStyle=hair,hairColor=color,facial=facial})
+    if not ok or not VanityStudioRaces[race] or (sex~=0 and sex~=1) or
+        type(skin)~="number" or type(face)~="number" or type(hair)~="number" or type(color)~="number" or type(facial)~="number" then
+        self.bodyError="Character is not ready yet.";return nil
+    end
+    -- These are the player's actual settings, not a draft to replace with the
+    -- catalog's first skin/hair choices. Normalize only deliberate edits.
+    return {race=race,sex=sex,skin=skin,face=face,hairStyle=hair,hairColor=color,facial=facial}
+end
+function V:RefreshTrueBody()
+    -- Runtime control values are separate from c.body, which enables an override.
+    -- Always replace the entire set so no skin/hair values survive a reset.
+    self.trueBody=self:NativeBody()
+    self.trueBodyPending=not self.trueBody and true or nil
+    if not VanityStudioCharacter.body and not self.editingBody then
+        self.bodyControlValues=self.trueBody and self:Copy(self.trueBody) or nil
+    end
+    return self.trueBody
 end
 function V:BodyDraft()
-    return self.editingBody or VanityStudioCharacter.body or self:NativeBody() or self:NormalizeBody({})
+    local body=self.editingBody or VanityStudioCharacter.body or self:RefreshTrueBody()
+    self.bodyControlValues=body and self:Copy(body) or nil
+    return self.bodyControlValues
+end
+function V:UsingTrueModel()
+    return not self.editingBody and not VanityStudioCharacter.body
 end
 function V:EditBody(key,value)
     if not self:BodyAvailable() then self:Message("Restart through VanillaFixes.exe to load SaureksCloset.dll for body customization.");return false end
-    local b=self:Copy(self:BodyDraft())
+    local current=self:BodyDraft()
+    if not current then self:Message("Character is not ready yet.");return false end
+    local b=self:Copy(current)
     b[key]=value
     self.editingBody=self:NormalizeBody(b)
     self:Refresh();return true
@@ -52,6 +74,7 @@ function V:ApplyBody()
 end
 function V:CycleBody(key,direction)
     local b=self:BodyDraft();local choices
+    if not b then return false end
     if key=="race" then choices={1,2,3,4,5,6,7,8}
     elseif key=="sex" then choices={0,1}
     else choices=self:BodyValues(b,key) end
@@ -62,6 +85,8 @@ function V:CycleBody(key,direction)
     return self:SelectBodyValue(key,choices[index])
 end
 function V:SelectBodyValue(key,value)
+    local current=self:BodyDraft()
+    if current and current[key]==value then return true end
     if not self:EditBody(key,value) then return false end
     local applied=self:ApplyBody()
     if not applied then
@@ -71,9 +96,17 @@ function V:SelectBodyValue(key,value)
     return applied
 end
 function V:ClearBody()
-    self.editingBody=nil;VanityStudioCharacter.body=nil;self:TrackUnsaved()
+    if self:UsingTrueModel() then self:RefreshTrueBody();self:Refresh();return true end
+    local c=VanityStudioCharacter;local previous=c.body;local draft=self.editingBody
+    self.editingBody=nil;c.body=nil
+    if self:SyncBody()==false then
+        c.body=previous;self.editingBody=draft;self:Message(self.bodyError);self:Refresh();return false
+    end
+    self:RefreshTrueBody()
+    self:TrackUnsaved()
     self:InvalidatePreviewModel(.25,true)
     self:Sync();self:Refresh()
+    return true
 end
 local bodyErrors={[-1]="Character is not ready yet.",[-2]="That appearance is unavailable.",[-3]="Restore your real body in other morph addons first.",[-4]="A model change is already in progress."}
 function V:SyncBody()
@@ -89,6 +122,7 @@ function V:SyncBody()
     else ok,status=pcall(SaureksClosetClearAppearance) end
     if not ok or status~=1 then self.bodyError=bodyErrors[status] or tostring(status);return false end
     self.bodyError=nil;c.bodyManaged=b and true or nil
+    if not b then self:RefreshTrueBody() end
     return true
 end
 function V:Diagnose()
@@ -112,6 +146,17 @@ function V:Diagnose()
         local result={pcall(SaureksClosetInspect)}
         for i=1,table.getn(result) do result[i]=tostring(result[i]) end
         table.insert(lines,"Renderer inspection: "..table.concat(result,","))
+    end
+    if type(SaureksClosetInspectPreview)=="function" then
+        table.insert(lines,"Preview fields: ok,status,copied appearance,race,sex,skin,face,hair style,hair color,facial,dirty textures")
+        for _,name in ipairs({"model","previewBuffer","outfitModel","outfitBuffer"}) do
+            local model=self[name]
+            if model and model.weaponToken then
+                local details={pcall(SaureksClosetInspectPreview,model.weaponToken)}
+                for i=1,table.getn(details) do details[i]=tostring(details[i]) end
+                table.insert(lines,name..": "..table.concat(details,","))
+            end
+        end
     end
     for _,slot in ipairs(self.slotOrder) do
         table.insert(lines,"Slot "..slot..": "..tostring(VanityStudioCharacter.selected[slot]).."; error: "..tostring(self.errors[slot]))

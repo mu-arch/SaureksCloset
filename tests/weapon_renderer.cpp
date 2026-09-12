@@ -12,6 +12,8 @@
 #include <type_traits>
 #include "../native/PreviewState.h"
 #include "../native/WeaponState.h"
+#include "bow_attachment_fixtures.h"
+#include "sword_attachment_fixtures.h"
 using DestroyModel=void (*)(void*);
 static std::map<std::uintptr_t,std::uint64_t> memory;
 static std::map<std::uintptr_t,int> refs;
@@ -24,6 +26,10 @@ static void ref(void* p){assert(refs[address(p)]>0);++refs[address(p)];}
 static void unref(void* p){assert(refs[address(p)]>0);if(--refs[address(p)]==0)forgetWeapons(address(p));}
 static const auto releaseModel=&unref;
 template<typename T> static bool read(std::uintptr_t a,T& out){auto i=memory.find(a);if(i==memory.end())return false;out=static_cast<T>(i->second);return true;}
+static std::map<std::uintptr_t,std::array<float,16>> matrices;
+static bool read(std::uintptr_t a,std::array<float,16>& out){auto i=matrices.find(a);if(i==matrices.end())return false;out=i->second;return true;}
+static std::map<std::uintptr_t,std::array<float,3>> positions;
+static bool read(std::uintptr_t a,std::array<float,3>& out){auto i=positions.find(a);if(i==positions.end())return false;out=i->second;return true;}
 struct Player {std::uintptr_t model=0,unit=0;std::uint64_t guid=0;unsigned display=0,native=0;};
 static Player player{0x1000,0x2000,123,49,49};
 static PreviewRegistry previews;
@@ -103,12 +109,24 @@ static void move(void* unit,unsigned role,unsigned stored){
     const int home=sheathPointHook(a->sheath,right);if(home<0)return;
     auto p=findChildHook(parent,nullptr,stored?hand:static_cast<unsigned>(home));
     if(p){ref(p);detach(p);attach(p,parent,stored?static_cast<unsigned>(home):hand);unref(p);}
+    if(role==2&&stored){rebuildWeaponHook(unit,nullptr,0);rebuildWeaponHook(unit,nullptr,1);}
+}
+static int effectHomes[3]={-1,-1,-1};
+static void rebuild(void* unit,unsigned role){
+    const auto* a=weaponAsset(realIDs[role]);if(!a)return;
+    const bool right=role==0||(role==2&&(a->inventory==25||a->inventory==26));
+    effectHomes[role]=sheathPointHook(a->sheath,right);
+    const unsigned mode=memory[address(unit)+0xD40];
+    const bool stored=mode==0||(mode==2&&role!=2);
+    weaponComposeHook(pointer(memory[address(unit)+0xD8]),weaponDisplay(a),15+role,a->sheath,stored,a->kind==3,right);
 }
 static Lua request(unsigned token,const WeaponSelection& s){
     Lua L;L.values.push_back(token);for(auto v:s.items)L.values.push_back(v);for(auto v:s.equipped)L.values.push_back(v);return L;
 }
 int main(){
+    (void)&updateAttachedHook;
     sheathPointOriginal=&sheath;weaponComposeOriginal=&compose;moveWeaponOriginal=&move;findChildOriginal=&find;clearChildrenOriginal=&clear;
+    rebuildWeaponOriginal=&rebuild;
     memory[player.unit+0xD8]=player.model;memory[player.unit+0xD40]=0;memory[player.model+0x10]=1;
     memory[0xC0DC10]=0x900000;memory[0xC0DC14]=100000;
     for(const auto& a:weaponAssets){const auto row=0xC00000+100*a.display;memory[0x900000+4*a.display]=row;memory[row]=a.display;}
@@ -129,6 +147,101 @@ int main(){
     previews.entries[0].model=0x6000;previews.entries[0].guid=player.guid;previews.entries[0].token=8;previews.entries[0].status=1;memory[0x6010]=1;
     auto preview=request(8,s);assert(setWeapons(&preview)==1);auto* pc=weaponContext(0x6000);assert(pc);
     for(unsigned i=0;i<7;i++)assert(pc->extra[i]&&pc->extra[i]!=c->extra[i]);
+    // Use each race/gender's actual authored anchor, with independent world
+    // and preview model data. Animated bone matrices include scale/orientation.
+    const std::array<float,16> identity{{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};
+    matrices[0xA00000]={{0,0,1,0,1,0,0,0,0,1,0,0,20,30,40,1}};
+    const auto input=matrices[0xA00000];
+    const auto* attachment=reinterpret_cast<const float*>(0xA00000);
+    std::array<float,16> shifted;
+    assert(!positionStoredBow(c->extra[5],attachment,shifted)); // gun unchanged
+    c->selection.items[5]=2507;pc->selection.items[5]=2507;
+    for(const auto& fixture:bowFixtures)for(auto context:{c,pc}){
+        // Deliberately unrelated to player race or any fixed attachment index.
+        const auto base=context==c?0x2000000u:0x3000000u;
+        memory[context->parent+0x30]=base;
+        memory[base+0x130]=base+0x1000;
+        memory[base+0x1000+0x10C]=37;memory[base+0x1000+0x110]=base+0x2000;
+        memory[base+0x2000+2*28]=fixture.index;
+        memory[base+0x1000+0x104]=34;memory[base+0x1000+0x108]=base+0x3000;
+        const auto record=base+0x3000+48*fixture.index;
+        memory[record]=28;memory[record+4]=fixture.bone;positions[record+8]=fixture.position;
+        memory[base+0x1000+0x34]=128;memory[context->parent+0x94]=base+0x5000;
+        const auto boneAddress=base+0x5000+64*fixture.bone;
+        for(const auto& transform:{identity,std::array<float,16>{{0,2,0,0,-2,0,0,0,0,0,2,0,7,8,9,1}},
+            std::array<float,16>{{1,0,0,0,0,0,1,0,0,-1,0,0,-3,2,5,1}}}){
+            matrices[boneAddress]=transform;
+            assert(positionStoredBow(context->extra[5],attachment,shifted));
+            const auto& p=fixture.position;
+            for(unsigned axis=0;axis<3;++axis){
+                const float expected=transform[12+axis]+p[0]*transform[axis]+p[1]*transform[4+axis]+p[2]*transform[8+axis];
+                assert(std::fabs(shifted[12+axis]-expected)<.0001f);
+            }
+            for(unsigned i=0;i<12;++i)assert(shifted[i]==input[i]); // sheath angle/scale unchanged
+            const auto once=shifted;
+            assert(positionStoredBow(context->extra[5],attachment,shifted)&&shifted==once);
+            assert(matrices[0xA00000]==input&&matrices[boneAddress]==transform);
+        }
+        memory[base+0x2000+2*28]=0xFFFF;
+        assert(!positionStoredBow(context->extra[5],attachment,shifted));
+        memory[base+0x2000+2*28]=fixture.index;
+        memory[record]=27;assert(!positionStoredBow(context->extra[5],attachment,shifted));memory[record]=28;
+        memory[record+4]=128;assert(!positionStoredBow(context->extra[5],attachment,shifted));memory[record+4]=fixture.bone;
+        matrices[boneAddress][15]=0;assert(!positionStoredBow(context->extra[5],attachment,shifted));matrices[boneAddress]=identity;
+    }
+    auto bow=c->extra[5];c->extra[5]=nullptr;c->routes[2]=5;
+    assert(positionStoredBow(bow,attachment,shifted)); // native routed bow
+    memory[address(bow)+0x1D0]=2;
+    assert(!positionStoredBow(bow,attachment,shifted)); // drawn hand remains native
+    memory[address(bow)+0x1D0]=27;c->routes[2]=-1;
+    assert(!positionStoredBow(bow,attachment,shifted)); // unrelated child not adjusted
+    c->extra[5]=bow;
+    auto guid=c->guid;c->guid=999;assert(!positionStoredBow(bow,attachment,shifted));c->guid=guid;
+    for(const auto& asset:weaponAssets)if(asset.kind==4&&asset.subclass!=2){
+        c->selection.items[5]=asset.item;assert(!positionStoredBow(bow,attachment,shifted));
+    }
+    c->selection.items[5]=gun;pc->selection.items[5]=gun;
+    // The storage repair uses logical points 30/31, but sheath-type-1 swords
+    // must use the original sword bone's orientation, not the staff bone's.
+    for(const auto& fixture:swordFixtures)for(auto context:{c,pc}){
+        const unsigned position=fixture.point==26?2:3;
+        void* child=context->extra[position];
+        if(!child)child=findChildOriginal(pointer(context->parent),weaponPoints[position]);
+        assert(child);
+        const auto oldItem=context->selection.items[position];
+        assert(!positionStoredBackWeapon(child,shifted)); // original staff unaffected
+        context->selection.items[position]=4939;
+        const auto base=context==c?0x4000000u:0x5000000u;
+        memory[context->parent+0x30]=base;memory[base+0x130]=base+0x1000;
+        memory[base+0x1000+0x10C]=37;memory[base+0x1000+0x110]=base+0x2000;
+        memory[base+0x2000+2*fixture.point]=fixture.index;
+        memory[base+0x1000+0x104]=34;memory[base+0x1000+0x108]=base+0x3000;
+        const auto record=base+0x3000+48*fixture.index;
+        memory[record]=fixture.point;memory[record+4]=fixture.bone;positions[record+8]=fixture.position;
+        memory[base+0x1000+0x34]=128;memory[context->parent+0x94]=base+0x5000;
+        const auto boneAddress=base+0x5000+64*fixture.bone;
+        for(const auto& transform:{identity,std::array<float,16>{{0,2,0,0,-2,0,0,0,0,0,2,0,7,8,9,1}},
+            std::array<float,16>{{1,0,0,0,0,0,1,0,0,-1,0,0,-3,2,5,1}}}){
+            matrices[boneAddress]=transform;
+            assert(positionStoredBackWeapon(child,shifted));
+            for(unsigned i=0;i<12;++i)assert(shifted[i]==transform[i]);
+            for(unsigned axis=0;axis<3;++axis){
+                const auto& p=fixture.position;
+                assert(std::fabs(shifted[12+axis]-(transform[12+axis]+p[0]*transform[axis]+p[1]*transform[4+axis]+p[2]*transform[8+axis]))<.0001f);
+            }
+            const auto once=shifted;assert(positionStoredBackWeapon(child,shifted)&&shifted==once);
+            assert(matrices[boneAddress]==transform); // do not alter parent skeleton
+            assert(memory[address(child)+0x1D0]==weaponPoints[position]); // logical home unchanged
+        }
+        memory[address(child)+0x1D0]=1;assert(!positionStoredBackWeapon(child,shifted));
+        memory[address(child)+0x1D0]=weaponPoints[position];
+        auto originalGuid=context->guid;context->guid=999;assert(!positionStoredBackWeapon(child,shifted));context->guid=originalGuid;
+        memory[base+0x2000+2*fixture.point]=0xFFFF;assert(!positionStoredBackWeapon(child,shifted));
+        memory[base+0x2000+2*fixture.point]=fixture.index;
+        memory[record+4]=128;assert(!positionStoredBackWeapon(child,shifted));memory[record+4]=fixture.bone;
+        matrices[boneAddress][15]=0;assert(!positionStoredBackWeapon(child,shifted));
+        context->selection.items[position]=oldItem;
+    }
     clearChildrenHook(pointer(player.model),nullptr,32);assert(c->extra[0]&&refs[address(c->extra[0])]==2);
     assert(!findChildHook(pointer(player.model),nullptr,32)); // native callers skip decor
     auto extra=c->extra[0];detach(extra);assert(refs[address(extra)]==1);
@@ -151,6 +264,42 @@ int main(){
     forgetWeapons(0x6000);assert(!weaponContext(0x6000));
     if(rangeHolder){unref(pointer(rangeHolder));rangeHolder=0;}
     s={};L=request(0,s);assert(setWeapons(&L)==1);
+    // Reproduce the reported equipment: sword's stock point 26 is removed by
+    // quiver composition; the bow's stock sheath 0 gives it no stored child.
+    realIDs[0]=4939;realIDs[1]=0;realIDs[2]=2507;memory[player.unit+0xD40]=0;
+    melee(pointer(player.unit),0);auto lostSword=find(pointer(player.model),26);assert(lostSword);
+    factory(pointer(player.model),26,"quiver","",0);assert(!refs[address(lostSword)]);
+    ranged(pointer(player.unit),1);assert(!find(pointer(player.model),27));
+    // Equipped fallbacks sent by Lua are routed through native draw callbacks,
+    // not extra visible copies of a weapon that is also held in the hand.
+    s.items[2]=4939;s.items[5]=2507;s.equipped={{4939,0,2507}};L=request(0,s);
+    assert(setWeapons(&L)==1);c=weaponContext(player.model);
+    assert(c&&c->routes[0]==2&&c->routes[2]==5&&!c->extra[2]&&!c->extra[5]);
+    assert(findChildHook(pointer(player.model),nullptr,30)&&findChildHook(pointer(player.model),nullptr,27));
+    factory(pointer(player.model),26,"quiver","",0);
+    assert(findChildHook(pointer(player.model),nullptr,30)&&findChildHook(pointer(player.model),nullptr,27));
+    memory[player.unit+0xD40]=1;moveWeaponHook(pointer(player.unit),nullptr,0,0);
+    assert(findChildHook(pointer(player.model),nullptr,1)&&!findChildHook(pointer(player.model),nullptr,30));
+    memory[player.unit+0xD40]=0;moveWeaponHook(pointer(player.unit),nullptr,0,1);
+    assert(!findChildHook(pointer(player.model),nullptr,1)&&findChildHook(pointer(player.model),nullptr,30));
+    memory[player.unit+0xD40]=2;ranged(pointer(player.unit),0);
+    assert(findChildHook(pointer(player.model),nullptr,2)&&!findChildHook(pointer(player.model),nullptr,27));
+    memory[player.unit+0xD40]=0;moveWeaponHook(pointer(player.unit),nullptr,2,1);
+    assert(effectHomes[0]==30); // nested sword rebuild never inherits bow's 27
+    assert(!findChildHook(pointer(player.model),nullptr,2));
+    assert(findChildHook(pointer(player.model),nullptr,30)&&findChildHook(pointer(player.model),nullptr,27));
+    clearChildrenHook(pointer(player.model),nullptr,26); // stock quiver disappears when stored
+    assert(findChildHook(pointer(player.model),nullptr,30)&&findChildHook(pointer(player.model),nullptr,27));
+    count=loads;assert(setWeapons(&L)==1&&loads==count);
+    s.items[6]=quiver;L=request(0,s);assert(setWeapons(&L)==1);
+    assert(c->extra[6]&&findChildHook(pointer(player.model),nullptr,30)&&findChildHook(pointer(player.model),nullptr,27));
+    // Unrelated players' rebuilds do not inherit the local player's route.
+    memory[0x4000+0xD8]=0x5000;memory[0x4000+0xD40]=0;
+    scopedSheathPoint=27;rebuildWeaponHook(pointer(0x4000),nullptr,0);
+    assert(effectHomes[0]==26&&scopedSheathPoint==27);scopedSheathPoint=-1;
+    forgetWeapons(player.model);
+    if(rangeHolder){unref(pointer(rangeHolder));rangeHolder=0;}
+    s={};L=request(0,s);
     L.values[1]=999999;assert(setWeapons(&L)==-2);
     L=request(99,s);assert(setWeapons(&L)==-1);
     std::cout<<"PASS: native hook simulation (routing, draw reuse, callback ownership, preview isolation, detach recovery, destruction, idempotence, input validation)\n";

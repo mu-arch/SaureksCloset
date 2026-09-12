@@ -104,6 +104,18 @@ local function section(parent,x,y,w,h,stone,kind,opacity)
     end
     return f
 end
+local function settingsButton(parent,text,x,y,w,callback)
+    local b=section(parent,x,y,w,27,true,"Button")
+    b.caption=label(b,text,8,5,w-36,17,true)
+    b.caption:SetFont("Fonts\\FRIZQT__.TTF",w<150 and 10 or 12)
+    b.caption:SetJustifyV("MIDDLE")
+    b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
+    local open=texture(b,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",w-25,2,22,22,"ARTWORK")
+    -- Rotate the native dropdown arrow counterclockwise: down becomes right.
+    open:SetTexCoord(1,0,0,0,1,1,0,1)
+    b:SetScript("OnClick",callback)
+    return b
+end
 local function itemName(id)
     if id==nil then return "Passing through real armor" end
     if id==0 then return "Hidden" end
@@ -149,6 +161,7 @@ end
 function V:SetTab(tab)
     if tab=="character" then tab=self.wardrobePage or "armor" end
     if not self.pagesByName or not self.pagesByName[tab] then return end
+    local wasCharacter=self.pagesByName.armor:IsVisible()
     self:CloseOutfitMenu();self:CloseOutfitDetails();self:CloseBrowser();self.tab=tab
     self.selectedOutfit=nil;self.confirmDelete=nil
     local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags"
@@ -177,19 +190,20 @@ function V:SetTab(tab)
     end
     self.groundShadow:ClearAllPoints()
     self.groundShadow:SetPoint("TOPLEFT",self.pagesByName.armor,"TOPLEFT",sideControls and 138 or 113,-394)
-    if character then self:InvalidatePreviewModel(.25,true) end
-    self.previewSignature=nil;self:Refresh()
+    if character and not wasCharacter then self:HidePreviewUntilReady();self:InvalidatePreviewModel(0,true) end
+    self:Refresh()
 end
 function V:CreateUI()
     self.uiReady=false
     self.slot=1;self.query="";self.offset=0;self.previewRequests={}
     local f=sheet("VanityStudioFrame",UIParent,"Saurek's Closet")
     self.frame=f;f:Hide();f:SetFrameStrata("MEDIUM")
+    f.close:ClearAllPoints();f.close:SetPoint("CENTER",f,"TOPRIGHT",-46,-24)
     f:SetPoint("TOPLEFT",UIParent,"TOPLEFT",0,-104)
     -- Reserve both native panel columns while the item browser is open.
     UIPanelWindows[f:GetName()]={area="left",pushable=0,whileDead=1}
     f.close:SetScript("OnClick",function() HideUIPanel(V.frame) end)
-    f:SetScript("OnShow",function() V:RefreshPortraits();V:InvalidatePreviewModel(.25,true);V:Refresh() end)
+    f:SetScript("OnShow",function() V:HidePreviewUntilReady();V:RefreshPortraits();V:InvalidatePreviewModel(0,true);V:Refresh() end)
     f:SetScript("OnHide",function()
         if UIParent.doublewide==V.frame then UIParent.doublewide=nil end
         V:CloseOutfitMenu();V:CloseOutfitDetails();V:CloseBrowser();V:CancelDraft()
@@ -215,7 +229,7 @@ function V:CreateUI()
     self.outfitMenu=CreateFrame("Frame","SaureksClosetOutfitMenu",f)
     self.outfitMenu.displayMode="MENU";self.outfitMenu:Hide()
     self.outfitMenu.initialize=function(level) V:BuildOutfitMenu(level) end
-    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),outfits=page(f),about=page(f)}
+    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),outfits=page(f),settings=page(f)}
     self.tabButtons={}
     local function fitTab(b)
         local text=getglobal(b:GetName().."Text")
@@ -226,9 +240,9 @@ function V:CreateUI()
         PanelTemplates_TabResize(0,b,width+ends)
     end
     local previous
-    for i,name in ipairs({"character","outfits","about"}) do
+    for i,name in ipairs({"character","outfits","settings"}) do
         local b=CreateFrame("Button",f:GetName().."Tab"..i,f,"CharacterFrameTabButtonTemplate")
-        b:SetText(({character="Wardrobe",outfits="Saved Looks",about="About"})[name])
+        b:SetText(({character="Wardrobe",outfits="Saved Looks",settings="Settings"})[name])
         if previous then b:SetPoint("TOPLEFT",previous,"TOPRIGHT",-12,0)
         else b:SetPoint("TOPLEFT",f,"TOPLEFT",13,-434) end
         fitTab(b)
@@ -243,7 +257,7 @@ function V:CreateUI()
     self:CreateWeaponryPage(self.pagesByName.weaponry)
     self:CreateBagsPage(self.pagesByName.bags)
     self:CreateOutfitPage(self.pagesByName.outfits)
-    self:CreateAboutPage(self.pagesByName.about)
+    self:CreateSettingsPage(self.pagesByName.settings)
     self:CreateBrowser()
     self:CreateOutfitDetails()
     self:CreateWardrobeSelector()
@@ -274,7 +288,7 @@ function V:CreateWardrobeSelector()
             UIDropDownMenu_AddButton({text=text,checked=V.tab==page and 1 or nil,
                 func=function() V:SetTab(page) end})
         end
-        choice("Outfit","armor");choice("Body","body");choice("Weaponry","weaponry");choice("Bags","bags")
+        choice("Outfit","armor");choice("Weaponry","weaponry");choice("Body","body");choice("Bags","bags")
     end
     b:SetScript("OnClick",function() ToggleDropDownMenu(1,nil,menu,b:GetName(),0,0) end)
 end
@@ -395,7 +409,7 @@ function V:CreateSlotButton(parent,anchor,slot,x,y,iconSize)
     b:SetScript("OnEnter",function()
         local id=V:SlotSelection(this.slot)
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText(V.slotNames[this.slot],1,.82,0)
-        GameTooltip:AddLine(V:IsWeaponPosition(this.slot) and not id and "Empty" or itemName(id),1,1,1);GameTooltip:Show()
+        GameTooltip:AddLine(V:IsWeaponPosition(this.slot) and not id and "Passthrough" or itemName(id),1,1,1);GameTooltip:Show()
     end)
     b:SetScript("OnLeave",function() GameTooltip:Hide() end)
     self.slotButtons[slot]=b
@@ -449,7 +463,7 @@ function V:OpenSlotMenu(slot)
             local selected=V:SlotSelection(selectedSlot)
             if V:IsWeaponPosition(selectedSlot) then
                 UIDropDownMenu_AddButton({text="Custom Item",checked=selected and 1 or nil,func=function() V:OpenBrowser(selectedSlot) end})
-                UIDropDownMenu_AddButton({text="Empty",checked=not selected and 1 or nil,func=function() V:CloseBrowser();V:ClearSlot(selectedSlot) end})
+                UIDropDownMenu_AddButton({text="Passthrough",checked=not selected and 1 or nil,func=function() V:CloseBrowser();V:ClearSlot(selectedSlot) end})
                 return
             end
             UIDropDownMenu_AddButton({text="Custom Item",checked=selected~=nil and selected~=0 and 1 or nil,func=function() V:OpenBrowser(selectedSlot) end})
@@ -471,9 +485,7 @@ function V:OpenBrowser(slot)
     self.quality=nil;self.material=nil;self.favoritesOnly=false
     self.query="";self.search:SetText("")
     -- Use the stock two-column panel manager to prevent overlap with other menus.
-    HideUIPanel(self.frame)
-    UIPanelWindows[self.frame:GetName()].area="doublewide"
-    ShowUIPanel(self.frame)
+    self:SetPanelArea("doublewide")
     self.browser:Show();self:Refresh()
 end
 function V:CloseBrowser()
@@ -619,7 +631,19 @@ function V:CreateBodyPage(p)
     choice(appearance,"skin",1,"Skin");choice(appearance,"face",2,"Face")
     choice(appearance,"hairStyle",3,"Hair");choice(appearance,"hairColor",4,"Color")
     choice(appearance,"facial",5,"Features")
-    self.realBodyButton=button(p,"Reset body",236,86,100,function() V:ClearBody() end)
+    local reset=section(p,204,86,132,26,true,"Button",.75)
+    self.realBodyButton=reset
+    texture(reset,"Interface\\Buttons\\UI-CheckBox-Up",5,3,20,20,"ARTWORK")
+    self.trueModelCheck=texture(reset,"Interface\\Buttons\\UI-CheckBox-Check",5,3,20,20,"OVERLAY")
+    self.trueModelLabel=label(reset,"Use True Model",28,4,98,18,true)
+    self.trueModelLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
+    self.trueModelLabel:SetJustifyV("MIDDLE")
+    local hover=texture(reset,"Interface\\QuestFrame\\UI-QuestTitleHighlight",4,4,124,18,"ARTWORK")
+    hover:SetBlendMode("ADD");hover:SetAlpha(.3);hover:Hide()
+    reset:SetScript("OnEnter",function() hover:Show() end)
+    reset:SetScript("OnLeave",function() hover:Hide() end)
+    reset:SetScript("OnHide",function() hover:Hide() end)
+    reset:SetScript("OnClick",function() CloseDropDownMenus();V:ClearBody() end)
 end
 function V:BodyChoiceLabel(key,value,index)
     if key=="race" then return VanityStudioRaces[value][1]
@@ -629,6 +653,7 @@ end
 function V:BuildBodyMenu()
     local key=self.bodyMenuKey;if not key then return end
     local body=self:BodyDraft();local choices
+    if not body then return end
     if key=="race" then choices={1,2,3,4,5,6,7,8}
     elseif key=="sex" then choices={0,1}
     else choices=self:BodyValues(body,key) end
@@ -640,15 +665,17 @@ function V:BuildBodyMenu()
 end
 function V:RefreshBody()
     if not self.uiReady then return end
-    local body=self:BodyDraft();local available=self:BodyAvailable()
+    local body=self:BodyDraft();local available=self:BodyAvailable() and body~=nil
+    if self:UsingTrueModel() then self.trueModelCheck:Show() else self.trueModelCheck:Hide() end
+    enabled(self.realBodyButton,self:UsingTrueModel() or self:BodyAvailable())
     for key,row in pairs(self.bodyRows) do
         local index=1
-        if key~="race" and key~="sex" then
+        if body and key~="race" and key~="sex" then
             for i,value in ipairs(self:BodyValues(body,key)) do if value==body[key] then index=i end end
         end
-        local text=self:BodyChoiceLabel(key,body[key],index)
+        local text=body and self:BodyChoiceLabel(key,body[key],index) or "Loading..."
         row.value:SetText(row.prefix and (row.prefix.." "..text) or text)
-        local count=key=="race" and 8 or key=="sex" and 2 or table.getn(self:BodyValues(body,key))
+        local count=not body and 0 or key=="race" and 8 or key=="sex" and 2 or table.getn(self:BodyValues(body,key))
         enabled(row.button,available)
         enabled(row.previous,available and count>1);enabled(row.next,available and count>1)
     end
@@ -778,26 +805,32 @@ function V:CreateOutfitDetails()
     self.replaceOutfitMenu.initialize=function() V:BuildReplaceOutfitMenu() end
     self.outfitMessage=label(actions,"",0,-18,320,16,true)
 end
+function V:SetPanelArea(area)
+    if not self.frame or UIPanelWindows[self.frame:GetName()].area==area then return end
+    UIPanelWindows[self.frame:GetName()].area=area
+    if not self.frame:IsVisible() then return end
+    -- Transfer our panel registration without hiding the frame. Native model
+    -- OnHide releases its M2; resizing for a neighbor must not destroy previews.
+    if UIParent.left==self.frame then UIParent.left=nil end
+    if UIParent.center==self.frame then UIParent.center=nil end
+    if UIParent.doublewide==self.frame then UIParent.doublewide=nil end
+    if area=="doublewide" then SetDoublewideFrame(self.frame) else SetLeftFrame(self.frame) end
+end
 function V:ReleaseNeighbor()
     if not self.frame or (self.browser and self.browser:IsShown()) or (self.outfitDetails and self.outfitDetails:IsShown()) then return end
-    if UIPanelWindows[self.frame:GetName()].area=="doublewide" then
-        local shown=self.frame:IsShown()
-        if shown then HideUIPanel(self.frame) end
-        UIPanelWindows[self.frame:GetName()].area="left"
-        if shown then ShowUIPanel(self.frame) end
-    end
+    self:SetPanelArea("left")
 end
 function V:CloseOutfitDetails()
     CloseDropDownMenus()
     if self.outfitDetails then self.outfitDetails:Hide() end
-    self.detailPending=nil;self.detailMissing=nil;self.detailKey=nil;self.selectedOutfit=nil;self.confirmDelete=nil
+    self.detailPending=nil;self.detailPreviewSignature=nil;self.detailPreviewBodyKey=nil;self.detailMissing=nil;self.detailKey=nil;self.selectedOutfit=nil;self.confirmDelete=nil
     self:ReleaseNeighbor()
 end
 function V:OpenOutfitDetails(key)
     if not self:GetOutfit(key) then return end
     if self.outfitDetails:IsShown() and self.detailKey==key then return end
     self:CloseBrowser();self:CloseOutfitDetails()
-    HideUIPanel(self.frame);UIPanelWindows[self.frame:GetName()].area="doublewide";ShowUIPanel(self.frame)
+    self:SetPanelArea("doublewide")
     self.detailKey=key;self.selectedOutfit=key;self.confirmDelete=nil
     self.outfitName:SetText(key==self.UNSAVED and "" or key);self.outfitMessage:SetText("")
     self.outfitDetails:Show();self:RefreshPortraits();self:RefreshOutfits();self:RefreshOutfitDetails();self:StartOutfitPreview()
@@ -863,81 +896,72 @@ function V:RefreshPortraits()
         if frame and frame:IsVisible() then frame.portrait:SetTexture(art.."Logo.tga") end
     end
 end
-function V:CreateAboutPage(p)
-    texture(p,art.."About",20,75,320,352)
-    local view=CreateFrame("ScrollFrame","SaureksClosetAboutViewport",p)
-    self.aboutViewport=view
-    view:SetPoint("TOPLEFT",p,"TOPLEFT",51,-83);view:SetWidth(233);view:SetHeight(336)
-    local content=CreateFrame("Frame",nil,view);self.aboutContent=content
-    content:SetWidth(233);content:SetHeight(1)
-    view:SetScrollChild(content)
-    self.aboutBlocks={}
-    local function paragraph(text,size,white,gap,center)
-        local f=label(content,text,0,0,233,0,white)
-        f:SetFont("Fonts\\FRIZQT__.TTF",size)
-        if center then f:SetJustifyH("CENTER") end
-        table.insert(V.aboutBlocks,{text=f,gap=gap})
-        return f
+function V:CreateSettingsPage(p)
+    -- Full page at native pixel density; only unused bottom-panel padding is cropped.
+    self.settingsBackground=texture(p,art.."SettingsTL.tga",20,75,256,256)
+    texture(p,art.."SettingsTR.tga",276,75,64,256)
+    local bottomLeft=texture(p,art.."SettingsBL.tga",20,331,256,98)
+    local bottomRight=texture(p,art.."SettingsBR.tga",276,331,64,98)
+    bottomLeft:SetTexCoord(0,1,0,98/128);bottomRight:SetTexCoord(0,1,0,98/128)
+    -- Keep the title panel and navigation 40 UI pixels inside the page artwork.
+    local titleShade=texture(p,"Interface\\DialogFrame\\UI-DialogBox-Background",64,119,232,70,"ARTWORK")
+    titleShade:SetVertexColor(0,0,0,.85)
+    self.settingsTitlePanel=section(p,60,115,240,78)
+    self.settingsTitle=label(self.settingsTitlePanel,"Saurek's Closet",16,16,208,22)
+    self.settingsTitle:SetFont("Fonts\\FRIZQT__.TTF",16)
+    self.settingsVersion=label(self.settingsTitlePanel,"Version "..self.VERSION,16,45,208,17,true)
+    self.settingsNavigationButtons={}
+    for i,name in ipairs({"privacy","links","updates"}) do
+        local x=60+math.mod(i-1,2)*124
+        local y=209+math.floor((i-1)/2)*35
+        local b=settingsButton(p,({privacy="Internet Settings",links="Links",updates="Version Details"})[name],x,y,116,function() V:OpenInfoPage(this.infoPage) end)
+        b.infoPage=name;self.settingsNavigationButtons[name]=b
     end
-    paragraph("Saurek's Closet",16,true,8,true)
-    self.aboutVersion=paragraph("- Version "..self.VERSION.." -",11,true,22,true)
-    paragraph("Welcome, traveler! Step into the wardrobe and leave your mismatched outfit of yore behind. May you find a look worthy of your next adventure!",12,true,16)
-    paragraph("If you run into any trouble or have some ideas, make an issue on the Github page, or join my support Discord: 6mfxCdNbM6",12,true,16)
-    paragraph("How to use it?",12,false,16)
-    paragraph("Begin by selecting an item slot in the Wardrobe panel. As you make your first change, a new \"Look\" labeled \"(Unsaved)\" is created. Keep customizing until you feel satisfied, then click the \"Saved Looks\" tab and select your unsaved look. You can give it a name and permanantly save it.",12,true,16)
-    paragraph("Explain how the Wardrobe panel works?",12,false,16)
-    paragraph("Passthrough",12,false,6)
-    paragraph("Passes through the item your character actually has equipped in that slot.",12,true,15)
-    paragraph("Hide slot",12,false,6)
-    paragraph("Makes the slot appear empty, without removing your equipped item.",12,true,15)
-    paragraph("Select Appearance",12,false,6)
-    paragraph("Browse the wardrobe’s wares. This opens the item selection menu, where you can choose a custom appearance for that slot.",12,true,15)
-    paragraph("- Yours, Saurek",12,true,16)
-    -- Match the Saved Looks scrollbar's inset, end caps and right-hand stone strip.
-    local rail="Interface\\PaperDollInfoFrame\\UI-Character-ScrollBar"
-    local backing=texture(p,"Interface\\ClassTrainerFrame\\UI-ClassTrainer-ScrollBar",343,74,4,356,"ARTWORK")
-    backing:SetTexCoord(26/64,30/64,28/128,100/128)
-    local top=texture(p,rail,317,74,28,256,"ARTWORK");top:SetTexCoord(0,31/64,0,1)
-    local bottom=texture(p,rail,317,330,28,100,"ARTWORK");bottom:SetTexCoord(33/64,1,7/256,107/256)
-    local scroll=CreateFrame("Slider","SaureksClosetAboutScroll",p,"UIPanelScrollBarTemplate")
-    self.aboutScroll=scroll
-    scroll:SetPoint("TOPLEFT",p,"TOPLEFT",323,-94);scroll:SetWidth(16);scroll:SetHeight(317);scroll:SetValueStep(1)
-    self.aboutScrollUp=getglobal(scroll:GetName().."ScrollUpButton")
-    self.aboutScrollDown=getglobal(scroll:GetName().."ScrollDownButton")
-    self.aboutScrollThumb=getglobal(scroll:GetName().."ThumbTexture")
-    self.aboutScrollUp:SetScript("OnClick",function() V:SetAboutOffset((V.aboutOffset or 0)-32) end)
-    self.aboutScrollDown:SetScript("OnClick",function() V:SetAboutOffset((V.aboutOffset or 0)+32) end)
-    scroll:SetScript("OnValueChanged",function()
-        if not V.updatingAboutScroll then V:SetAboutOffset(this:GetValue()) end
-    end)
-    local function wheel() V:SetAboutOffset((V.aboutOffset or 0)-arg1*48) end
-    p:EnableMouseWheel(true);p:SetScript("OnMouseWheel",wheel)
-    view:EnableMouseWheel(true);view:SetScript("OnMouseWheel",wheel)
-    p:SetScript("OnShow",function() V:LayoutAbout() end)
-    self:LayoutAbout()
+
+    local window=sheet("SaureksClosetInformation",UIParent,"Internet Settings")
+    self.settingsInfoWindow=window
+    window:Hide();window:SetFrameStrata("DIALOG");window:SetClampedToScreen(true)
+    window:SetPoint("TOPLEFT",self.frame,"TOPRIGHT",-30,0)
+    window:SetMovable(true);window:RegisterForDrag("LeftButton")
+    window:SetScript("OnDragStart",function() this:StartMoving() end)
+    window:SetScript("OnDragStop",function() this:StopMovingOrSizing() end)
+    window.close:SetScript("OnClick",function() V.settingsInfoWindow:Hide() end)
+    table.insert(UISpecialFrames,window:GetName())
+    self.infoPages={privacy=page(window),updates=page(window),links=page(window)}
+    local privacy=self.infoPages.privacy
+    label(privacy,"Update checks",38,90,284,24)
+    local checkbox=CreateFrame("CheckButton","SaureksClosetAutoUpdates",privacy,"UICheckButtonTemplate")
+    self.autoUpdatesCheckbox=checkbox
+    checkbox:SetPoint("TOPLEFT",privacy,"TOPLEFT",36,-126);checkbox:SetWidth(24);checkbox:SetHeight(24)
+    label(privacy,"Automatically check for updates",67,131,254,36,true)
+    checkbox:SetScript("OnClick",function() V:SetAutoUpdates(this:GetChecked()) end)
+    label(privacy,"Check GitHub for a newer version when you log in. Enabled by default; your choice is saved for your account.",38,178,284,66,true)
+    label(privacy,"Turning this off stops automatic and manual update checks. Opening a website using Links is still available.",38,259,284,66,true)
+    self.updateMenuStatus=label(privacy,"",38,345,284,62,true)
+
+    local updates=self.infoPages.updates
+    self.updatesSummary=label(updates,"",38,84,284,202,true)
+    self.updatesSummary:SetFont("Fonts\\FRIZQT__.TTF",12)
+    self.updatesStatus=label(updates,"",38,297,284,46,true)
+    self.checkUpdatesButton=settingsButton(updates,"Check for updates",38,352,284,function() V:CheckForUpdates(true) end)
+    self.downloadUpdateButton=settingsButton(updates,"Open download page",38,387,284,function() V:OpenWebsite(2) end)
+
+    local links=self.infoPages.links
+    self.githubButton=settingsButton(links,"Open GitHub",38,96,284,function() V:OpenWebsite(1) end)
+    self.releasesButton=settingsButton(links,"Open download page",38,135,284,function() V:OpenWebsite(2) end)
+    self.discordButton=settingsButton(links,"Open support Discord",38,174,284,function() V:OpenWebsite(3) end)
+    label(links,"Website address",38,247,284,20)
+    self.websiteAddress=edit(links,"SaureksClosetWebsiteAddress",42,274,272,200)
+    self.websiteAddress:SetText(self.websiteURLs[1])
+    label(links,"You can copy this address if your browser does not open.",38,311,284,46,true)
+    self:RefreshUpdateUI()
 end
-function V:LayoutAbout()
-    local y=4
-    for _,block in ipairs(self.aboutBlocks) do
-        block.text:ClearAllPoints();block.text:SetPoint("TOPLEFT",self.aboutContent,"TOPLEFT",0,-y)
-        block.text:SetHeight(0)
-        y=y+math.ceil(block.text:GetHeight())+block.gap
-    end
-    self.aboutContent:SetHeight(y)
-    self.aboutMaxOffset=math.max(0,y-self.aboutViewport:GetHeight())
-    self:SetAboutOffset(self.aboutOffset or 0)
-end
-function V:SetAboutOffset(value)
-    self.aboutOffset=math.max(0,math.min(self.aboutMaxOffset or 0,value))
-    self.updatingAboutScroll=true
-    self.aboutScroll:SetMinMaxValues(0,self.aboutMaxOffset or 0)
-    self.aboutScroll:SetValue(self.aboutOffset)
-    self.updatingAboutScroll=nil
-    self.aboutViewport:SetVerticalScroll(self.aboutOffset)
-    enabled(self.aboutScrollUp,self.aboutOffset>0)
-    enabled(self.aboutScrollDown,self.aboutOffset<(self.aboutMaxOffset or 0))
-    if (self.aboutMaxOffset or 0)>0 then self.aboutScroll:Show();self.aboutScrollThumb:Show()
-    else self.aboutScrollThumb:Hide();self.aboutScroll:Hide() end
+function V:OpenInfoPage(name)
+    if not self.infoPages or not self.infoPages[name] then return end
+    for key,p in pairs(self.infoPages) do if key==name then p:Show() else p:Hide() end end
+    self.settingsInfoWindow.title:SetText(({privacy="Internet Settings",updates="Version Details",links="Links"})[name])
+    self.settingsInfoWindow:Show()
+    self:RefreshUpdateUI()
 end
 function V:RefreshList()
     if not self.uiReady or not self.rows then return end
@@ -1062,6 +1086,7 @@ function V:ActiveOutfitText()
 end
 function V:Refresh()
     if not self.uiReady or not self.frame or not self.frame:IsShown() then return end
+    self:RefreshUpdateUI()
     local c=VanityStudioCharacter
     self.enabledButton:SetText("Toggle")
     if self.weaponNotice then

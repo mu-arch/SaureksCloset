@@ -1,21 +1,5 @@
 [
   {
-    "source": "about_bg.png",
-    "source_sha256": "f501b6a3e80f78da15bc973be4196ae150e669f85a2bf11084163cc8141e1260",
-    "texture": "About.tga",
-    "crop": [
-      0,
-      142,
-      1086,
-      1306
-    ],
-    "size": [
-      512,
-      512
-    ],
-    "bytes": 786476
-  },
-  {
     "source": "logo.png",
     "source_sha256": "6b49a1e397e7164966aa9fc938eda5ee73a27ece8cf6c405c2153efdf76fc174",
     "texture": "Logo.tga",
@@ -226,5 +210,73 @@
       256
     ],
     "bytes": 262188
+  },
+  {
+    "source": "settings.png",
+    "source_sha256": "403f4871e85599227aaab0d7ccb761376385191aa2cc84bae40a80bfc6b71089",
+    "texture": "SettingsTL.tga",
+    "size": [
+      256,
+      256
+    ],
+    "layout": "320x354 full Settings page, one texture pixel per UI pixel",
+    "crop": [
+      0,
+      0,
+      256,
+      256
+    ],
+    "bytes": 196652
+  },
+  {
+    "source": "settings.png",
+    "source_sha256": "403f4871e85599227aaab0d7ccb761376385191aa2cc84bae40a80bfc6b71089",
+    "texture": "SettingsTR.tga",
+    "size": [
+      64,
+      256
+    ],
+    "layout": "320x354 full Settings page, one texture pixel per UI pixel",
+    "crop": [
+      256,
+      0,
+      320,
+      256
+    ],
+    "bytes": 49196
+  },
+  {
+    "source": "settings.png",
+    "source_sha256": "403f4871e85599227aaab0d7ccb761376385191aa2cc84bae40a80bfc6b71089",
+    "texture": "SettingsBL.tga",
+    "size": [
+      256,
+      128
+    ],
+    "layout": "320x354 full Settings page, one texture pixel per UI pixel",
+    "crop": [
+      0,
+      256,
+      256,
+      354
+    ],
+    "bytes": 98348
+  },
+  {
+    "source": "settings.png",
+    "source_sha256": "403f4871e85599227aaab0d7ccb761376385191aa2cc84bae40a80bfc6b71089",
+    "texture": "SettingsBR.tga",
+    "size": [
+      64,
+      128
+    ],
+    "layout": "320x354 full Settings page, one texture pixel per UI pixel",
+    "crop": [
+      256,
+      256,
+      320,
+      354
+    ],
+    "bytes": 24620
   }
 ]

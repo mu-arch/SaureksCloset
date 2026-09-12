@@ -6,7 +6,13 @@ struct PreviewEntry {
     Appearance body;
     unsigned token=0;
     int status=0;
+    std::uintptr_t component=0;
+    bool copiedAppearance=false;
 };
+inline bool previewBodyMatches(const std::array<std::uint32_t,91>& source,const Appearance& body){
+    return source[0]==body.race&&source[1]==body.sex&&source[2]==body.hairColor&&
+        source[3]==body.skin&&source[5]==body.face&&source[6]==body.facial&&source[7]==body.hairStyle;
+}
 struct PreviewRegistry {
     std::array<PreviewEntry,8> entries{};
     unsigned sequence=0;

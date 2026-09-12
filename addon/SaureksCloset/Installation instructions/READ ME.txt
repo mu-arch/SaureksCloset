@@ -1,5 +1,9 @@
 SAUREK'S CLOSET - DLL INSTALLATION
 
+Version 3.4.34 requires the matching DLL (renderer 30433), including
+background update checks and loaded-version compatibility reporting.
+Replace BOTH the addon folder and the DLL for this update.
+
 1. Fully close World of Warcraft.
 2. Open your main WoW folder: the folder containing WoW.exe.
 3. Copy or drag SaureksCloset.dll from this folder into that WoW folder.

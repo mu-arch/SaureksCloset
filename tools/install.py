@@ -68,11 +68,16 @@ def install(game,source,bridge,backup_root,receipt_path,expected_client_sha):
             if f.is_file():
                 rel=f.relative_to(source);assert (target/rel).read_bytes()==f.read_bytes()
                 files['Interface/AddOns/'+ADDON+'/'+rel.as_posix()]=digest(f)
+        bundled=target/'Installation instructions'/DLL
+        bundled.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(bridge,bundled)
+        assert digest(bundled)==digest(bridge)
+        files['Interface/AddOns/'+ADDON+'/Installation instructions/'+DLL]=digest(bundled)
         assert digest(native)==digest(bridge) and config.read_bytes()==updated
         assert digest(game/'WoW.exe')==expected_client_sha
         files[DLL]=digest(native)
-        receipt={'name':"Saurek's Closet",'version':'3.4.15','installed_to':str(target),'backup':str(backup),
-                 'body_bridge':'Renderer 30400 is unchanged. This UI update only requires the addon folder if 3.4.0 is already installed. Earlier versions also need SaureksCloset.dll and a full restart through VanillaFixes.',
+        receipt={'name':"Saurek's Closet",'version':'3.4.34','installed_to':str(target),'backup':str(backup),
+                 'body_bridge':'Addon 3.4.34 requires renderer 30433. Replace both addon and DLL, then fully restart through VanillaFixes. Settings contains automatic update checks and loaded-DLL compatibility details.',
                  'loader_updated':updated!=original,'migrated_saved_variables':[str(new) for old,new in migrations],
                  'files_sha256':files}
         receipt_path.write_text(json.dumps(receipt,indent=2)+'\n')
