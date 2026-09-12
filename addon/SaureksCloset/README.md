@@ -4,6 +4,10 @@
 
 **World of Warcraft 1.12.1 · Build 5875**
 
+<a href="https://discord.gg/6mfxCdNbM6"><img src="https://invidget.switchblade.xyz/6mfxCdNbM6" alt="Join Saurek's Addons on Discord — online and total member counts" width="430" height="110"></a>
+
+[Join the Discord community](https://discord.gg/6mfxCdNbM6)
+
 </div>
 
 ## Your character, your look
