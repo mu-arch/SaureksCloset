@@ -179,9 +179,9 @@ function V:SetTab(tab)
         self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags"})[tab])
     else self.wardrobeSelectorBox:Hide() end
     if tab=="armor" then
-        self.armorDecorationFrame:Show();self.armorShadowFrame:Show()
+        self.armorDecorationFrame:Show()
     else
-        self.armorDecorationFrame:Hide();self.armorShadowFrame:Hide()
+        self.armorDecorationFrame:Hide()
     end
     if sideControls then self.genericTrimFrame:Show() else self.genericTrimFrame:Hide() end
     local modelX=sideControls and 86 or 61
@@ -297,7 +297,7 @@ function V:CreateArmorPage(p)
     local decorationHeight=contentHeight+2
     -- Extend the Outfit trim 2px right; map its shadow and item centers with it.
     local leftWidth,rightWidth=164,163
-    texture(p,art.."Main",19,75,328,contentHeight)
+    texture(p,art.."Main.blp",19,75,328,contentHeight)
     self.groundShadow=texture(p,"Interface\\Glues\\Models\\UI_Tauren\\groundshadow",113,394,140,32,"BORDER")
     self.enabledButton=button(p,"Toggle",262,44,76,function() V:SetEnabled(not VanityStudioCharacter.enabled) end)
     local m=CreateFrame("DressUpModel","SaureksClosetModel",p)
@@ -330,30 +330,13 @@ function V:CreateArmorPage(p)
     slotLayer:SetPoint("TOPLEFT",p,"TOPLEFT",19,-75)
     slotLayer:SetWidth(leftWidth+rightWidth);slotLayer:SetHeight(decorationHeight);slotLayer:SetAlpha(1)
     slotLayer:SetFrameLevel(math.max(m:GetFrameLevel(),buffer:GetFrameLevel())+1)
-    -- Shadow follows the alpha silhouette of the complete decoration, behind the models.
-    local shadowLayer=CreateFrame("Frame",nil,p);self.armorShadowFrame=shadowLayer
-    shadowLayer:SetAllPoints(p)
-    for _,part in ipairs({{"TL",0,0,leftWidth},{"TR",leftWidth,0,rightWidth},{"BL",0,decorationHeight/2,leftWidth},{"BR",leftWidth,decorationHeight/2,rightWidth}}) do
-        local shadow=texture(shadowLayer,art.."ArmorShadow"..part[1],22+part[2],79+part[3],part[4],decorationHeight/2,"BACKGROUND")
-        -- Clip to the same right edge as the decoration, accounting for its 3px shadow offset.
-        if part[2]>0 then
-            shadow:SetWidth(part[4]-4);shadow:SetTexCoord(0,(part[4]-4)/part[4],0,1)
-        end
-        shadow:SetAlpha(.45)
-    end
-    -- The shadow must be below both preview buffers, not above the character.
-    shadowLayer:SetFrameLevel(p:GetFrameLevel()+1)
+    -- The trim and its offset shadow share one compressed texture and draw call.
+    -- Its 4px lower overhang preserves the previous shadow extent. Slot positions
+    -- still use decorationHeight, so the item controls do not move.
     self.armorSlotPanels={}
-    for _,part in ipairs({{"TL",0,0,leftWidth},{"TR",leftWidth,0,rightWidth},{"BL",0,decorationHeight/2,leftWidth},{"BR",leftWidth,decorationHeight/2,rightWidth}}) do
-        local t=texture(slotLayer,art.."ArmorSlots"..part[1],part[2],part[3],part[4],decorationHeight/2,"ARTWORK")
-        -- Crop the last UI pixel; retain texture scale, anchors and slot positions.
-        if part[2]>0 then
-            t:SetWidth(part[4]-1);t:SetTexCoord(0,(part[4]-1)/part[4],0,1)
-        end
-        -- Cool and mute the warm gold toward the native window's metal finish.
-        t:SetVertexColor(.82,.88,1)
-        t:SetAlpha(1);table.insert(self.armorSlotPanels,t)
-    end
+    local decoration=texture(slotLayer,art.."ArmorDecorations.blp",0,0,326,361,"ARTWORK")
+    decoration:SetVertexColor(.82,.88,1)
+    table.insert(self.armorSlotPanels,decoration)
     -- Extend the trim onto the native border, compensating for the artwork's
     -- transparent outer margin instead of leaving a second inset frame.
     local trimWidth,trimHeight=332,364
@@ -362,7 +345,7 @@ function V:CreateArmorPage(p)
     genericTrim:SetWidth(trimWidth);genericTrim:SetHeight(trimHeight)
     genericTrim:SetFrameLevel(slotLayer:GetFrameLevel());genericTrim:EnableMouse(false)
     for _,part in ipairs({{"TL",0,0},{"TR",trimWidth/2,0},{"BL",0,trimHeight/2},{"BR",trimWidth/2,trimHeight/2}}) do
-        local trim=texture(genericTrim,art.."GenericTrim"..part[1],part[2],part[3],trimWidth/2,trimHeight/2,"ARTWORK")
+        local trim=texture(genericTrim,art.."GenericTrim"..part[1]..".blp",part[2],part[3],trimWidth/2,trimHeight/2,"ARTWORK")
         -- This source is warmer/brighter than the armor art; balance its metal to match.
         trim:SetVertexColor(.63,.72,1)
     end
@@ -898,10 +881,10 @@ function V:RefreshPortraits()
 end
 function V:CreateSettingsPage(p)
     -- Full page at native pixel density; only unused bottom-panel padding is cropped.
-    self.settingsBackground=texture(p,art.."SettingsTL.tga",20,75,256,256)
-    texture(p,art.."SettingsTR.tga",276,75,64,256)
-    local bottomLeft=texture(p,art.."SettingsBL.tga",20,331,256,98)
-    local bottomRight=texture(p,art.."SettingsBR.tga",276,331,64,98)
+    self.settingsBackground=texture(p,art.."SettingsTL.blp",20,75,256,256)
+    texture(p,art.."SettingsTR.blp",276,75,64,256)
+    local bottomLeft=texture(p,art.."SettingsBL.blp",20,331,256,98)
+    local bottomRight=texture(p,art.."SettingsBR.blp",276,331,64,98)
     bottomLeft:SetTexCoord(0,1,0,98/128);bottomRight:SetTexCoord(0,1,0,98/128)
     -- Keep the title panel and navigation 40 UI pixels inside the page artwork.
     local titleShade=texture(p,"Interface\\DialogFrame\\UI-DialogBox-Background",64,119,232,70,"ARTWORK")

@@ -1,6 +1,6 @@
 SAUREK'S CLOSET - DLL INSTALLATION
 
-Version 3.4.34 requires the matching DLL (renderer 30433), including
+Version 3.4.35 requires the matching DLL (renderer 30433), including
 background update checks and loaded-version compatibility reporting.
 Replace BOTH the addon folder and the DLL for this update.
 

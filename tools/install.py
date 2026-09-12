@@ -51,10 +51,12 @@ def install(game,source,bridge,backup_root,receipt_path,expected_client_sha):
     try:
         # Keep user files in an existing installation; retire the legacy addon entirely.
         shutil.copytree(source,target,dirs_exist_ok=True)
-        # Remove retired side-tab assets after the existing addon has been backed up.
-        for name in ('TabBody.tga','TabOutfit.tga','SlotShadow.tga'):
+        # Retire old texture payloads only after backing up the existing addon.
+        retired_names=['TabBody.tga','TabOutfit.tga','SlotShadow.tga','About.tga','ArmorSlots.tga','Main.tga']
+        retired_names += [prefix+part+'.tga' for prefix in ('ArmorShadow','ArmorSlots','GenericTrim','Settings') for part in ('TL','TR','BL','BR')]
+        for name in retired_names:
             retired=target/'Textures'/name
-            if retired.is_file():retired.unlink()
+            if retired.is_file() and not (source/'Textures'/name).exists():retired.unlink()
         shutil.copy2(bridge,native)
         for old,new in migrations:
             shutil.copy2(old,new);assert new.read_bytes()==old.read_bytes()
@@ -76,8 +78,8 @@ def install(game,source,bridge,backup_root,receipt_path,expected_client_sha):
         assert digest(native)==digest(bridge) and config.read_bytes()==updated
         assert digest(game/'WoW.exe')==expected_client_sha
         files[DLL]=digest(native)
-        receipt={'name':"Saurek's Closet",'version':'3.4.34','installed_to':str(target),'backup':str(backup),
-                 'body_bridge':'Addon 3.4.34 requires renderer 30433. Replace both addon and DLL, then fully restart through VanillaFixes. Settings contains automatic update checks and loaded-DLL compatibility details.',
+        receipt={'name':"Saurek's Closet",'version':'3.4.35','installed_to':str(target),'backup':str(backup),
+                 'body_bridge':'Addon 3.4.35 requires renderer 30433. Replace both addon and DLL, then fully restart through VanillaFixes. Settings contains automatic update checks and loaded-DLL compatibility details.',
                  'loader_updated':updated!=original,'migrated_saved_variables':[str(new) for old,new in migrations],
                  'files_sha256':files}
         receipt_path.write_text(json.dumps(receipt,indent=2)+'\n')

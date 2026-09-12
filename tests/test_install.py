@@ -9,6 +9,10 @@ with tempfile.TemporaryDirectory() as tmp:
     for name in ['WoW.exe','VanillaHelpers.dll',m.LEGACY_DLL,m.MISNAMED_DLL,'Other.dll']:(game/name).write_bytes(name.encode())
     legacy=game/'Interface/AddOns'/m.LEGACY_ADDON;legacy.mkdir(parents=True);(legacy/'Core.lua').write_text('old addon')
     numbered=game/'Interface/AddOns'/m.NUMBERED_ADDON;numbered.mkdir();(numbered/'Core.lua').write_text('numbered addon')
+    current=game/'Interface/AddOns'/m.ADDON/'Textures';current.mkdir(parents=True)
+    (current/'ArmorShadowTL.tga').write_bytes(b'retired shadow')
+    (current/'Main.tga').write_bytes(b'retired backdrop')
+    (current/'PersonalTexture.tga').write_bytes(b'personal artwork')
     original=b'# personal config\r\nVanillaHelpers.dll\r\nVanillaCloset.dll\r\nOther.dll\r\n VanillaCloset.DLL \r\n'
     original+=m.MISNAMED_DLL.encode()+b'\r\n'
     (game/'dlls.txt').write_bytes(original)
@@ -18,7 +22,7 @@ with tempfile.TemporaryDirectory() as tmp:
         p.with_name(m.LEGACY_ADDON+'.lua').write_text('outdated original looks')
     p=game/'WTF/Account/LegacyOnly/SavedVariables'/(m.LEGACY_ADDON+'.lua');p.parent.mkdir(parents=True);p.write_text('legacy-only looks');saved.append(p)
     def snapshot():return {str(p.relative_to(game)):p.read_bytes() for p in game.rglob('*') if p.is_file()}
-    retired=game/'Interface/AddOns'/m.ADDON/'Textures';retired.mkdir(parents=True)
+    retired=game/'Interface/AddOns'/m.ADDON/'Textures';retired.mkdir(parents=True,exist_ok=True)
     (retired/'TabBody.tga').write_bytes(b'old side tab')
     (retired/'TabOutfit.tga').write_bytes(b'old side tab')
     initial=snapshot()
@@ -34,6 +38,8 @@ with tempfile.TemporaryDirectory() as tmp:
     assert not numbered.exists() and not legacy.exists() and not (game/m.LEGACY_DLL).exists() and not (game/m.MISNAMED_DLL).exists()
     assert (target/(m.ADDON+'.toc')).is_file()
     assert not (retired/'TabBody.tga').exists() and not (retired/'TabOutfit.tga').exists()
+    assert not (current/'ArmorShadowTL.tga').exists() and not (current/'Main.tga').exists()
+    assert (current/'PersonalTexture.tga').read_bytes()==b'personal artwork'
     assert (game/m.DLL).read_bytes()==bridge.read_bytes()
     assert (game/'dlls.txt').read_bytes()==b'# personal config\r\nVanillaHelpers.dll\r\nOther.dll\r\nSaureksCloset.dll\r\n'
     for old in saved:
