@@ -1,6 +1,6 @@
 <div align="center">
 
-# Saurek's Closet - A damn fine 1.12.1 Morph
+# Saurek's Closet - A damn fine 1.12 Transmog
 
 **World of Warcraft 1.12.1 · Build 5875**
 
@@ -12,13 +12,12 @@
 
 ## Your character, your look
 
-Saurek's Closet changes how your character looks on your own client. Your actual equipment, stats, and gameplay stay the same; other players do not see these appearance changes.
+Saurek's Closet morphs how your character looks on your own client. Your actual equipment, stats, and gameplay stay the same; other players do not see these appearance changes.
 
 - **Dress your character:** browse the item database, filter by quality and type, and preview an item before activating it.
 - **Choose what shows:** customize an armor slot, hide it, or pass through your real equipment.
 - **Customize your body:** change race, gender, skin, face, hair, and available features.
-- **Arrange your weaponry:** select appearances for both sides of the waist, both sides of the back, a shield, a ranged weapon, and a quiver.
-- **Save your favorites:** name new looks, update existing ones, and switch between them from the quick-selection dropdown.
+- **Arrange your weaponry:** select appearances for both sides of the waist, both sides of the back, a shield, a ranged weapon, and a quiver. Or all at once! Also, Hunters can rejoice, because Saurek's Closet fixes Vanilla WoW's bugged behavior that hides our bows after switching to melee in a fight.
 
 ## Take a look inside
 
@@ -26,13 +25,9 @@ Saurek's Closet changes how your character looks on your own client. Your actual
 
 ![Wardrobe and searchable item appearance browser](Screenshots/1.png)
 
-The wardrobe shows your character in a live 3D preview, with armor slots arranged along either side. Click a slot to choose a custom item, hide it, or pass through your real armor. The item browser opens alongside the wardrobe: search the database, narrow the list by quality and type, and click an item to preview it. **Activate Item** applies your selection. The crossed-out eye marks a hidden slot, and **Toggle** switches your local appearance overrides on or off.
-
 ### Body customization
 
 ![Body and appearance controls beside the character preview](Screenshots/2.png)
-
-**Use True Model** is checked while using your character's real appearance. The controls start with your actual settings. Changing a setting enables body customization and clears the check; clicking **Use True Model** restores your real appearance. Saved looks remember whether they use a custom body.
 
 ### Weaponry
 
@@ -50,6 +45,10 @@ The wardrobe shows your character in a live 3D preview, with armor slots arrange
 - **VanillaFixes** configured to launch your game.
 - **VanillaHelpers.dll** installed and enabled in `dlls.txt`.
 - Both parts of Saurek's Closet: the **`SaureksCloset` addon folder** and **`SaureksCloset.dll`** from the release download.
+
+### Privacy Notes
+
+- Vanilla Closet has a "Check for updates" feature that queries this Github page to see if an update is available. This feature can be disabled in settings. It's able to do this while other addons cannot because it uses memory injection to take full control of the game client and escape Blizzard's addon jail.
 
 ### Install the release
 
@@ -103,18 +102,3 @@ Several custom weapons can be displayed at once. When you draw weapons, matching
 
 Weaponry is still being refined. Some combinations may clip, and attachment positions cannot yet be adjusted manually. The **Bags** view is a placeholder; bag appearance customization is not available yet.
 
-
-## Settings and updates
-
-The **Settings** tab shows the addon version over the supplied wardrobe artwork.
-Its **Internet Settings** button opens the update-check preference, and **Links**
-opens GitHub, downloads, and support Discord. **Version Details** shows the
-addon and loaded/required DLL versions, along with the update status.
-**Automatically check for updates** is on by default and is saved for your account.
-Uncheck it to disable GitHub checks; the Check for updates button is disabled too.
-
-The addon always checks whether the loaded DLL matches its code. If the files do
-not match, or GitHub has a newer version, chat and the main window title show
-**Update Available**. Open **Settings > Version Details** for version details and the
-download page. Install the addon and DLL from the same release, then fully exit
-WoW and restart through VanillaFixes. Update checks do not install anything.
