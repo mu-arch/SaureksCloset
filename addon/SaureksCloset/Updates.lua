@@ -1,5 +1,5 @@
 local V=VanityStudio
-V.REQUIRED_RENDERER=30436
+V.REQUIRED_RENDERER=30500
 V.websiteURLs={"https://github.com/mu-arch/SaureksCloset","https://github.com/mu-arch/SaureksCloset/releases","https://discord.gg/6mfxCdNbM6"}
 function V:VersionParts(version)
     local _,_,major,minor,patch=string.find(version or "","^(%d+)%.(%d+)%.(%d+)$")
@@ -27,12 +27,11 @@ function V:RefreshUpdateUI()
     if self.updatesSummary then
         local text="Addon: "..self.VERSION.."\nLoaded DLL: "..self:RendererVersionText(self.loadedRenderer).."\nRequired DLL: "..self:RendererVersionText(self.REQUIRED_RENDERER)
         if self.updateMismatch then text=text.."\n\nThe addon and loaded DLL do not match. Install both from the same release, then fully restart WoW through VanillaFixes." end
-        if self.remoteRelease then text=text.."\n\nPublished addon: "..self.remoteRelease.addon.."\nPublished DLL: "..self:RendererVersionText(self.remoteRelease.dll) end
+        local remote=VanityStudioDB.autoCheckUpdates and self.remoteRelease
+        text=text.."\n\nGitHub current version addon: "..(remote and remote.addon or "Unknown")
+            .."\nGitHub current version DLL: "..(remote and self:RendererVersionText(remote.dll) or "Unknown")
         self.updatesSummary:SetText(text)
         self.updatesStatus:SetText(self.updateStatus or "Not checked yet.")
-    end
-    if self.updateMenuStatus then
-        self.updateMenuStatus:SetText(self.updateMismatch and "Addon / DLL mismatch" or (self.remoteUpdateAvailable and "Update available" or (self.updateStatus or "")))
     end
     if self.checkUpdatesButton then
         local on=VanityStudioDB.autoCheckUpdates and not self.updatePolling

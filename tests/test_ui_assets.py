@@ -28,10 +28,25 @@ for entry in manifest:
             assert lengths[0] == w*h//(1 if alpha else 2)
             assert offsets[0] + lengths[0] == len(data)
             assert lengths[0] == entry['gpu_base_bytes']
-        if p.name == 'ArmorDecorations.blp':
-            assert image.convert('RGBA').getchannel('A').crop((150,100,350,440)).getextrema() == (0,0)
-assert not list(folder.glob('ArmorShadow*')) and not list(folder.glob('ArmorSlots*'))
+assert not list(folder.glob('ArmorDecorations*'))
+assert not list(folder.glob('GenericTrim*')) and not list(folder.glob('WardrobeBG*'))
+assert not list(folder.glob('WardrobeFrame*'))
+assert not list(folder.glob('Settings*'))
+assert hashlib.sha256((folder / 'Main.blp').read_bytes()).hexdigest() == '1dcd62ccdc06f806bde7be4435f6e2f7f9589d1984ec2ec5075555db51321a3d'
+# Verify original artwork byte-for-byte, separately from the newly generated shadows.
+for prefix in ['ArmorSlots', 'ArmorShadow']:
+    layer = Image.new('RGBA', (512, 512))
+    for suffix, x, y in [('TL',0,0), ('TR',256,0), ('BL',0,256), ('BR',256,256)]:
+        name = prefix + suffix + '.tga'
+        with Image.open(folder / name) as part:
+            assert part.size == (256, 256) and part.mode == 'RGBA'
+            layer.paste(part, (x, y))
+        if prefix == 'ArmorSlots':
+            entry = next(e for e in manifest if e['texture'] == name)
+            assert entry['restored_from'] == 'v3.4.34'
+    # Preserve the original TGA's sub-1% alpha noise rather than editing the artwork.
+    assert layer.getchannel('A').crop((150,150,350,350)).getextrema()[1] <= 1
 ui = (root / 'addon/SaureksCloset/UI.lua').read_text()
-assert 'ArmorShadow' not in ui and 'armorShadowFrame' not in ui
-assert 'ArmorDecorations.blp' in ui
-print('PASS: texture inventory, native BLP headers/block sizes, checksums, transparent preview center and removed separate shadows')
+assert 'armorShadowFrame' in ui and 'shadow:SetAlpha(.60)' in ui
+assert 'ArmorDecorations.blp' not in ui
+print('PASS: texture inventory, payloads, checksums, restored art and separate shadow layers')

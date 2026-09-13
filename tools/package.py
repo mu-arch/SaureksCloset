@@ -1,46 +1,57 @@
-"""Make transfer and corresponding-source archives without Blizzard assets or executables."""
+"""Package one addon folder ready to drop into Interface/AddOns."""
 from pathlib import Path
-import hashlib,json,zipfile,re
-root=Path(__file__).resolve().parents[1]
-version='3.4.36'
-addon=root/'addon/SaureksCloset'
-assert re.search(r'V.VERSION = "([^"]+)"',(addon/'Core.lua').read_text()).group(1)==version
-assert re.search(r'## Version: ([^\n]+)',(addon/'SaureksCloset.toc').read_text()).group(1)==version
-dll_version=int(re.search(r'static int __fastcall version\(void\* L\)\{return result\(L,(\d+)\);\}',(root/'native/SaureksCloset.cpp').read_text()).group(1))
-required=int(re.search(r'V.REQUIRED_RENDERER=(\d+)',(addon/'Updates.lua').read_text()).group(1))
-assert dll_version==required,'Addon requires a different DLL version'
-(root/'update-version.txt').write_text('schema=1\naddon='+version+'\ndll='+str(dll_version)+'\n')
-expected_textures={entry['texture'] for entry in json.loads((addon/'ARTWORK.json').read_text())}
-actual_textures={p.name for p in (addon/'Textures').iterdir() if p.suffix in ('.tga','.blp')}
-assert actual_textures==expected_textures,'Texture directory and artwork record differ; do not ship unused source textures'
-payload={f'Interface/AddOns/SaureksCloset/{p.relative_to(addon).as_posix()}':p for p in addon.rglob('*') if p.is_file()}
-payload.update({'SaureksCloset.dll':root/'native/SaureksCloset.dll','README.md':(root/'README.md' if (root/'README.md').exists() else addon/'README.md'),
-                'LICENSE.txt':root/'native/LICENSE','MINHOOK-LICENSE.txt':root/'native/vendor/minhook/LICENSE.txt'})
-payload.update({'install.py':root/'tools/install.py','CLIENT-BUILD.json':root/'native/CLIENT-BUILD.json'})
-payload['update-version.txt']=root/'update-version.txt'
-payload.update({str(p.relative_to(root)):p for p in (root/'Screenshots').glob('*.png')})
-payload['Interface/AddOns/SaureksCloset/Installation instructions/SaureksCloset.dll']=root/'native/SaureksCloset.dll'
-# Publish the existing README exactly as written by its owner.
-readme_bytes=payload['README.md'].read_bytes()
-manifest={name:hashlib.sha256(readme_bytes if name=='README.md' else p.read_bytes()).hexdigest() for name,p in payload.items()}
-with zipfile.ZipFile(root/f'SaureksCloset-{version}.zip','w',zipfile.ZIP_DEFLATED) as z:
- for name,p in sorted(payload.items()):
-  if name=='README.md':z.writestr(name,readme_bytes)
-  else:z.write(p,name)
- z.writestr('FILES-SHA256.json',json.dumps(manifest,indent=2)+'\n')
-source={'update-version.txt':root/'update-version.txt'}
-for folder in ['addon','native','tools','tests','Screenshots']:
- for p in (root/folder).rglob('*'):
-  if not p.is_file() or any(part in ('build','__pycache__','.git') for part in p.parts):continue
-  if p.suffix in ('.dll','.o','.pyc') or p.name in ('BodyState.h','body_state.cpp'):continue
-  source[str(p.relative_to(root))]=p
-with zipfile.ZipFile(root/f'SaureksCloset-{version}-source.zip','w',zipfile.ZIP_DEFLATED) as z:
- for name,p in sorted(source.items()):z.write(p,name)
- z.writestr('README.md',readme_bytes)
+import hashlib
+import json
+import re
+import zipfile
 
-with zipfile.ZipFile(root/f'SaureksCloset-{version}.zip') as z:
- assert z.testzip() is None
- for name,digest in manifest.items():assert hashlib.sha256(z.read(name)).hexdigest()==digest
- assert 'SaureksCloset.dll' in z.namelist() and not any(name.endswith('WoW.exe') for name in z.namelist())
-with zipfile.ZipFile(root/f'SaureksCloset-{version}-source.zip') as z:assert z.testzip() is None
-print('Created and verified transfer and source archives for '+version)
+root = Path(__file__).resolve().parents[1]
+addon = root / 'addon/SaureksCloset'
+version = re.search(r'V.VERSION = "([^"]+)"', (addon / 'Core.lua').read_text()).group(1)
+assert re.search(r'## Version: ([^\n]+)', (addon / 'SaureksCloset.toc').read_text()).group(1) == version
+required = int(re.search(r'V.REQUIRED_RENDERER=(\d+)', (addon / 'Updates.lua').read_text()).group(1))
+native_version = int(re.search(r'static int __fastcall version\(void\* L\)\{return result\(L,(\d+)\);\}', (root / 'native/SaureksCloset.cpp').read_text()).group(1))
+assert native_version == required
+assert (root / 'update-version.txt').read_text() == f'schema=1\naddon={version}\ndll={required}\n'
+dll = addon / 'Installation instructions/SaureksCloset.dll'
+assert dll.read_bytes() == (root / 'native/SaureksCloset.dll').read_bytes(), 'Bundled DLL differs from the current build'
+artwork = json.loads((addon / 'ARTWORK.json').read_text())
+assert {p.name for p in (addon / 'Textures').iterdir()} == {e['texture'] for e in artwork}
+
+# Keep only the installable addon, its existing documentation/screenshots and DLL.
+# Build metadata stays in the repository. Never rewrite the user's README.
+payload = {}
+for p in addon.rglob('*'):
+    if not p.is_file():
+        continue
+    relative = p.relative_to(addon)
+    if relative.parts[0] == 'Textures':
+        include = p.name in {e['texture'] for e in artwork}
+    elif relative.parts[0] == 'Screenshots':
+        include = p.suffix.lower() == '.png'
+    elif relative.parts[0] == 'Installation instructions':
+        include = p.suffix.lower() in ('.txt', '.dll')
+    else:
+        include = len(relative.parts) == 1 and p.suffix.lower() in ('.lua', '.xml', '.toc', '.md')
+    if include:
+        payload['SaureksCloset/' + relative.as_posix()] = p
+assert 'SaureksCloset/README.md' in payload
+for line in (addon / 'SaureksCloset.toc').read_text().splitlines():
+    if line.strip() and not line.startswith('#'):
+        assert 'SaureksCloset/' + line.strip() in payload, line
+for link in re.findall(r'\]\((Screenshots/[^)]+)\)', (addon / 'README.md').read_text()):
+    assert 'SaureksCloset/' + link in payload, 'Missing README image: ' + link
+assert [name for name in payload if name.endswith('.dll')] == ['SaureksCloset/Installation instructions/SaureksCloset.dll']
+checksums = {name: hashlib.sha256(p.read_bytes()).hexdigest() for name, p in payload.items()}
+output = root / f'SaureksCloset-{version}.zip'
+with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+    for name, p in sorted(payload.items()):
+        archive.write(p, name)
+with zipfile.ZipFile(output) as archive:
+    assert archive.testzip() is None
+    assert set(archive.namelist()) == set(payload)
+    assert {name.split('/')[0] for name in archive.namelist()} == {'SaureksCloset'}
+    for name, digest in checksums.items():
+        assert hashlib.sha256(archive.read(name)).hexdigest() == digest, name
+        assert hashlib.sha256(payload[name].read_bytes()).hexdigest() == digest, 'Source changed during packaging'
+print(f'Created and verified {output.name}: one addon folder, {len(payload)} files, {output.stat().st_size:,} bytes.')

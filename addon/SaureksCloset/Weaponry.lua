@@ -20,6 +20,9 @@ function V:NormalizeWeapons(source)
         local id=source and source[slot]
         if type(id)=="number" and id>0 and self:WeaponCompatible(id,slot) then result[slot]=id end
     end
+    for _,name in ipairs({"quiverHorizontal","hideRangedWhenStored","hideMeleeWhenStored"}) do
+        if source and source[name]==true then result[name]=true end
+    end
     return result
 end
 function V:InitializeWeapons()
@@ -37,6 +40,29 @@ function V:InitializeWeapons()
 end
 function V:WeaponRendererAvailable()
     return type(SaureksClosetSetWeapons)=="function"
+end
+function V:QuiverRotationAvailable()
+    if not self:WeaponRendererAvailable() or type(SaureksClosetRendererVersion)~="function" then return false end
+    local ok,version=pcall(SaureksClosetRendererVersion)
+    return ok and type(version)=="number" and version>=30446
+end
+function V:SetQuiverHorizontal(horizontal)
+    if not self:QuiverRotationAvailable() then return false end
+    local c=VanityStudioCharacter;c.weapons=c.weapons or {}
+    c.weapons.quiverHorizontal=horizontal and true or nil
+    self:TrackUnsaved();self:SyncWeapons();self:Refresh();return true
+end
+function V:WeaponStoredVisibilityAvailable()
+    if not self:WeaponRendererAvailable() or type(SaureksClosetRendererVersion)~="function" then return false end
+    local ok,version=pcall(SaureksClosetRendererVersion)
+    return ok and type(version)=="number" and version>=30449
+end
+function V:SetWeaponStoredHidden(kind,hidden)
+    local field=kind=="ranged" and "hideRangedWhenStored" or kind=="melee" and "hideMeleeWhenStored"
+    if not field or not self:WeaponStoredVisibilityAvailable() then return false end
+    local c=VanityStudioCharacter;c.weapons=c.weapons or {}
+    c.weapons[field]=hidden and true or nil
+    self:TrackUnsaved();self:SyncWeapons();self:Refresh();return true
 end
 function V:SlotSelection(slot)
     local c=VanityStudioCharacter
@@ -78,6 +104,17 @@ function V:RealWeaponItems()
     end
     return real
 end
+function V:RealQuiverItem()
+    for slot=20,23 do
+        local link=GetInventoryItemLink("player",slot)
+        if link then
+            local _,_,number=string.find(link,"item:(%d+)")
+            local id=tonumber(number);local asset=id and SaureksClosetWeaponAssets[id]
+            if asset and asset[1]==5 then return id end
+        end
+    end
+    return 0
+end
 -- Vanilla bows have no native sheath, and the two-handed sword home (26)
 -- collides with quivers. Reserve separate homes for real equipped weapons too.
 -- These fallbacks are renderer inputs only; saved choices remain untouched.
@@ -105,7 +142,7 @@ end
 function V:ApplyWeaponRenderer(token,weapons)
     if not self:WeaponRendererAvailable() then return false end
     local w=weapons or {};local real=self:RealWeaponItems()
-    local ok,status=pcall(SaureksClosetSetWeapons,token,w[101] or 0,w[102] or 0,w[103] or 0,w[104] or 0,w[105] or 0,w[106] or 0,w[107] or 0,real[1],real[2],real[3])
+    local ok,status=pcall(SaureksClosetSetWeapons,token,w[101] or 0,w[102] or 0,w[103] or 0,w[104] or 0,w[105] or 0,w[106] or 0,w[107] or 0,real[1],real[2],real[3],w.quiverHorizontal and 1 or 0,w.hideRangedWhenStored and 1 or 0,w.hideMeleeWhenStored and 1 or 0,self:RealQuiverItem())
     return ok and status==1,status
 end
 function V:SyncWeapons()
@@ -122,10 +159,16 @@ function V:PreviewWeapons()
     if self.draft and self:IsWeaponPosition(self.draft.slot) then weapons[self.draft.slot]=self.draft.id end
     return self:EffectiveWeapons(weapons)
 end
-function V:WeaponSignature(weapons,overrides)
+function V:WeaponDisplaySignature(weapons)
+    local w=weapons or {}
+    return ":q"..(w.quiverHorizontal and 1 or 0)..":r"..(w.hideRangedWhenStored and 1 or 0)..":m"..(w.hideMeleeWhenStored and 1 or 0)
+end
+function V:WeaponSignature(weapons,overrides,omitDisplayOptions)
     weapons=self:EffectiveWeapons(weapons,overrides)
     local text=""
     for _,slot in ipairs(self.weaponOrder) do text=text..":"..((weapons or {})[slot] or 0) end
+    text=text..":a"..self:RealQuiverItem()
+    if not omitDisplayOptions then text=text..self:WeaponDisplaySignature(weapons) end
     return text
 end
 function V:PreviewWeaponRoutes(weapons,overrides)

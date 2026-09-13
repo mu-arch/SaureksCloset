@@ -104,10 +104,19 @@ local function section(parent,x,y,w,h,stone,kind,opacity)
     end
     return f
 end
-local function settingsButton(parent,text,x,y,w,callback)
-    local b=section(parent,x,y,w,27,true,"Button")
+local function textWidth(parent,text,size)
+    local measure=label(parent,text,0,0,0,18,true)
+    measure:SetFont("Fonts\\FRIZQT__.TTF",size)
+    local width=math.ceil(measure:GetWidth())
+    measure:Hide()
+    return width
+end
+local function settingsButton(parent,text,x,y,w,callback,opacity,height)
+    local fitText=not w
+    if fitText then w=textWidth(parent,text,11)+66 end
+    local b=section(parent,x,y,w,height or 27,true,"Button",opacity)
     b.caption=label(b,text,8,5,w-36,17,true)
-    b.caption:SetFont("Fonts\\FRIZQT__.TTF",w<150 and 10 or 12)
+    b.caption:SetFont("Fonts\\FRIZQT__.TTF",fitText and 11 or (w<150 and 10 or 12))
     b.caption:SetJustifyV("MIDDLE")
     b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
     local open=texture(b,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",w-25,2,22,22,"ARTWORK")
@@ -162,6 +171,7 @@ function V:SetTab(tab)
     if tab=="character" then tab=self.wardrobePage or "armor" end
     if not self.pagesByName or not self.pagesByName[tab] then return end
     local wasCharacter=self.pagesByName.armor:IsVisible()
+    if tab~="weaponry" then self:CloseWeaponOptions() end
     self:CloseOutfitMenu();self:CloseOutfitDetails();self:CloseBrowser();self.tab=tab
     self.selectedOutfit=nil;self.confirmDelete=nil
     local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags"
@@ -179,11 +189,10 @@ function V:SetTab(tab)
         self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags"})[tab])
     else self.wardrobeSelectorBox:Hide() end
     if tab=="armor" then
-        self.armorDecorationFrame:Show()
+        self.armorDecorationFrame:Show();self.armorShadowFrame:Show()
     else
-        self.armorDecorationFrame:Hide()
+        self.armorDecorationFrame:Hide();self.armorShadowFrame:Hide()
     end
-    if sideControls then self.genericTrimFrame:Show() else self.genericTrimFrame:Hide() end
     local modelX=sideControls and 86 or 61
     for _,model in ipairs({self.model,self.previewBuffer}) do
         model:ClearAllPoints();model:SetPoint("TOPLEFT",self.pagesByName.armor,"TOPLEFT",modelX,-86)
@@ -203,10 +212,12 @@ function V:CreateUI()
     -- Reserve both native panel columns while the item browser is open.
     UIPanelWindows[f:GetName()]={area="left",pushable=0,whileDead=1}
     f.close:SetScript("OnClick",function() HideUIPanel(V.frame) end)
-    f:SetScript("OnShow",function() V:HidePreviewUntilReady();V:RefreshPortraits();V:InvalidatePreviewModel(0,true);V:Refresh() end)
+    f:SetScript("OnShow",function()
+        V:HidePreviewUntilReady();V:RefreshPortraits();V:InvalidatePreviewModel(0,true);V:Refresh()
+    end)
     f:SetScript("OnHide",function()
         if UIParent.doublewide==V.frame then UIParent.doublewide=nil end
-        V:CloseOutfitMenu();V:CloseOutfitDetails();V:CloseBrowser();V:CancelDraft()
+        V:CloseOutfitMenu();V:CloseOutfitDetails();V:CloseBrowser();V:CloseWeaponOptions();V:CancelDraft()
         if V.outfitName then V.outfitName:ClearFocus() end
     end)
     table.insert(UISpecialFrames,f:GetName())
@@ -265,11 +276,15 @@ function V:CreateUI()
     self:SetTab("armor")
 end
 function V:CreateWardrobeSelector()
-    local box=section(self.frame,115,397,136,27,true,nil,.75)
+    local box=section(self.frame,115,392,136,27,true,nil,.75)
     box:SetFrameLevel(self.frame:GetFrameLevel()+10)
     self.wardrobeSelectorBox=box
-    -- Share the selector's vertical center on every wardrobe page.
-    self.rotationControls:SetPoint("LEFT",box,"RIGHT",20,0)
+    -- Place each turning arrow beside the selector on every wardrobe page.
+    self.rotationControls:SetAllPoints(box)
+    local left=getglobal(self.model:GetName().."RotateLeftButton")
+    local right=getglobal(self.model:GetName().."RotateRightButton")
+    left:ClearAllPoints();left:SetPoint("RIGHT",box,"LEFT",-3,0)
+    right:ClearAllPoints();right:SetPoint("LEFT",box,"RIGHT",3,0)
     self.wardrobeSelectorLabel=label(box,"Outfit",8,5,102,17,true)
     self.wardrobeSelectorLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
     self.wardrobeSelectorLabel:SetJustifyV("MIDDLE")
@@ -293,11 +308,8 @@ function V:CreateWardrobeSelector()
     b:SetScript("OnClick",function() ToggleDropDownMenu(1,nil,menu,b:GetName(),0,0) end)
 end
 function V:CreateArmorPage(p)
-    local contentHeight=355
-    local decorationHeight=contentHeight+2
-    -- Extend the Outfit trim 2px right; map its shadow and item centers with it.
-    local leftWidth,rightWidth=164,163
-    texture(p,art.."Main.blp",19,75,328,contentHeight)
+    -- Reuse the original baked background; inset only its right edge by 5px.
+    self.wardrobeBackgrounds={texture(p,art.."Main.blp",19,75,323,355)}
     self.groundShadow=texture(p,"Interface\\Glues\\Models\\UI_Tauren\\groundshadow",113,394,140,32,"BORDER")
     self.enabledButton=button(p,"Toggle",262,44,76,function() V:SetEnabled(not VanityStudioCharacter.enabled) end)
     local m=CreateFrame("DressUpModel","SaureksClosetModel",p)
@@ -325,31 +337,36 @@ function V:CreateArmorPage(p)
     end
     m:SetScript("OnUpdate",function() Model_OnUpdate(arg1,V.model) end)
     self.slotButtons={};self.wardrobeSlots={1,3,15,5,4,19,9,10,6,7,8}
+    local leftWidth,rightWidth,decorationHeight=164,163,357
     local slotLayer=CreateFrame("Frame","SaureksClosetArmorDecorations",p)
     self.armorDecorationFrame=slotLayer
     slotLayer:SetPoint("TOPLEFT",p,"TOPLEFT",19,-75)
     slotLayer:SetWidth(leftWidth+rightWidth);slotLayer:SetHeight(decorationHeight);slotLayer:SetAlpha(1)
     slotLayer:SetFrameLevel(math.max(m:GetFrameLevel(),buffer:GetFrameLevel())+1)
-    -- The trim and its offset shadow share one compressed texture and draw call.
-    -- Its 4px lower overhang preserves the previous shadow extent. Slot positions
-    -- still use decorationHeight, so the item controls do not move.
-    self.armorSlotPanels={}
-    local decoration=texture(slotLayer,art.."ArmorDecorations.blp",0,0,326,361,"ARTWORK")
-    decoration:SetVertexColor(.82,.88,1)
-    table.insert(self.armorSlotPanels,decoration)
-    -- Extend the trim onto the native border, compensating for the artwork's
-    -- transparent outer margin instead of leaving a second inset frame.
-    local trimWidth,trimHeight=332,364
-    local genericTrim=CreateFrame("Frame",nil,p);self.genericTrimFrame=genericTrim
-    genericTrim:SetPoint("TOPLEFT",p,"TOPLEFT",16,-72)
-    genericTrim:SetWidth(trimWidth);genericTrim:SetHeight(trimHeight)
-    genericTrim:SetFrameLevel(slotLayer:GetFrameLevel());genericTrim:EnableMouse(false)
-    for _,part in ipairs({{"TL",0,0},{"TR",trimWidth/2,0},{"BL",0,trimHeight/2},{"BR",trimWidth/2,trimHeight/2}}) do
-        local trim=texture(genericTrim,art.."GenericTrim"..part[1]..".blp",part[2],part[3],trimWidth/2,trimHeight/2,"ARTWORK")
-        -- This source is warmer/brighter than the armor art; balance its metal to match.
-        trim:SetVertexColor(.63,.72,1)
+    -- Shadow follows the alpha silhouette of the complete decoration, behind the models.
+    local shadowLayer=CreateFrame("Frame",nil,p);self.armorShadowFrame=shadowLayer
+    shadowLayer:SetAllPoints(p)
+    for _,part in ipairs({{"TL",0,0,leftWidth},{"TR",leftWidth,0,rightWidth},{"BL",0,decorationHeight/2,leftWidth},{"BR",leftWidth,decorationHeight/2,rightWidth}}) do
+        local shadow=texture(shadowLayer,art.."ArmorShadow"..part[1]..".tga",22+part[2],79+part[3],part[4],decorationHeight/2,"BACKGROUND")
+        -- Clip to the same right edge as the decoration, accounting for its 3px shadow offset.
+        if part[2]>0 then
+            shadow:SetWidth(part[4]-4);shadow:SetTexCoord(0,(part[4]-4)/part[4],0,1)
+        end
+        shadow:SetAlpha(.60)
     end
-    genericTrim:Hide()
+    -- The shadow must be below both preview buffers, not above the character.
+    shadowLayer:SetFrameLevel(p:GetFrameLevel()+1)
+    self.armorSlotPanels={}
+    for _,part in ipairs({{"TL",0,0,leftWidth},{"TR",leftWidth,0,rightWidth},{"BL",0,decorationHeight/2,leftWidth},{"BR",leftWidth,decorationHeight/2,rightWidth}}) do
+        local t=texture(slotLayer,art.."ArmorSlots"..part[1]..".tga",part[2],part[3],part[4],decorationHeight/2,"ARTWORK")
+        -- Crop the last UI pixel; retain texture scale, anchors and slot positions.
+        if part[2]>0 then
+            t:SetWidth(part[4]-1);t:SetTexCoord(0,(part[4]-1)/part[4],0,1)
+        end
+        -- Cool and mute the warm gold toward the native window's metal finish.
+        t:SetVertexColor(.82,.88,1)
+        t:SetAlpha(1);table.insert(self.armorSlotPanels,t)
+    end
     -- Centers of the slot openings in armor_slot_decorations.png.
     local positions={};local iconSize=32.0045
     local function slotAt(slot,x,y)
@@ -362,7 +379,13 @@ function V:CreateArmorPage(p)
     for i,slot in ipairs({10,6,7,8}) do slotAt(slot,1115.5,rightY[i]) end
     for _,slot in ipairs(self.wardrobeSlots) do
         local pos=positions[slot]
-        self:CreateSlotButton(slotLayer,p,slot,pos[1],pos[2],iconSize)
+        local b=self:CreateSlotButton(slotLayer,p,slot,pos[1],pos[2],iconSize)
+        b:SetFrameLevel(slotLayer:GetFrameLevel()+1)
+        -- A subtle additive pass brightens only the actual item rim.
+        b.borderLight=b:CreateTexture(nil,"ARTWORK")
+        b.borderLight:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+        b.borderLight:SetAllPoints(b.border)
+        b.borderLight:SetBlendMode("ADD");b.borderLight:SetAlpha(.08)
     end
     -- A sibling frame above BOTH model buffers, anchored just above the weapons.
     local note=CreateFrame("Frame",nil,p);self.previewNoteOverlay=note
@@ -401,7 +424,7 @@ end
 function V:CreateWeaponryPage(p)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
     local function group(title,y,height)
-        local box=section(p,27,y,124,height,true,nil,.65)
+        local box=section(p,33,y,124,height,true,nil,.65)
         local heading=label(box,title,8,7,108,14)
         heading:SetFont("Fonts\\FRIZQT__.TTF",11)
         heading:SetJustifyH("CENTER");heading:SetJustifyV("MIDDLE")
@@ -422,18 +445,90 @@ function V:CreateWeaponryPage(p)
     local back=group("Back",181,138)
     choice(back,103,"Left",1,27);choice(back,104,"Right",2,27)
     choice(back,105,"Shield",1,82);choice(back,106,"Ranged",2,82)
-    local quiver=section(p,27,327,124,48,true,nil,.65)
+    local quiver=section(p,33,327,124,48,true,nil,.65)
     self:CreateSlotButton(quiver,quiver,107,12,8,32)
     local quiverTitle=label(quiver,"Quiver",53,16,62,16)
     quiverTitle:SetFont("Fonts\\FRIZQT__.TTF",11);quiverTitle:SetJustifyV("MIDDLE")
-    self.weaponNotice=label(p,"",29,378,275,18,true)
+    self.weaponOptionsButton=settingsButton(p,"Options",0,90,nil,function() V:OpenWeaponOptions() end,.75,26)
+    self.weaponOptionsButton:ClearAllPoints()
+    self.weaponOptionsButton:SetPoint("TOPLEFT",p,"TOPLEFT",336-self.weaponOptionsButton:GetWidth(),-90)
+    self:CreateWeaponOptions()
+end
+function V:CreateWeaponOptions()
+    local f=sheet("SaureksClosetWeaponOptions",self.frame,"Weaponry Options")
+    self.weaponOptions=f;f:Hide();f:SetPoint("TOPLEFT",self.frame,"TOPLEFT",384,0)
+    f.close:SetScript("OnClick",function() V:CloseWeaponOptions() end)
+    f:SetScript("OnHide",function() GameTooltip:Hide();V:ReleaseNeighbor() end)
+    table.insert(UISpecialFrames,f:GetName())
+    local quiver=section(f,23,90,318,64,true)
+    label(quiver,"Quiver",12,8,290,18)
+    local horizontal=CreateFrame("CheckButton","SaureksClosetHorizontalQuiver",quiver,"UICheckButtonTemplate")
+    self.horizontalQuiverCheckbox=horizontal
+    horizontal:SetPoint("TOPLEFT",quiver,"TOPLEFT",8,-30);horizontal:SetWidth(24);horizontal:SetHeight(24)
+    horizontal:SetHitRectInsets(0,-278,0,0)
+    self.horizontalQuiverLabel=label(quiver,"Horizontal",38,31,270,22,true)
+    self.horizontalQuiverLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
+    self.horizontalQuiverLabel:SetJustifyV("MIDDLE")
+    horizontal:SetScript("OnClick",function() V:SetQuiverHorizontal(this:GetChecked()) end)
+    horizontal:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:ClearLines()
+        GameTooltip:AddLine("You may find it useful to rotate the quiver to prevent overlap with 2h weapons.",1,1,1,true)
+        GameTooltip:Show()
+    end)
+    horizontal:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    local stored=section(f,23,166,318,94,true)
+    self.weaponStoredOptions=stored
+    label(stored,"Stored weapons",12,8,290,18)
+    local function storedChoice(kind,field,text,y,tooltip)
+        local name=kind=="ranged" and "SaureksClosetHideRangedWhenStored" or "SaureksClosetHideMeleeWhenStored"
+        local checkbox=CreateFrame("CheckButton",name,stored,"UICheckButtonTemplate")
+        self[field.."Checkbox"]=checkbox;checkbox.kind=kind
+        checkbox:SetPoint("TOPLEFT",stored,"TOPLEFT",8,-y);checkbox:SetWidth(24);checkbox:SetHeight(24)
+        checkbox:SetHitRectInsets(0,-278,0,0)
+        local caption=label(stored,text,38,y+1,270,22,true)
+        self[field.."Label"]=caption
+        caption:SetFont("Fonts\\FRIZQT__.TTF",11);caption:SetJustifyV("MIDDLE")
+        checkbox:SetScript("OnClick",function() V:SetWeaponStoredHidden(this.kind,this:GetChecked()) end)
+        checkbox:SetScript("OnEnter",function()
+            GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:ClearLines()
+            GameTooltip:AddLine(tooltip,1,1,1,true);GameTooltip:Show()
+        end)
+        checkbox:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    end
+    storedChoice("ranged","hideRangedWhenStored","Hide ranged weapon when not in use",30,
+        "Hide your ranged weapon while it is stored. It remains visible while drawn.")
+    storedChoice("melee","hideMeleeWhenStored","Hide melee weapons when not in use",60,
+        "Hide melee weapons while they are stored. Drawn weapons and shields remain visible.")
+    self.weaponNotice=label(f,"",29,274,306,40,true)
     self.weaponNotice:SetFont("Fonts\\FRIZQT__.TTF",10)
+end
+function V:OpenWeaponOptions()
+    if not self.weaponOptions or not self.frame:IsVisible() or self.tab~="weaponry" then return end
+    self.weaponOptions:Show()
+    if self.browser and self.browser:IsShown() then self:CloseBrowser() end
+    self:SetPanelArea("doublewide");self:Refresh()
+end
+function V:CloseWeaponOptions()
+    if self.weaponOptions then self.weaponOptions:Hide() end
+    self:ReleaseNeighbor()
 end
 function V:CreateBagsPage(p)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
-    label(p,"Bags",27,87,124,18)
-    local note=label(p,"Bag appearance customization is not available yet.",27,113,128,70,true)
+    label(p,"Bags",33,87,124,18)
+    local note=label(p,"Bag appearance customization is not available yet.",33,113,128,70,true)
     note:SetJustifyV("TOP")
+end
+function V:RefreshSlotHighlights()
+    if not self.slotButtons then return end
+    local slot
+    if self.frame and self.frame:IsVisible() then
+        if self.slotMenu and UIDROPDOWNMENU_OPEN_MENU==self.slotMenu:GetName() and DropDownList1:IsShown() then
+            slot=self.menuSlot
+        elseif self.browser and self.browser:IsShown() then slot=self.slot end
+    end
+    for id,b in pairs(self.slotButtons) do
+        if id==slot then b.selected:Show() else b.selected:Hide() end
+    end
 end
 function V:OpenSlotMenu(slot)
     if not self.slotButtons[slot] or (self:IsWeaponPosition(slot) and self.tab~="weaponry") then return end
@@ -441,6 +536,13 @@ function V:OpenSlotMenu(slot)
     if not self.slotMenu then
         self.slotMenu=CreateFrame("Frame","SaureksClosetSlotMenu",self.frame)
         self.slotMenu.displayMode="MENU";self.slotMenu:Hide()
+        -- The visible list is shared by all native dropdowns; the owner frame
+        -- itself never shows. Keep its original submenu cleanup when dismissed.
+        local onHide=DropDownList1:GetScript("OnHide")
+        DropDownList1:SetScript("OnHide",function()
+            if onHide then onHide() end
+            V:RefreshSlotHighlights()
+        end)
         self.slotMenu.initialize=function()
             local selectedSlot=V.menuSlot
             local selected=V:SlotSelection(selectedSlot)
@@ -461,6 +563,7 @@ function V:OpenSlotMenu(slot)
     if self.menuSlot~=slot then self:CloseOutfitMenu() end
     self.menuSlot=slot
     ToggleDropDownMenu(1,nil,self.slotMenu,self.slotButtons[slot]:GetName(),0,0)
+    self:RefreshSlotHighlights()
 end
 function V:OpenBrowser(slot)
     if not self.slotButtons[slot] or (self:IsWeaponPosition(slot) and self.tab~="weaponry") then return end
@@ -469,12 +572,13 @@ function V:OpenBrowser(slot)
     self.query="";self.search:SetText("")
     -- Use the stock two-column panel manager to prevent overlap with other menus.
     self:SetPanelArea("doublewide")
-    self.browser:Show();self:Refresh()
+    self.browser:Show();self:CloseWeaponOptions();self:Refresh()
 end
 function V:CloseBrowser()
     CloseDropDownMenus()
     self:CancelDraft()
     if self.browser then self.browser:Hide();self.search:ClearFocus() end
+    self:RefreshSlotHighlights()
     self:ReleaseNeighbor()
 end
 function V:CreateBrowser()
@@ -482,7 +586,8 @@ function V:CreateBrowser()
     self.browser=f;f:Hide();f:SetPoint("TOPLEFT",self.frame,"TOPLEFT",384,0)
     f:SetScript("OnShow",function() V:RefreshPortraits() end)
     f.close:SetScript("OnClick",function() V:CloseBrowser();V:Refresh() end)
-    local filters=section(f,23,79,318,72,true)
+    self.commitButton=button(f,"Apply Appearance",206,44,132,function() V:CommitDraft();V:Refresh() end)
+    local filters=section(f,23,79,318,100,true)
     self.search=edit(filters,"SaureksClosetSearch",15,10,293)
     -- InputBoxTemplate extends 5px left: these bounds give 10px outer margins.
     -- The text starts 5px inside that border; reserve the same inset on the right.
@@ -511,14 +616,19 @@ function V:CreateBrowser()
     end
     self.qualityButton,self.qualityLabel,self.qualityMenu=filterSelector("quality","SaureksClosetQualityFilter",7,148)
     self.materialButton,self.materialLabel,self.materialMenu=filterSelector("material","SaureksClosetTypeFilter",159,152)
-    local list=section(f,23,155,318,235)
+    local listHeight=245 -- Leave 3px between the raised tile and the pane bottom.
+    local list=section(f,23,183,318,listHeight)
     local rail="Interface\\PaperDollInfoFrame\\UI-Character-ScrollBar"
-    local backing=texture(list,"Interface\\ClassTrainerFrame\\UI-ClassTrainer-ScrollBar",314,4,4,227,"ARTWORK")
+    local backing=texture(list,"Interface\\ClassTrainerFrame\\UI-ClassTrainer-ScrollBar",314,4,4,listHeight-8,"ARTWORK")
     backing:SetTexCoord(26/64,30/64,28/128,100/128)
     local railTop=texture(list,rail,288,4,28,128,"ARTWORK");railTop:SetTexCoord(0,31/64,0,.5)
-    local railBottom=texture(list,rail,288,132,28,99,"ARTWORK");railBottom:SetTexCoord(33/64,1,8/256,107/256)
+    -- The native bottom cap ends at texture row 108; rows below it are transparent.
+    -- Stretch only the straight track, then anchor the intact cap around the down arrow.
+    local railMiddle=texture(list,rail,288,132,28,listHeight-160,"ARTWORK");railMiddle:SetTexCoord(33/64,1,8/256,84/256)
+    local railBottom=texture(list,rail,288,listHeight-28,28,24,"ARTWORK");railBottom:SetTexCoord(33/64,1,84/256,108/256)
+    self.scrollRailBottom=railBottom
     local s=CreateFrame("Slider","SaureksClosetItemScroll",list,"UIPanelScrollBarTemplate")
-    self.scroll=s;s:SetPoint("TOPLEFT",list,"TOPLEFT",294,-24);s:SetWidth(16);s:SetHeight(188);s:SetValueStep(1)
+    self.scroll=s;s:SetPoint("TOPLEFT",list,"TOPLEFT",294,-24);s:SetWidth(16);s:SetHeight(listHeight-48);s:SetValueStep(1)
     self.scrollThumb=getglobal(s:GetName().."ThumbTexture")
     self.scrollUp=getglobal(s:GetName().."ScrollUpButton")
     self.scrollDown=getglobal(s:GetName().."ScrollDownButton")
@@ -531,32 +641,49 @@ function V:CreateBrowser()
     f:EnableMouseWheel(true)
     f:SetScript("OnMouseWheel",function() V.offset=math.max(0,math.min(V.maxOffset or 0,V.offset-arg1*3));V:RefreshList() end)
     self.rows={};self.visibleItemRows=8
+    local rowHeight=(listHeight-8)/self.visibleItemRows
     for i=1,self.visibleItemRows do
         local b=CreateFrame("Button",nil,list)
-        b:SetPoint("TOPLEFT",list,"TOPLEFT",7,-(5+(i-1)*28));b:SetWidth(276);b:SetHeight(28)
+        b:SetPoint("TOPLEFT",list,"TOPLEFT",7,-(4+(i-1)*rowHeight));b:SetWidth(276);b:SetHeight(rowHeight)
         b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
-        b.selected=texture(b,"Interface\\QuestFrame\\UI-QuestTitleHighlight",0,0,276,28)
+        b.selected=texture(b,"Interface\\QuestFrame\\UI-QuestTitleHighlight",0,0,276,rowHeight)
         b.selected:SetBlendMode("ADD")
-        b.icon=texture(b,"Interface\\Icons\\INV_Misc_QuestionMark",0,2,24,24,"ARTWORK")
-        b.nameLabel=label(b,"",29,0,245,13,true)
-        b.metaLabel=label(b,"",29,14,245,12,true)
+        b.icon=texture(b,"Interface\\Icons\\INV_Misc_QuestionMark",0,3,24,24,"ARTWORK")
+        b.nameLabel=label(b,"",29,1,245,13,true)
+        b.metaLabel=label(b,"",29,16,245,12,true)
         b:SetScript("OnClick",function() if this.item then V:DraftSlot(V.slot,this.item[1]) end end)
         b:SetScript("OnEnter",function()
             if not this.item then return end
             GameTooltip:SetOwner(this,"ANCHOR_RIGHT")
             if GetItemInfo(this.item[1]) then GameTooltip:SetHyperlink(V:Link(this.item[1]))
             else GameTooltip:SetText(this.item[2],1,1,1);GameTooltip:AddLine("Item "..this.item[1],1,1,1) end
+            if (this.item[11] or 0)==0 and this.item[12] then
+                GameTooltip:AddLine("Quest minimum: Level "..this.item[12],1,.82,0)
+            end
             GameTooltip:Show()
         end)
         b:SetScript("OnLeave",function() GameTooltip:Hide() end)
         self.rows[i]=b
     end
-    self.emptyLabel=label(list,"No matches. Clear the search or change the filters.",12,82,272,50,true)
-    self.resultsLabel=label(f,"",30,399,160,22,true)
+    self.emptyLabel=label(list,"No matches. Clear the search or change the filters.",12,(listHeight-50)/2,272,50,true)
+    self.resultsLabel=label(filters,"",217,71,87,22,true)
     self.resultsLabel:SetFont("Fonts\\FRIZQT__.TTF",10)
     self.resultsLabel:SetTextColor(.85,.85,.85)
-    self.resultsLabel:SetJustifyH("LEFT");self.resultsLabel:SetJustifyV("MIDDLE")
-    self.commitButton=button(f,"Activate Item",212,399,123,function() V:CommitDraft();V:Refresh() end)
+    self.resultsLabel:SetJustifyH("RIGHT");self.resultsLabel:SetJustifyV("MIDDLE")
+    local checkbox=CreateFrame("CheckButton","SaureksClosetHideHigherLevelItems",filters,"UICheckButtonTemplate")
+    self.hideHigherLevelCheckbox=checkbox
+    checkbox:SetPoint("TOPLEFT",filters,"TOPLEFT",7,-70);checkbox:SetWidth(24);checkbox:SetHeight(24)
+    checkbox:SetHitRectInsets(0,-174,0,0)
+    self.hideHigherLevelLabel=label(filters,"Hide Higher Level Items",34,71,171,22,true)
+    self.hideHigherLevelLabel:SetJustifyV("MIDDLE")
+    checkbox:SetScript("OnClick",function() V:SetHideHigherLevelItems(this:GetChecked()) end)
+    checkbox:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(this,"ANCHOR_TOP");GameTooltip:SetText("Hide Higher Level Items",1,1,1)
+        GameTooltip:AddLine("Hide items above your character's level.",1,1,1)
+        GameTooltip:AddLine("Quest reward items without explicit level req. use the quest's minimum level.",1,1,1,true)
+        GameTooltip:Show()
+    end)
+    checkbox:SetScript("OnLeave",function() GameTooltip:Hide() end)
 end
 function V:BuildItemFilterMenu(kind)
     local function option(text,value)
@@ -565,11 +692,13 @@ function V:BuildItemFilterMenu(kind)
         end})
     end
     UIDropDownMenu_AddButton({text=kind=="quality" and "Quality" or "Type",isTitle=1,notCheckable=1})
-    option("All",nil)
+    option(kind=="quality" and "All Rarities" or "All",nil)
     if kind=="quality" then
         for value=0,6 do option(self.qualityNames[value],value) end
+        option("Unobtainable","unobtainable")
     else
-        for _,value in ipairs(self:ItemTypeOptions(self.slot)) do option(self:ItemTypeName(value,self.slot),value) end
+        local maxLevel=VanityStudioDB.hideHigherLevelItems and UnitLevel("player") or nil
+        for _,value in ipairs(self:ItemTypeOptions(self.slot,self.quality,maxLevel)) do option(self:ItemTypeName(value,self.slot),value) end
     end
 end
 function V:CreateBodyPage(p)
@@ -579,7 +708,7 @@ function V:CreateBodyPage(p)
     self.bodyMenu.displayMode="MENU";self.bodyMenu:Hide()
     self.bodyMenu.initialize=function() V:BuildBodyMenu() end
     local function group(title,y,height)
-        local box=section(p,27,y,132,height,true,nil,.65)
+        local box=section(p,33,y,132,height,true,nil,.65)
         local heading=label(box,title,8,7,116,14)
         heading:SetFont("Fonts\\FRIZQT__.TTF",11)
         heading:SetJustifyH("CENTER");heading:SetJustifyV("MIDDLE")
@@ -614,18 +743,25 @@ function V:CreateBodyPage(p)
     choice(appearance,"skin",1,"Skin");choice(appearance,"face",2,"Face")
     choice(appearance,"hairStyle",3,"Hair");choice(appearance,"hairColor",4,"Color")
     choice(appearance,"facial",5,"Features")
-    local reset=section(p,204,86,132,26,true,"Button",.75)
+    local captionWidth=textWidth(p,"Passthrough",11)+30
+    local resetWidth=captionWidth+36
+    local reset=section(p,336-resetWidth,90,resetWidth,26,true,"Button",.75)
     self.realBodyButton=reset
     texture(reset,"Interface\\Buttons\\UI-CheckBox-Up",5,3,20,20,"ARTWORK")
     self.trueModelCheck=texture(reset,"Interface\\Buttons\\UI-CheckBox-Check",5,3,20,20,"OVERLAY")
-    self.trueModelLabel=label(reset,"Use True Model",28,4,98,18,true)
+    self.trueModelLabel=label(reset,"Passthrough",28,4,captionWidth,18,true)
     self.trueModelLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
     self.trueModelLabel:SetJustifyV("MIDDLE")
-    local hover=texture(reset,"Interface\\QuestFrame\\UI-QuestTitleHighlight",4,4,124,18,"ARTWORK")
+    local hover=texture(reset,"Interface\\QuestFrame\\UI-QuestTitleHighlight",4,4,resetWidth-8,18,"ARTWORK")
     hover:SetBlendMode("ADD");hover:SetAlpha(.3);hover:Hide()
-    reset:SetScript("OnEnter",function() hover:Show() end)
-    reset:SetScript("OnLeave",function() hover:Hide() end)
-    reset:SetScript("OnHide",function() hover:Hide() end)
+    reset:SetScript("OnEnter",function()
+        hover:Show()
+        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:ClearLines()
+        GameTooltip:AddLine("Enabling this passes through your real character model.",1,1,1,true)
+        GameTooltip:Show()
+    end)
+    reset:SetScript("OnLeave",function() hover:Hide();GameTooltip:Hide() end)
+    reset:SetScript("OnHide",function() hover:Hide();GameTooltip:Hide() end)
     reset:SetScript("OnClick",function() CloseDropDownMenus();V:ClearBody() end)
 end
 function V:BodyChoiceLabel(key,value,index)
@@ -714,7 +850,7 @@ function V:CreateOutfitPage(p)
     self.outfitScrollUp:SetScript("OnClick",function() V:SetOutfitOffset(V.outfitOffset-1) end)
     self.outfitScrollDown:SetScript("OnClick",function() V:SetOutfitOffset(V.outfitOffset+1) end)
     scroll:SetScript("OnValueChanged",function() if not V.updatingOutfitScroll then V:SetOutfitOffset(this:GetValue()) end end)
-    self.outfitEmpty=label(list,"Customize your armor or race\nto create an (Unsaved) outfit.",15,20,railX-30,58,true)
+    self.outfitEmpty=label(list,"Customize your armor or race\nto create an (Unsaved Look).",15,20,railX-30,58,true)
     p:EnableMouseWheel(true)
     p:SetScript("OnMouseWheel",function()
         V:SetOutfitOffset(V.outfitOffset-arg1*3)
@@ -800,7 +936,7 @@ function V:SetPanelArea(area)
     if area=="doublewide" then SetDoublewideFrame(self.frame) else SetLeftFrame(self.frame) end
 end
 function V:ReleaseNeighbor()
-    if not self.frame or (self.browser and self.browser:IsShown()) or (self.outfitDetails and self.outfitDetails:IsShown()) then return end
+    if not self.frame or (self.browser and self.browser:IsShown()) or (self.outfitDetails and self.outfitDetails:IsShown()) or (self.weaponOptions and self.weaponOptions:IsShown()) then return end
     self:SetPanelArea("left")
 end
 function V:CloseOutfitDetails()
@@ -880,19 +1016,17 @@ function V:RefreshPortraits()
     end
 end
 function V:CreateSettingsPage(p)
-    -- Full page at native pixel density; only unused bottom-panel padding is cropped.
-    self.settingsBackground=texture(p,art.."SettingsTL.blp",20,75,256,256)
-    texture(p,art.."SettingsTR.blp",276,75,64,256)
-    local bottomLeft=texture(p,art.."SettingsBL.blp",20,331,256,98)
-    local bottomRight=texture(p,art.."SettingsBR.blp",276,331,64,98)
-    bottomLeft:SetTexCoord(0,1,0,98/128);bottomRight:SetTexCoord(0,1,0,98/128)
-    -- Keep the title panel and navigation 40 UI pixels inside the page artwork.
-    local titleShade=texture(p,"Interface\\DialogFrame\\UI-DialogBox-Background",64,119,232,70,"ARTWORK")
-    titleShade:SetVertexColor(0,0,0,.85)
-    self.settingsTitlePanel=section(p,60,115,240,78)
+    -- Share the wardrobe's existing texture and framing without another background asset.
+    self.settingsBackground=texture(p,art.."Main.blp",19,75,323,355)
+    -- Keep the title and navigation at their established positions.
+    self.settingsTitlePanel=CreateFrame("Frame",nil,p)
+    self.settingsTitlePanel:SetPoint("TOPLEFT",p,"TOPLEFT",60,-115)
+    self.settingsTitlePanel:SetWidth(240);self.settingsTitlePanel:SetHeight(78)
     self.settingsTitle=label(self.settingsTitlePanel,"Saurek's Closet",16,16,208,22)
     self.settingsTitle:SetFont("Fonts\\FRIZQT__.TTF",16)
-    self.settingsVersion=label(self.settingsTitlePanel,"Version "..self.VERSION,16,45,208,17,true)
+    self.settingsTagline=label(self.settingsTitlePanel,"A damn fine 1.12 transmog.",16,45,208,17,true)
+    self.settingsVersion=label(p,"Version "..self.VERSION,19,400,323,17,true)
+    self.settingsVersion:SetJustifyH("CENTER")
     self.settingsNavigationButtons={}
     for i,name in ipairs({"privacy","links","updates"}) do
         local x=60+math.mod(i-1,2)*124
@@ -918,9 +1052,6 @@ function V:CreateSettingsPage(p)
     checkbox:SetPoint("TOPLEFT",privacy,"TOPLEFT",36,-126);checkbox:SetWidth(24);checkbox:SetHeight(24)
     label(privacy,"Automatically check for updates",67,131,254,36,true)
     checkbox:SetScript("OnClick",function() V:SetAutoUpdates(this:GetChecked()) end)
-    label(privacy,"Check GitHub for a newer version when you log in. Enabled by default; your choice is saved for your account.",38,178,284,66,true)
-    label(privacy,"Turning this off stops automatic and manual update checks. Opening a website using Links is still available.",38,259,284,66,true)
-    self.updateMenuStatus=label(privacy,"",38,345,284,62,true)
 
     local updates=self.infoPages.updates
     self.updatesSummary=label(updates,"",38,84,284,202,true)
@@ -946,15 +1077,27 @@ function V:OpenInfoPage(name)
     self.settingsInfoWindow:Show()
     self:RefreshUpdateUI()
 end
+function V:SetHideHigherLevelItems(hide)
+    VanityStudioDB.hideHigherLevelItems=hide and true or false
+    self.offset=0
+    local item=self.draft and self.index[self.draft.id]
+    if hide and item and self:ItemBrowseLevel(item)>(UnitLevel("player") or 0) then
+        self:CancelDraft();self:RefreshPreview()
+    end
+    self:RefreshList()
+end
 function V:RefreshList()
     if not self.uiReady or not self.rows then return end
-    local matches=self:Filter(self.slot,self.query,self.quality,self.material,self.favoritesOnly)
+    local playerLevel=UnitLevel("player") or 0
+    local maxLevel=VanityStudioDB.hideHigherLevelItems and playerLevel or nil
+    self.hideHigherLevelCheckbox:SetChecked(VanityStudioDB.hideHigherLevelItems and 1 or nil)
+    local matches=self:Filter(self.slot,self.query,self.quality,self.material,self.favoritesOnly,maxLevel)
     self.maxOffset=math.max(0,table.getn(matches)-self.visibleItemRows);self.offset=math.max(0,math.min(self.offset,self.maxOffset))
     if self.offset==0 then self.scrollUp:Disable() else self.scrollUp:Enable() end
     if self.offset==self.maxOffset then self.scrollDown:Disable() else self.scrollDown:Enable() end
     self.updatingScroll=true;self.scroll:SetMinMaxValues(0,self.maxOffset);self.scroll:SetValue(self.offset);self.updatingScroll=nil
     if self.maxOffset>0 then self.scroll:Show();self.scrollThumb:Show() else self.scrollThumb:Hide();self.scroll:Hide() end
-    self.qualityLabel:SetText("Quality: "..(self.qualityNames[self.quality] or "All"))
+    self.qualityLabel:SetText(self.quality=="unobtainable" and "Unobtainable" or ("Quality: "..(self.qualityNames[self.quality] or "All")))
     self.materialLabel:SetText("Type: "..self:ItemTypeName(self.material,self.slot))
     self.browser.title:SetText(self.slotNames[self.slot].." Appearance")
     self.resultsLabel:SetText(table.getn(matches)..(table.getn(matches)==1 and " Item" or " Items"))
@@ -965,7 +1108,10 @@ function V:RefreshList()
             b:Show();b.nameLabel:SetText(item[2])
             local n,l,q,level,typ,sub,stack,loc,icon=GetItemInfo(item[1])
             b.icon:SetTexture(icon or self:CatalogIcon(item[1]) or "Interface\\PaperDoll\\UI-PaperDoll-Slot-"..icons[self.slot])
-            b.metaLabel:SetText((self.qualityNames[item[4]] or "").."  /  "..item[1])
+            -- Use the equip requirement, or a known quest minimum for rewards with none.
+            local requiredLevel=self:ItemBrowseLevel(item)
+            local levelColor=requiredLevel>playerLevel and (RED_FONT_COLOR_CODE or "|cffff2020") or (HIGHLIGHT_FONT_COLOR_CODE or "|cffffffff")
+            b.metaLabel:SetText((item.unobtainable and "Unobtainable" or self.qualityNames[item[4]] or "").."  /  "..levelColor.."Level "..requiredLevel.."|r  /  "..item[1])
             if self.draft and self.draft.id==item[1] then b.selected:Show() else b.selected:Hide() end
         else b:Hide() end
     end
@@ -1064,7 +1210,7 @@ function V:RefreshOutfits()
 end
 function V:ActiveOutfitText()
     local c=VanityStudioCharacter
-    local name=c.activeUnsaved and "(Unsaved)" or c.activeOutfit or "No outfit"
+    local name=c.activeUnsaved and "(Unsaved Look)" or c.activeOutfit or "No outfit"
     return name..(not c.enabled and " (off)" or "")
 end
 function V:Refresh()
@@ -1072,8 +1218,24 @@ function V:Refresh()
     self:RefreshUpdateUI()
     local c=VanityStudioCharacter
     self.enabledButton:SetText("Toggle")
+    if self.horizontalQuiverCheckbox then
+        local available=self:QuiverRotationAvailable()
+        self.horizontalQuiverCheckbox:SetChecked(c.weapons and c.weapons.quiverHorizontal and 1 or nil)
+        enabled(self.horizontalQuiverCheckbox,available)
+        self.horizontalQuiverCheckbox:SetAlpha(available and 1 or .45)
+        self.horizontalQuiverLabel:SetAlpha(available and 1 or .45)
+    end
+    local storedAvailable=self:WeaponStoredVisibilityAvailable()
+    for _,field in ipairs({"hideRangedWhenStored","hideMeleeWhenStored"}) do
+        local checkbox=self[field.."Checkbox"]
+        if checkbox then
+            checkbox:SetChecked(c.weapons and c.weapons[field] and 1 or nil)
+            enabled(checkbox,storedAvailable);checkbox:SetAlpha(storedAvailable and 1 or .45)
+            self[field.."Label"]:SetAlpha(storedAvailable and 1 or .45)
+        end
+    end
     if self.weaponNotice then
-        self.weaponNotice:SetText(not self:WeaponRendererAvailable() and "Update SaureksCloset.dll and restart WoW." or self.weaponError or "")
+        self.weaponNotice:SetText(not storedAvailable and "Update SaureksCloset.dll and restart WoW." or self.weaponError or "")
     end
     self.activeOutfitLabel:SetText(self:ActiveOutfitText())
     for slot,b in pairs(self.slotButtons) do
@@ -1082,8 +1244,8 @@ function V:Refresh()
         end
         b.icon:SetTexture(icon or "Interface\\PaperDoll\\UI-PaperDoll-Slot-"..(icons[slot] or self.weaponIcons[slot-100]))
         if id==0 then b.hiddenOverlay:Show() else b.hiddenOverlay:Hide() end
-        if self.browser:IsShown() and slot==self.slot then b.selected:Show() else b.selected:Hide() end
     end
+    self:RefreshSlotHighlights()
     if self.tab=="armor" or self.tab=="weaponry" or self.tab=="bags" then self:RefreshPreview()
     elseif self.tab=="body" then self:RefreshBody();self:RefreshPreview()
     elseif self.tab=="outfits" then self:RefreshOutfits() end

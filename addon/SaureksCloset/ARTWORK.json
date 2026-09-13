@@ -1,47 +1,5 @@
 [
   {
-    "source": "settings.png",
-    "source_sha256": "0591815389acb15912f571f9ff174728a305d0d69c45e1ad29ba94a24d1a0d1d",
-    "texture": "SettingsTL.blp",
-    "size": [
-      256,
-      256
-    ],
-    "layout": "320x354 full Settings page, one texture pixel per UI pixel",
-    "crop": [
-      0,
-      0,
-      256,
-      256
-    ],
-    "bytes": 33940,
-    "encoding": "DXT1",
-    "gpu_base_bytes": 32768,
-    "worst_background_psnr_db": 35.95823661813769,
-    "sha256": "bfd436f25c966c8e192f5fe26d49a09af826cb157c05052cb19be8783e0df7a8"
-  },
-  {
-    "source": "generic_window_decoration.png",
-    "source_sha256": "1a6701c27cabe54939046769e1f90f2e9f181fef9b50f7cbfeeb4077e56a26f1",
-    "texture": "GenericTrimBR.blp",
-    "layout": "Complete frame, scaled to 512x512 and split into four panels; source alpha preserved",
-    "crop": [
-      256,
-      256,
-      512,
-      512
-    ],
-    "size": [
-      256,
-      256
-    ],
-    "bytes": 66708,
-    "encoding": "DXT5",
-    "gpu_base_bytes": 65536,
-    "worst_background_psnr_db": 34.100044921792794,
-    "sha256": "b8bee5f606e2069749686cfa3fb54ba87c4443156aad657289215bc9671badc1"
-  },
-  {
     "texture": "PortraitBorder.tga",
     "size": [
       64,
@@ -52,63 +10,6 @@
     "bytes": 16428,
     "worst_background_psnr_db": null,
     "sha256": "37c363ba4b3d18154195592fb224451610806142b279d07853b50eee088fd14f"
-  },
-  {
-    "source": "BG4.png",
-    "source_sha256": "7763cb32764131a29225d1290ea1ebe02f48983dfe8a1a9a1b1d77cd08243a43",
-    "texture": "Main.blp",
-    "layout": "Centered crop: 47,0,1206,1254",
-    "size": [
-      512,
-      512
-    ],
-    "bytes": 132244,
-    "encoding": "DXT1",
-    "gpu_base_bytes": 131072,
-    "worst_background_psnr_db": 36.313020068292275,
-    "sha256": "1dcd62ccdc06f806bde7be4435f6e2f7f9589d1984ec2ec5075555db51321a3d"
-  },
-  {
-    "source": "generic_window_decoration.png",
-    "source_sha256": "1a6701c27cabe54939046769e1f90f2e9f181fef9b50f7cbfeeb4077e56a26f1",
-    "texture": "GenericTrimTL.blp",
-    "layout": "Complete frame, scaled to 512x512 and split into four panels; source alpha preserved",
-    "crop": [
-      0,
-      0,
-      256,
-      256
-    ],
-    "size": [
-      256,
-      256
-    ],
-    "bytes": 66708,
-    "encoding": "DXT5",
-    "gpu_base_bytes": 65536,
-    "worst_background_psnr_db": 33.20271377968599,
-    "sha256": "20c65be560004e024b212b4a28c8db5a3cead1f690481c28e0ef596318810f0c"
-  },
-  {
-    "source": "settings.png",
-    "source_sha256": "0591815389acb15912f571f9ff174728a305d0d69c45e1ad29ba94a24d1a0d1d",
-    "texture": "SettingsBR.blp",
-    "size": [
-      64,
-      128
-    ],
-    "layout": "320x354 full Settings page, one texture pixel per UI pixel",
-    "crop": [
-      256,
-      256,
-      320,
-      354
-    ],
-    "bytes": 5268,
-    "encoding": "DXT1",
-    "gpu_base_bytes": 4096,
-    "worst_background_psnr_db": 34.340739225602405,
-    "sha256": "bdf9ac430f8b09c96c92649983d038b1e0700cc45eedabc49f3740ec9d6e5855"
   },
   {
     "source": "logo.png",
@@ -146,48 +47,6 @@
     "sha256": "c0c1d5e4ee83d102debffbbbc146555af84619a3d9c75f7321b369c635ec6b95"
   },
   {
-    "source": "settings.png",
-    "source_sha256": "0591815389acb15912f571f9ff174728a305d0d69c45e1ad29ba94a24d1a0d1d",
-    "texture": "SettingsTR.blp",
-    "size": [
-      64,
-      256
-    ],
-    "layout": "320x354 full Settings page, one texture pixel per UI pixel",
-    "crop": [
-      256,
-      0,
-      320,
-      256
-    ],
-    "bytes": 9364,
-    "encoding": "DXT1",
-    "gpu_base_bytes": 8192,
-    "worst_background_psnr_db": 32.04313739618652,
-    "sha256": "33fe79c9b35df76d744756e5d7e3e4416ace506a63416c30e12919ef8551140f"
-  },
-  {
-    "source": "generic_window_decoration.png",
-    "source_sha256": "1a6701c27cabe54939046769e1f90f2e9f181fef9b50f7cbfeeb4077e56a26f1",
-    "texture": "GenericTrimBL.blp",
-    "layout": "Complete frame, scaled to 512x512 and split into four panels; source alpha preserved",
-    "crop": [
-      0,
-      256,
-      256,
-      512
-    ],
-    "size": [
-      256,
-      256
-    ],
-    "bytes": 66708,
-    "encoding": "DXT5",
-    "gpu_base_bytes": 65536,
-    "worst_background_psnr_db": 35.790516453399334,
-    "sha256": "b9f2e06d5b6c65e3b2d40a84daaf8680dd006b53669d38b2d7c11d9741daaf4b"
-  },
-  {
     "source": "tools/build_visible_slot_icon.py",
     "generated": true,
     "source_sha256": "877d3feaa1ad11dc315b8f99f5fad1a84e6b95edc56c49fc745eeec175f2f73b",
@@ -223,59 +82,146 @@
     "sha256": "b1ea4ae22260211622f8d4c0c302e4f046902b29fd262d30eca0fc10af4621bc"
   },
   {
-    "source": "generic_window_decoration.png",
-    "source_sha256": "1a6701c27cabe54939046769e1f90f2e9f181fef9b50f7cbfeeb4077e56a26f1",
-    "texture": "GenericTrimTR.blp",
-    "layout": "Complete frame, scaled to 512x512 and split into four panels; source alpha preserved",
-    "crop": [
-      256,
-      0,
-      512,
-      256
-    ],
-    "size": [
-      256,
-      256
-    ],
-    "bytes": 66708,
-    "encoding": "DXT5",
-    "gpu_base_bytes": 65536,
-    "worst_background_psnr_db": 33.21443136251604,
-    "sha256": "5a765ea84c260593531816c447079541b28fb77a9d43806d273a03cde0d47972"
-  },
-  {
-    "source": "settings.png",
-    "source_sha256": "0591815389acb15912f571f9ff174728a305d0d69c45e1ad29ba94a24d1a0d1d",
-    "texture": "SettingsBL.blp",
-    "size": [
-      256,
-      128
-    ],
-    "layout": "320x354 full Settings page, one texture pixel per UI pixel",
-    "crop": [
-      0,
-      256,
-      256,
-      354
-    ],
-    "bytes": 17556,
-    "encoding": "DXT1",
-    "gpu_base_bytes": 16384,
-    "worst_background_psnr_db": 35.55096401210762,
-    "sha256": "e18ff0e71d2addc0029a59d6ca1632eb77136ce98b915cbed10ad124ef58a7b4"
-  },
-  {
-    "texture": "ArmorDecorations.blp",
+    "source": "BG4.png",
+    "source_sha256": "7763cb32764131a29225d1290ea1ebe02f48983dfe8a1a9a1b1d77cd08243a43",
+    "texture": "Main.blp",
+    "layout": "Centered crop: 47,0,1206,1254",
     "size": [
       512,
       512
     ],
-    "encoding": "DXT5",
-    "gpu_base_bytes": 262144,
-    "bytes": 263316,
-    "worst_background_psnr_db": 32.73021364418946,
-    "sha256": "112541b5668e7a8774a514365a8e105c47a9114603e44826e858f9df47cccd14",
-    "source": "Original ArmorSlots and ArmorShadow panels",
-    "layout": "Combined trim and 45% shadow, 3px right/4px down, drawn at 326x361"
+    "bytes": 132244,
+    "encoding": "DXT1",
+    "gpu_base_bytes": 131072,
+    "worst_background_psnr_db": 36.313020068292275,
+    "sha256": "1dcd62ccdc06f806bde7be4435f6e2f7f9589d1984ec2ec5075555db51321a3d"
+  },
+  {
+    "source": "armor_slot_decorations.png",
+    "source_sha256": "099f788a1c0c436b922dd5a559219aeb1c9cbac418dc21fc654f19345cc7f62f",
+    "texture": "ArmorSlotsTL.tga",
+    "layout": "Quadrant of ArmorSlots.tga",
+    "crop": [
+      0,
+      0,
+      256,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188,
+    "sha256": "061a856e11ffa0b7182d2bc129d4c97c0e8eb2c30afe7a2a9d508258538b06d3",
+    "restored_from": "v3.4.34"
+  },
+  {
+    "source": "armor_slot_decorations.png",
+    "source_sha256": "099f788a1c0c436b922dd5a559219aeb1c9cbac418dc21fc654f19345cc7f62f",
+    "texture": "ArmorSlotsTR.tga",
+    "layout": "Quadrant of ArmorSlots.tga",
+    "crop": [
+      256,
+      0,
+      512,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188,
+    "sha256": "ef8a15de0e4bc5cfb3099602a11fa2462d05b17203a17493feb8920f331bba70",
+    "restored_from": "v3.4.34"
+  },
+  {
+    "source": "armor_slot_decorations.png",
+    "source_sha256": "099f788a1c0c436b922dd5a559219aeb1c9cbac418dc21fc654f19345cc7f62f",
+    "texture": "ArmorSlotsBL.tga",
+    "layout": "Quadrant of ArmorSlots.tga",
+    "crop": [
+      0,
+      256,
+      256,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188,
+    "sha256": "8d79317d34c46689d894afabe7dd5ccc0e5f2897e018a15924326ea8db5ce9b8",
+    "restored_from": "v3.4.34"
+  },
+  {
+    "source": "armor_slot_decorations.png",
+    "source_sha256": "099f788a1c0c436b922dd5a559219aeb1c9cbac418dc21fc654f19345cc7f62f",
+    "texture": "ArmorSlotsBR.tga",
+    "layout": "Quadrant of ArmorSlots.tga",
+    "crop": [
+      256,
+      256,
+      512,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188,
+    "sha256": "98efe0b6f72253715abd3ac05dacb7afb2faed375e66b870833f847d20960f5c",
+    "restored_from": "v3.4.34"
+  },
+  {
+    "texture": "ArmorShadowTL.tga",
+    "source": "tools/build_slot_shadow.py",
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188,
+    "sha256": "afb01aa2c7974a9e5c0e71d61e58e04b74c833ba2e4516a6b72fc619ef0bbb05",
+    "generated": true,
+    "source_sha256": "e275ff0d5e9f35f6b65c22e2b13d43f3d0e91d6aea02f83ed89e7af11e1bb703",
+    "layout": "Separate contact and soft shadow of unmodified v3.4.34 armor art"
+  },
+  {
+    "texture": "ArmorShadowTR.tga",
+    "source": "tools/build_slot_shadow.py",
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188,
+    "sha256": "02ef8fdaa5621e9b8cca9ad9a9ed4cd5fd83b82dad50f30d907d40bb53adbde9",
+    "generated": true,
+    "source_sha256": "e275ff0d5e9f35f6b65c22e2b13d43f3d0e91d6aea02f83ed89e7af11e1bb703",
+    "layout": "Separate contact and soft shadow of unmodified v3.4.34 armor art"
+  },
+  {
+    "texture": "ArmorShadowBL.tga",
+    "source": "tools/build_slot_shadow.py",
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188,
+    "sha256": "e447f18fbe6fa5ef4ad11f54721ebb10a7f40ff6d437ea91056ac6fa68b803de",
+    "generated": true,
+    "source_sha256": "e275ff0d5e9f35f6b65c22e2b13d43f3d0e91d6aea02f83ed89e7af11e1bb703",
+    "layout": "Separate contact and soft shadow of unmodified v3.4.34 armor art"
+  },
+  {
+    "texture": "ArmorShadowBR.tga",
+    "source": "tools/build_slot_shadow.py",
+    "size": [
+      256,
+      256
+    ],
+    "bytes": 262188,
+    "sha256": "bbfcf3e264c15e0ac7a90f282b592db9259416d2dac55ac7e11f0de2049b7a07",
+    "generated": true,
+    "source_sha256": "e275ff0d5e9f35f6b65c22e2b13d43f3d0e91d6aea02f83ed89e7af11e1bb703",
+    "layout": "Separate contact and soft shadow of unmodified v3.4.34 armor art"
   }
 ]

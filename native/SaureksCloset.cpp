@@ -322,7 +322,8 @@ static int __fastcall weaponryProbe(void* L){
 }
 #include "WeaponRenderer.h"
 #include "UpdateChecker.h"
-static int __fastcall version(void* L){return result(L,30436);}
+#include "VoiceRenderer.h"
+static int __fastcall version(void* L){return result(L,30500);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
@@ -354,7 +355,14 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     if(!compatible()||MH_Initialize()!=MH_OK)return TRUE;
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
+        {0x611770,reinterpret_cast<void*>(&sheathTransitionHook),reinterpret_cast<void**>(&sheathTransitionOriginal)},
+        {0x60C480,reinterpret_cast<void*>(&voiceSoundDataHook),reinterpret_cast<void**>(&voiceSoundDataOriginal)},
+        {0x60C6A0,reinterpret_cast<void*>(&voiceRaceHook),reinterpret_cast<void**>(&voiceRaceOriginal)},
+        {0x60C6C0,reinterpret_cast<void*>(&voiceSexHook),reinterpret_cast<void**>(&voiceSexOriginal)},
+        {0x4580F0,reinterpret_cast<void*>(&vocalCacheHook),reinterpret_cast<void**>(&vocalCacheOriginal)},
+        {0x458250,reinterpret_cast<void*>(&vocalPlayHook),reinterpret_cast<void**>(&vocalPlayOriginal)},
         {0x714260,reinterpret_cast<void*>(&updateAttachedHook),reinterpret_cast<void**>(&updateAttachedOriginal)},
+        {0x611FF0,reinterpret_cast<void*>(&bowStringDrawHook),reinterpret_cast<void**>(&bowStringDrawOriginal)},
         {0x47A0C0,reinterpret_cast<void*>(&weaponComposeHook),reinterpret_cast<void**>(&weaponComposeOriginal)},
         {0x47A070,reinterpret_cast<void*>(&sheathPointHook),reinterpret_cast<void**>(&sheathPointOriginal)},
         {0x60B590,reinterpret_cast<void*>(&moveWeaponHook),reinterpret_cast<void**>(&moveWeaponOriginal)},

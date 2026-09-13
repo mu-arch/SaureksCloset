@@ -37,7 +37,7 @@ function V:InvalidatePreviewModel(delay,recover)
     local tracked=self:WeaponRendererAvailable()
     self.previewBaseDirty=true;self.previewCaptureAt=now+(tracked and 0 or (delay or 0))
     self.previewReveal=nil;self.previewDeadline=now+8
-    self.previewDressAt=nil;self.previewDressingModel=nil;self.previewSignature=nil
+    self.previewDressAt=nil;self.previewDressingModel=nil;self.previewSignature=nil;self.previewDressSignature=nil
     -- The new bridge tracks composition explicitly. A timed second copy replaces
     -- an already-correct character and restarts its animation for no reason.
     tracked=tracked or type(SaureksClosetInspectPreview)=="function"
@@ -109,9 +109,10 @@ function V:RefreshPreview()
     if self.previewDressAt and now<self.previewDressAt then return end
     local items=self:PreviewItems();local weapons=self:PreviewWeapons()
     local routes=self:PreviewWeaponRoutes(weapons)
-    local signature=key..self:WeaponSignature(weapons)
-    for _,slot in ipairs(self.slotOrder) do signature=signature..":"..items[slot] end
-    if self.previewReveal and self.previewReveal.signature==signature then
+    local dressSignature=key..self:WeaponSignature(weapons,nil,true)
+    for _,slot in ipairs(self.slotOrder) do dressSignature=dressSignature..":"..items[slot] end
+    local signature=dressSignature..self:WeaponDisplaySignature(weapons)
+    if self.previewReveal and self.previewReveal.dressSignature==dressSignature then
         local reveal=self.previewReveal
         if now>(self.previewDeadline or now+8) then
             self.previewReveal=nil;self.previewDressAt=nil;self.previewDressingModel=nil
@@ -124,11 +125,16 @@ function V:RefreshPreview()
         target.rotation=previous.rotation or .61;target:SetRotation(target.rotation)
         if target~=previous then previous:SetAlpha(0);self.model=target;self.previewBuffer=previous end
         target:SetAlpha(1)
-        self.previewSignature=signature;self.previewError=nil;self.previewReveal=nil;self.previewDressAt=nil;self.previewDressingModel=nil
+        self.previewSignature=signature;self.previewDressSignature=reveal.dressSignature;self.previewError=nil;self.previewReveal=nil;self.previewDressAt=nil;self.previewDressingModel=nil
         self.previewNote:SetText(next(self.previewWaiting or {}) and "Some item data is unavailable." or "")
         return
     end
     if signature==self.previewSignature and not self.previewDressingModel and not self.previewReveal then return end
+    if self.previewSignature and self.previewDressSignature==dressSignature and not self.previewDressingModel and not self.previewReveal and self.model.weaponToken and self:PreviewModelReady(self.model) then
+        -- Angle and stored-visibility changes need no undress/rebuild.
+        local ok,ready=pcall(self.DressWeaponPlacements,self,self.model,weapons)
+        if ok and ready then self.previewSignature=signature;return end
+    end
     local target=self.previewDressingModel or self.model
     if target.weaponToken and not self:PreviewModelReady(target) then
         if now>(self.previewDeadline or now+8) then self.previewDressAt=nil;self.previewDressingModel=nil;self.previewNote:SetText("Preview could not finish loading. Close and reopen the wardrobe.") end
@@ -157,7 +163,7 @@ function V:RefreshPreview()
         target:SetRotation(V.model.rotation or .61)
     end)
     if ok and target.weaponToken then
-        self.previewReveal={target=target,signature=signature,at=now}
+        self.previewReveal={target=target,signature=signature,dressSignature=dressSignature,at=now}
         self.previewDressAt=now;self.previewDeadline=now+8
         return
     end
@@ -167,7 +173,7 @@ function V:RefreshPreview()
         target:SetAlpha(1);previous:SetAlpha(0)
         self.model=target;self.previewBuffer=previous
     end
-    if ok then self.previewSignature=signature;self.previewError=nil;self:RefreshPortraits()
+    if ok then self.previewSignature=signature;self.previewDressSignature=dressSignature;self.previewError=nil;self:RefreshPortraits()
     else self.previewError="Preview unavailable. Close and reopen the wardrobe." end
     if self.previewError then self.previewNote:SetText(self.previewError)
     elseif next(self.previewWaiting or {}) then self.previewNote:SetText("Some item data is unavailable.\nThe preview may be incomplete.")

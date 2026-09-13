@@ -2,7 +2,7 @@
 VanityStudio = { index = {}, slots = {}, applied = {}, pending = {}, errors = {} }
 local V = VanityStudio
 -- Read from reloaded code; client addon metadata can retain the startup version.
-V.VERSION = "3.4.36"
+V.VERSION = "3.5.0"
 V.UNSAVED = {} -- Runtime key; the single draft itself lives in character saved variables.
 V.slotOrder = {1,3,15,4,5,19,9,10,6,7,8,16,17,18}
 V.slotNames = {[1]="Head",[3]="Shoulders",[4]="Shirt",[5]="Chest",[6]="Waist",[7]="Legs",[8]="Feet",[9]="Wrists",[10]="Hands",[15]="Back",[16]="Main hand",[17]="Off hand",[18]="Ranged",[19]="Tabard"}
@@ -26,11 +26,19 @@ function V:ItemTypeName(key,slot)
     if class==4 and sub==0 and slot==17 then return "Held items" end
     return self.materialNames[sub] or "Other"
 end
-function V:ItemTypeOptions(slot)
+function V:MatchesItemQuality(item,quality)
+    if quality=="unobtainable" then return item.unobtainable end
+    return not item.unobtainable and (quality==nil or item[4]==quality)
+end
+function V:ItemBrowseLevel(item)
+    if (item[11] or 0)>0 then return item[11] end
+    return math.max(1,item[12] or 1)
+end
+function V:ItemTypeOptions(slot,quality,maxLevel)
     local seen,options={},{}
     for _,item in ipairs(self.slots[slot] or {}) do
         local key=self:ItemTypeKey(item,slot)
-        if not seen[key] then seen[key]=true;table.insert(options,key) end
+        if self:MatchesItemQuality(item,quality) and (not maxLevel or self:ItemBrowseLevel(item)<=maxLevel) and not seen[key] then seen[key]=true;table.insert(options,key) end
     end
     table.sort(options);return options
 end
@@ -75,11 +83,13 @@ function V:Initialize()
     VanityStudioDB.portraitDiagnostics=nil -- Retire the generated-thumbnail diagnostics.
     VanityStudioDB.favorites = VanityStudioDB.favorites or {}
     VanityStudioDB.outfits = VanityStudioDB.outfits or {}
+    if VanityStudioDB.hideHigherLevelItems==nil then VanityStudioDB.hideHigherLevelItems=true end
     VanityStudioCharacter = VanityStudioCharacter or {}
     local c = VanityStudioCharacter
     c.selected = c.selected or {}
     c.managed = c.managed or {}
     if c.enabled == nil then c.enabled = true end
+    c.useRaceVoice = nil -- Voice now follows the active body automatically.
     for _,slot in ipairs(self.slotOrder) do self.slots[slot] = {} end
     for _,item in ipairs(VanityStudioCatalog) do
         self.index[item[1]] = item
@@ -259,7 +269,7 @@ function V:GetOutfit(key)
     return VanityStudioDB.outfits[key]
 end
 function V:OutfitLabel(key)
-    return key==self.UNSAVED and "(Unsaved)" or key
+    return key==self.UNSAVED and "(Unsaved Look)" or key
 end
 function V:IsOutfitActive(key)
     local c=VanityStudioCharacter
@@ -270,7 +280,7 @@ function V:ValidateOutfitName(name,existing)
     name=string.gsub(string.gsub(name or "","^%s+",""),"%s+$","")
     if name=="" then return nil,"Enter a name for this outfit." end
     if string.len(name)>40 then return nil,"Use 40 characters or fewer." end
-    if string.lower(name)=="(unsaved)" then return nil,"Choose a name for your saved outfit." end
+    if string.lower(name)=="(unsaved)" or string.lower(name)=="(unsaved look)" then return nil,"Choose a name for your saved outfit." end
     if VanityStudioDB.outfits[name] and name~=existing then return nil,"That name is already used." end
     return name
 end
@@ -349,11 +359,12 @@ function V:HideArmor()
     self:Sync(); self:Refresh()
 end
 
-function V:Filter(slot, query, quality, material, favorites)
+function V:Filter(slot, query, quality, material, favorites, maxLevel)
     local result = {}
     query = string.lower(query or "")
     for _,item in ipairs(self.slots[slot] or {}) do
-        local match = (quality == nil or item[4] == quality) and
+        local match = self:MatchesItemQuality(item,quality) and
+            (not maxLevel or self:ItemBrowseLevel(item)<=maxLevel) and
             (material == nil or self:ItemTypeKey(item,slot) == material) and
             (not favorites or VanityStudioDB.favorites[item[1]])
         if match then
@@ -394,10 +405,20 @@ V.events = CreateFrame("Frame")
 V.events:RegisterEvent("ADDON_LOADED")
 V.events:RegisterEvent("PLAYER_ENTERING_WORLD")
 V.events:RegisterEvent("UNIT_INVENTORY_CHANGED")
+V.events:RegisterEvent("BAG_UPDATE")
 V.events:RegisterEvent("UNIT_MODEL_CHANGED")
 V.events:RegisterEvent("UNIT_PORTRAIT_UPDATE")
+V.events:RegisterEvent("UNIT_LEVEL")
 V.events:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == "SaureksCloset" then V:Initialize()
+    elseif V.ready and event == "BAG_UPDATE" then
+        local quiver=V:RealQuiverItem()
+        if V.lastEquippedQuiver~=quiver then
+            V.lastEquippedQuiver=quiver;V.needsSync=true
+            if V.outfitDetails and V.outfitDetails:IsShown() then V:StartOutfitPreview() end
+        end
+    elseif V.ready and event == "UNIT_LEVEL" and arg1 == "player" then
+        if V.browser and V.browser:IsShown() then V:RefreshList() end
     elseif V.ready and event == "UNIT_PORTRAIT_UPDATE" and arg1 == "player" then
         V:RefreshPortraits()
     elseif V.ready and event == "UNIT_MODEL_CHANGED" and arg1 == "player" then

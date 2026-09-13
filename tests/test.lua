@@ -1,5 +1,7 @@
 function UnitRace() return "Human", "Human" end
 function UnitSex() return 2 end
+local playerLevel=15
+function UnitLevel(unit) if unit=="player" then return playerLevel end end
 -- Run with the actual Lua 5.0.3 interpreter, from the VanityStudio directory.
 local passed = 0
 local function check(condition, message)
@@ -9,14 +11,17 @@ end
 local frames = {}
 local methods = {}
 local function noop() end
-for _,name in ipairs({"SetFont","SetTextColor","SetJustifyH","SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetHighlightTexture","SetTextInsets","SetAutoFocus","SetMaxLetters","ClearFocus","SetClampedToScreen","SetMovable","RegisterForDrag","StartMoving","StopMovingOrSizing","SetFrameStrata","EnableMouse","EnableMouseWheel","SetNormalTexture","SetOwner","AddLine","RegisterEvent","SetAllPoints","SetAlpha","RegisterForClicks","SetFocus","SetJustifyV","SetHitRectInsets","SetPushedTexture","SetVertexColor","SetValueStep","SetDisabledTexture","SetTexCoord","SetBlendMode"}) do methods[name]=noop end
+for _,name in ipairs({"SetFont","SetTextColor","SetJustifyH","SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetHighlightTexture","SetTextInsets","SetAutoFocus","SetMaxLetters","ClearFocus","SetClampedToScreen","SetMovable","RegisterForDrag","StartMoving","StopMovingOrSizing","SetFrameStrata","EnableMouse","EnableMouseWheel","SetNormalTexture","SetOwner","ClearLines","AddLine","RegisterEvent","SetAllPoints","SetAlpha","RegisterForClicks","SetFocus","SetJustifyV","SetHitRectInsets","SetPushedTexture","SetVertexColor","SetValueStep","SetDisabledTexture","SetTexCoord","SetBlendMode"}) do methods[name]=noop end
 function methods:SetFont(path,size) self.fontPath=path;self.fontSize=size end
 function methods:SetJustifyV(v) self.justifyV=v end
 function methods:SetAlpha(v) self.alpha=v end
 function methods:SetBlendMode(v) self.blend=v end
 function methods:SetWidth(v) self.width=v end
 function methods:SetHeight(v) self.height=v end
-function methods:GetWidth() return self.width or 1920 end
+function methods:GetWidth()
+    if self.kind=="FontString" and self.width==0 then return string.len(self:GetText())*6 end
+    return self.width or 1920
+end
 function methods:GetHeight()
     if self.kind=="FontString" and self.height==0 then
         local lines=0;local columns=math.max(1,math.floor((self.width or 273)/6))
@@ -49,6 +54,7 @@ function methods:GetText() return self.textValue or "" end
 function methods:GetTextWidth() return string.len(self:GetText())*6 end
 function methods:SetTexture(v) check(type(v)=="string","Texture must be a path") self.texture=v end
 function methods:SetScript(name,func) self.scripts[name]=func end
+function methods:GetScript(name) return self.scripts[name] end
 function methods:Show()
     local was=self.shown;self.shown=true
     if not was and self.scripts.OnShow then local old=this;this=self;self.scripts.OnShow();this=old end
@@ -128,6 +134,8 @@ local menuEntries={}
 DropDownList1=CreateFrame("Frame","DropDownList1");DropDownList1:Hide()
 DropDownList2=CreateFrame("Frame","DropDownList2");DropDownList2:Hide()
 function CloseDropDownMenus(level) if not level or level==1 then DropDownList1:Hide() end;DropDownList2:Hide() end
+local nativeDropdownHides=0
+DropDownList1:SetScript("OnHide",function() nativeDropdownHides=nativeDropdownHides+1;CloseDropDownMenus(2) end)
 function UIDropDownMenu_AddButton(info,level)
     level=level or 1
     check(table.getn(menuEntries)<32,"Dropdown stays within vanilla's native row limit")
@@ -143,6 +151,7 @@ function ToggleDropDownMenu(level,value,owner,anchor,x,y)
     check((level==2 and value=="savedlooks") or (level==1 and (anchor=="SaureksClosetOutfitSelector" or (VanityStudio.replaceOutfitButton and anchor==VanityStudio.replaceOutfitButton:GetName()) or string.find(anchor,"SaureksClosetSlot",1,true)==1 or anchor=="SaureksClosetQualityFilter" or anchor=="SaureksClosetTypeFilter" or anchor=="SaureksClosetWardrobeSelector" or string.find(anchor,"SaureksClosetBody",1,true)==1)),"Dropdown anchors to its nameplate, slot or filter")
     local list=getglobal("DropDownList"..level)
     if list:IsShown() and UIDROPDOWNMENU_OPEN_MENU==owner:GetName() then CloseDropDownMenus(level);return end
+    list:Hide() -- The client dismisses the previous list before changing owners.
     UIDROPDOWNMENU_OPEN_MENU=owner:GetName();UIDROPDOWNMENU_MENU_LEVEL=level;UIDROPDOWNMENU_MENU_VALUE=value
     menuEntries={};owner.initialize(level);list:Show()
 end
@@ -218,12 +227,13 @@ local V=VanityStudio
 VanityStudioDB={outfits={["Legacy armor"]={[1]=16955}}}
 event="ADDON_LOADED"; arg1="SaureksCloset"; V.events.scripts.OnEvent()
 check(V.ready,"Addon initialization")
+check(VanityStudioDB.hideHigherLevelItems==true,"Higher-level items are hidden by default for new and upgrading users")
 check(V:UsingTrueModel() and VanityStudioCharacter.body==nil,"First run defaults to True Model without creating a body override")
 check(VanityStudioDB.outfits["Legacy armor"].version==2 and VanityStudioDB.outfits["Legacy armor"].slots[1]==16955,"Legacy outfits migrate without losing armor")
 check(table.getn(VanityStudioCatalog)==9665,"Complete pinned catalog")
-local head=V.slots[1][1][1]
-local other=V.slots[1][2][1]
-local shoulder=V.slots[3][1][1]
+local head=V:Filter(1)[1][1]
+local other=V:Filter(1)[2][1]
+local shoulder=V:Filter(3)[1][1]
 cache[head]=true; cache[shoulder]=true
 V:Sync()
 check(table.getn(calls)==0,"Empty defaults must not create overrides")
@@ -266,7 +276,66 @@ check(table.getn(V:Filter(1,tostring(head)))==1,"Find by item ID")
 VanityStudioDB.favorites[head]=true
 check(table.getn(V:Filter(1,"",nil,nil,true))==1,"Favorite filter")
 for _,item in ipairs(V:Filter(5,"",4,404,false)) do check(item[4]==4 and item[6]==4,"Quality and material filters") end
+-- Rarity browsing separates unused gear; compatibility and saved appearances do not.
+local unavailableCount=0
+for _,item in ipairs(VanityStudioCatalog) do
+    if item.unobtainable then unavailableCount=unavailableCount+1 end
+end
+check(unavailableCount==1238,"Explicit development and retired items are marked without deleting catalog records")
+for _,slot in ipairs({1,3,4,5,6,7,8,9,10,15,16,17,18,19,101,102,103,104,105,106,107}) do
+    local normal=V:Filter(slot)
+    local unused=V:Filter(slot,"","unobtainable")
+    check(table.getn(normal)+table.getn(unused)==table.getn(V.slots[slot] or {}),"Every item remains browsable in exactly one category")
+    for _,item in ipairs(normal) do check(not item.unobtainable,"Default list excludes unobtainable items") end
+    for _,item in ipairs(unused) do
+        check(item.unobtainable and V:Compatible(item[1],slot),"Unobtainable equipment keeps its original slot compatibility")
+    end
+    for quality=0,6 do
+        for _,item in ipairs(V:Filter(slot,"",quality)) do
+            check(item[4]==quality and not item.unobtainable,"Normal rarities exclude unused gear without changing real quality")
+        end
+    end
+end
+local prototype=V:Filter(1,"","unobtainable")[1]
+check(prototype and V:CatalogIcon(prototype[1]),"Unused item metadata does not occupy the icon override field")
+VanityStudioDB.favorites[prototype[1]]=true
+check(table.getn(V:Filter(1,"#"..prototype[1],"unobtainable",V:ItemTypeKey(prototype,1),true))==1,"Unobtainable supports combined ID, type and favorite filters")
+check(table.getn(V:Filter(1,tostring(prototype[1])))==0,"ID searches respect the selected category")
+check(table.getn(V:Filter(1,"doesnotexist","unobtainable"))==0,"Unobtainable supports ordinary name searching")
+VanityStudioDB.favorites[prototype[1]]=nil
+for _,id in ipairs({25,35,13315,19160,19169,12784,12640,14152}) do
+    check(V.index[id] and not V.index[id].unobtainable,"Starting, event and crafted gear remains in normal rarities")
+end
+check(V.index[7001][11]==0 and V:ItemBrowseLevel(V.index[7001])==18,"Gravestone Scepter uses the quest's minimum level rather than its level 29 item power")
+check(V:ItemBrowseLevel(V.index[5323])==17,"Multiple quest paths use the lowest known minimum")
+check(V:ItemBrowseLevel(V.index[10504])==1,"Skill-only equipment without a proven quest gate stays available")
+check(table.getn(V:Filter(106,"#7001",nil,nil,false,17))==0 and table.getn(V:Filter(106,"#7001",nil,nil,false,18))==1,"Quest reward filtering respects the exact minimum-level boundary")
+for _,slot in ipairs({1,4,5,16,17,18,101,102,103,104,105,106,107}) do
+    for _,item in ipairs(V:Filter(slot,"",nil,nil,false,15)) do
+        check(V:ItemBrowseLevel(item)<=15,"Every filtered armor, weapon and quiver is within the chosen level")
+    end
+    for _,item in ipairs(V:Filter(slot,"","unobtainable",nil,false,15)) do
+        check(item.unobtainable and V:ItemBrowseLevel(item)<=15,"Level filtering combines with Unobtainable")
+    end
+end
 V:Toggle(true)
+V:OpenBrowser(1)
+check(V.hideHigherLevelCheckbox:GetChecked() and V.hideHigherLevelLabel:GetText()=="Hide Higher Level Items","Browser uses a checked, labeled level filter by default")
+do
+    local addLine=GameTooltip.AddLine;local line;local previous=this
+    GameTooltip.AddLine=function(self,text) line=text end
+    this=V.hideHigherLevelCheckbox;V.hideHigherLevelCheckbox.scripts.OnEnter()
+    check(line=="Quest reward items without explicit level req. use the quest's minimum level.","Level filter tooltip uses the requested wording")
+    this=V.horizontalQuiverCheckbox;V.horizontalQuiverCheckbox.scripts.OnEnter()
+    check(line=="You may find it useful to rotate the quiver to prevent overlap with 2h weapons.","Horizontal tooltip uses the requested explanation")
+    GameTooltip.AddLine=addLine;this=previous
+end
+for _,row in ipairs(V.rows) do if row.item then check(V:ItemBrowseLevel(row.item)<=playerLevel,"Default visible rows respect the player's level") end end
+V.hideHigherLevelCheckbox:SetChecked(nil);click(V.hideHigherLevelCheckbox)
+check(VanityStudioDB.hideHigherLevelItems==false,"Unchecking reveals higher-level items and saves the preference")
+V:CloseBrowser();V:OpenBrowser(1)
+check(not V.hideHigherLevelCheckbox:GetChecked() and VanityStudioDB.hideHigherLevelItems==false,"Reopening the browser preserves the saved choice")
+V:CloseBrowser()
 check(V.tabButtons.character:GetText()=="Wardrobe" and V.tabButtons.outfits:GetText()=="Saved Looks" and V.tabButtons.settings:GetText()=="Settings","Primary tabs use the new navigation labels")
 local savedTab=V.tabButtons.outfits
 local initialTabWidth=savedTab:GetWidth()
@@ -291,10 +360,15 @@ V:Toggle(true)
 check(V.frame:IsShown(),"Window opens")
 check(V.uiReady and V.slotButtons[8] and V.browser,"Every required widget exists before the first refresh")
 check(not V.quickLook and not V.quickPrev and not V.quickNext,"Armor footer has been removed")
-check(table.getn(V.armorSlotPanels)==1 and V.armorDecorationFrame.width==327 and V.armorDecorationFrame.height==357,"One combined decoration and shadow texture preserves the Outfit control frame")
+check(table.getn(V.wardrobeBackgrounds)==1 and table.getn(V.armorSlotPanels)==4 and V.armorDecorationFrame.width==327 and V.armorDecorationFrame.height==357,"Original armor quadrants use the v3.4.34 decoration dimensions")
+check(not V.wardrobeFrameOverlay,"The extra wardrobe frame overlay is removed")
+check(V.armorDecorationFrame.point[4]==19 and V.armorDecorationFrame.point[5]==-75 and V.armorDecorationFrame:GetFrameLevel()>V.model:GetFrameLevel() and V.armorDecorationFrame:GetFrameLevel()>V.previewBuffer:GetFrameLevel(),"Outfit decorations keep their page anchor above both model buffers")
 check(V.slotButtons[1]:GetParent()==V.armorDecorationFrame and V.armorDecorationFrame:GetFrameLevel()>V.model:GetFrameLevel(),"Item buttons sit above the decoration panels and character model")
 for _,slot in ipairs(V.wardrobeSlots) do
     check(V.slotButtons[slot].width==V.slotButtons[slot].height and V.slotButtons[slot].icon.width==V.slotButtons[slot].icon.height,"Every armor icon is square")
+    local b=V.slotButtons[slot]
+    check(b.point[2]==V.pagesByName.armor and b.point[4]>=19 and b.point[4]+b.width<=346 and -b.point[5]>=75 and -b.point[5]+b.height<=432,"Clickable armor items stay within their decorative layer")
+    check(b:GetFrameLevel()>V.armorDecorationFrame:GetFrameLevel() and b.border:IsShown(),"Original armor items retain their native quickslot rims")
 end
 check(V.model.height==340 and V.previewBuffer.height==340 and V.groundShadow,"Larger matching model viewports share a ground shadow")
 for _,slot in ipairs(V.wardrobeSlots) do check(not V.slotButtons[slot].mark,"Per-slot unsaved markers are removed") end
@@ -304,6 +378,8 @@ local _,_,releaseVersion=string.find(manifestText,"## Version: ([^\n]+)")
 check(V.VERSION==releaseVersion,"Loaded code version matches the release manifest")
 check(V.settingsVersion:GetText()=="Version "..releaseVersion,"Settings displays the loaded release even when client metadata is stale")
 V:SetTab("settings")
+check(V.settingsBackground.texture==V.wardrobeBackgrounds[1].texture and V.settingsBackground.width==V.wardrobeBackgrounds[1].width and V.settingsBackground.height==V.wardrobeBackgrounds[1].height,"Settings shares the wardrobe texture and dimensions")
+check(not V.updateMenuStatus,"Internet Settings has no extra status description")
 click(V.settingsNavigationButtons.privacy)
 check(V.settingsInfoWindow:IsShown() and V.infoPages.privacy:IsVisible(),"Internet Settings opens a separate window")
 check(V.autoUpdatesCheckbox:IsVisible(),"Automatic update preference is visible in Internet Settings")
@@ -330,6 +406,30 @@ local slotCalls=table.getn(calls)
 click(V.slotButtons[1])
 check(table.getn(menuEntries)==3 and menuEntries[1].text=="Custom Item" and menuEntries[2].text=="Hide Slot" and menuEntries[3].text=="Passthrough","Slot dropdown exposes all three requested actions")
 check(not V.browser:IsShown() and table.getn(calls)==slotCalls,"Opening slot actions never changes armor or opens browser")
+check(V.slotButtons[1].selected:IsShown(),"Opening a slot dropdown highlights the clicked slot before opening the browser")
+V:Refresh();check(V.slotButtons[1].selected:IsShown(),"Refresh retains an open slot dropdown's highlight")
+local previousDropdownHides=nativeDropdownHides
+CloseDropDownMenus()
+check(not V.slotButtons[1].selected:IsShown() and nativeDropdownHides==previousDropdownHides+1,"Dismissal clears the slot highlight and preserves native dropdown cleanup")
+click(V.slotButtons[1]);click(V.slotButtons[3])
+check(not V.slotButtons[1].selected:IsShown() and V.slotButtons[3].selected:IsShown(),"Switching slot dropdowns moves the highlight")
+click(V.slotButtons[3])
+check(not V.slotButtons[3].selected:IsShown(),"Clicking the same slot again dismisses its highlight")
+click(V.slotButtons[1]);click(V.wardrobeSelector)
+check(not V.slotButtons[1].selected:IsShown(),"An unrelated dropdown clears the slot menu highlight")
+V:CloseOutfitMenu();click(V.slotButtons[1]);click(getglobal("DropDownList1Button1"))
+check(V.browser:IsShown() and V.slotButtons[1].selected:IsShown() and not DropDownList1:IsShown(),"Choosing Custom Item transfers the dropdown highlight to the browser")
+click(V.slotButtons[3])
+check(V.slotButtons[3].selected:IsShown() and not V.slotButtons[1].selected:IsShown(),"An open slot menu takes highlight focus over the previous browser slot")
+CloseDropDownMenus()
+check(V.slotButtons[1].selected:IsShown() and not V.slotButtons[3].selected:IsShown(),"Dismissing a slot dropdown restores the open browser's highlight")
+V:CloseBrowser()
+check(not V.slotButtons[1].selected:IsShown(),"Closing the browser clears its highlight without requiring a full refresh")
+click(V.slotButtons[1]);V:SetTab("body")
+check(not V.slotButtons[1].selected:IsShown() and not DropDownList1:IsShown(),"Changing pages clears the slot dropdown highlight")
+V:SetTab("armor");click(V.slotButtons[1]);HideUIPanel(V.frame)
+check(not V.slotButtons[1].selected:IsShown() and not DropDownList1:IsShown(),"Closing the wardrobe clears the slot dropdown highlight")
+ShowUIPanel(V.frame);click(V.slotButtons[1])
 click(getglobal("DropDownList1Button2"))
 check(VanityStudioCharacter.selected[1]==0 and V.slotButtons[1].hiddenOverlay:IsShown() and V.slotButtons[1].icon.texture=="Interface\\PaperDoll\\UI-PaperDoll-Slot-Head","Hidden eye overlays the native default slot image")
 check(not V.slotButtons[1].mark,"Hidden slot uses its icon without a text marker")
@@ -362,13 +462,24 @@ for _,slot in ipairs({16,17,18}) do
 end
 V:SetTab("weaponry")
 check(V.model:IsVisible() and V.slotButtons[101]:IsVisible() and not V.slotButtons[1]:IsVisible() and V.wardrobeSelectorLabel:GetText()=="Weaponry","Weaponry shows the shared character and only weapon selectors")
+check(not V.weaponOptions:IsShown() and GetDoublewideFrame()==nil,"Entering Weaponry leaves its options window closed")
+click(V.weaponOptionsButton);check(V.weaponOptions:IsVisible() and GetDoublewideFrame()==V.frame,"Options button opens the neighboring options window")
+check(V.weaponOptionsButton:IsVisible() and V.weaponOptionsButton.point[4]+V.weaponOptionsButton:GetWidth()==336 and V.realBodyButton.point[4]+V.realBodyButton:GetWidth()==336 and V.weaponOptionsButton.point[5]==V.realBodyButton.point[5],"Options and Passthrough remain aligned at the upper right")
+check(V.weaponOptionsButton:GetWidth()==V.weaponOptionsButton.caption:GetWidth()+36 and V.realBodyButton:GetWidth()==V.trueModelLabel:GetWidth()+36 and V.weaponOptionsButton:GetWidth()<V.realBodyButton:GetWidth() and V.realBodyButton:GetWidth()<162,"Wardrobe buttons include extra label space to avoid ellipses")
+check(V.weaponOptionsButton.point[5]==V.slotButtons[101]:GetParent().point[5] and V.realBodyButton.point[5]==V.bodyRows.race.button:GetParent().point[5],"Both upper-right controls align vertically with their left-hand panels")
+click(V.weaponOptions.close);V:Refresh()
+check(not V.weaponOptions:IsShown() and GetDoublewideFrame()==nil,"Closing options releases the neighbor and remains closed through refresh")
+V:SetTab("weaponry");check(not V.weaponOptions:IsShown(),"Selecting the same page does not reopen manually closed options")
+click(V.weaponOptionsButton);check(V.weaponOptions:IsVisible(),"Options button reopens the secondary window")
 for _,slot in ipairs(V.weaponOrder) do
     click(V.slotButtons[slot]);check(table.getn(menuEntries)==2,"Body positions use Custom Item and Empty")
     click(getglobal("DropDownList1Button1"))
     check(V.browser:IsShown() and V.slot==slot,"Each weapon slot opens the matching appearance browser")
+    check(not V.weaponOptions:IsShown(),"The item browser takes the neighboring pane without overlapping options")
     V:CloseBrowser()
 end
-V:SetTab("bags")
+click(V.weaponOptionsButton);V:SetTab("bags")
+check(not V.weaponOptions:IsShown() and not V.weaponOptionsButton:IsVisible(),"Other wardrobe pages hide the options window and reopen button")
 check(V.model:IsVisible() and V.pagesByName.bags:IsVisible() and not V.slotButtons[101]:IsVisible() and V.wardrobeSelectorLabel:GetText()=="Bags","Bags has its own page and retains the character preview")
 V:SetTab("outfits");V:SetTab("character")
 check(V.tab=="bags","Wardrobe remembers the Bags section")
@@ -384,15 +495,93 @@ local poorOption
 for _,entry in ipairs(menuEntries) do if entry.text=="Poor" then poorOption=entry end end
 poorOption.func();check(V.quality==0 and V.offset==0 and V.qualityLabel:GetText()=="Quality: Poor","Quality zero selects Poor and resets scrolling")
 click(V.qualityButton)
-for _,entry in ipairs(menuEntries) do if entry.text=="All" then entry.func() end end
-check(V.quality==nil,"All clears the quality filter")
+for _,entry in ipairs(menuEntries) do if entry.text=="All Rarities" then entry.func() end end
+check(V.quality==nil,"All Rarities clears the normal quality filter")
 click(V.materialButton)
 for _,entry in ipairs(menuEntries) do if entry.text=="All" then entry.func() end end
 check(V.material==nil and V.materialLabel:GetText()=="Type: All","All clears the type filter")
-check(not V.selectionLabel and V.commitButton:GetText()=="Activate Item","Appearance footer has only the renamed activation button")
+V.slot=1;V.offset=3;click(V.qualityButton)
+local unobtainableOption
+for _,entry in ipairs(menuEntries) do if entry.text=="Unobtainable" then unobtainableOption=entry end end
+check(unobtainableOption~=nil,"Quality menu exposes Unobtainable")
+unobtainableOption.func()
+check(V.quality=="unobtainable" and V.offset==0 and V.qualityLabel:GetText()=="Unobtainable","Unused category fits the selector and resets scrolling")
+check(V.rows[1].item.unobtainable and string.find(V.rows[1].metaLabel:GetText(),"Unobtainable",1,true),"Unused rows identify their category")
+click(V.materialButton)
+local offeredTypes={}
+for _,entry in ipairs(menuEntries) do offeredTypes[entry.text]=true end
+for _,item in ipairs(V:Filter(1,"","unobtainable")) do
+    check(offeredTypes[V:ItemTypeName(V:ItemTypeKey(item,1),1)],"Type menu includes types present in Unobtainable")
+end
+V:CloseOutfitMenu()
+local previousHead=V:SlotSelection(1)
+local unusedID=V.rows[1].item[1];cache[unusedID]=true
+click(V.rows[1]);check(V.draft and V.draft.id==unusedID,"Unused equipment can still be previewed")
+click(V.commitButton);check(VanityStudioCharacter.selected[1]==unusedID,"Unused equipment can still be applied")
+V:Select(1,previousHead);V:Refresh()
+check(not V.selectionLabel and V.commitButton:GetText()=="Apply Appearance","Item browser uses the Apply Appearance action")
+check(V.commitButton.point[5]==V.enabledButton.point[5] and V.commitButton.point[4]+V.commitButton:GetWidth()==V.enabledButton.point[4]+V.enabledButton:GetWidth(),"Apply Appearance aligns with the main wardrobe Toggle button at the upper right")
+check(V.hideHigherLevelCheckbox:GetParent()==V.search:GetParent() and V.resultsLabel:GetParent()==V.search:GetParent(),"Checkbox and result count belong to the search/filter box")
+check(V.hideHigherLevelCheckbox.point[5]-V.hideHigherLevelCheckbox:GetHeight()/2==V.resultsLabel.point[5]-V.resultsLabel:GetHeight()/2,"Checkbox and result count share a row")
+check(V.hideHigherLevelLabel.point[4]+V.hideHigherLevelLabel:GetWidth()<V.resultsLabel.point[4],"Checkbox label clears the right-aligned count")
+check(-V.hideHigherLevelCheckbox.point[5]>=-V.qualityButton:GetParent().point[5]+V.qualityButton:GetParent():GetHeight(),"Checkbox row sits below both dropdowns")
+check(-V.rows[1]:GetParent().point[5]>=-V.search:GetParent().point[5]+V.search:GetParent():GetHeight() and -V.rows[1]:GetParent().point[5]+V.rows[1]:GetParent():GetHeight()==428,"Raised results tile leaves a three-pixel gap above the pane bottom")
+check(-V.rows[8].point[5]+V.rows[8]:GetHeight()==V.rows[1]:GetParent():GetHeight()-4,"Item rows retain their original four-pixel interior padding")
+check(V.resultsLabel.point[4]+V.resultsLabel:GetWidth()==V.resultsLabel:GetParent():GetWidth()-14,"Result count is inset from the panel's right edge")
+check(-V.scrollRailBottom.point[5]+V.scrollRailBottom:GetHeight()==V.rows[1]:GetParent():GetHeight()-4,"Scrollbar bottom cap reaches the bottom inset of the pane")
+check(-V.scroll.point[5]+V.scroll:GetHeight()==-V.scrollRailBottom.point[5]+4 and -V.scroll.point[5]+V.scroll:GetHeight()+16==-V.scrollRailBottom.point[5]+V.scrollRailBottom:GetHeight()-4,"Native 16px down arrow is centered within the bottom cap")
 V:CloseBrowser()
 local priorIcon=V.slotButtons[1].icon.texture
 click(V.slotButtons[1]);click(getglobal("DropDownList1Button1"))
+V.search:SetText("#7937") -- Ornate Mithril Helm: item level 49, required level 44.
+check(V.rows[1].item[1]==7937 and V.rows[1].metaLabel:GetText()=="Uncommon  /  |cffff2020Level 44|r  /  7937","High-level uncached item shows its actual requirement in tooltip red")
+local selectedBeforeFilter=VanityStudioCharacter.selected[1]
+click(V.rows[1]);check(V.draft and V.draft.id==7937,"High-level items remain previewable with the filter off")
+V.offset=4;V.hideHigherLevelCheckbox:SetChecked(true);click(V.hideHigherLevelCheckbox)
+check(VanityStudioDB.hideHigherLevelItems and V.offset==0 and V.emptyLabel:IsVisible() and not V.rows[1].item,"Checking hides an above-level search result and resets scrolling")
+check(not V.draft and V.commitButton.disabled and VanityStudioCharacter.selected[1]==selectedBeforeFilter,"Hiding a drafted high-level item clears only its preview and prevents applying a hidden draft")
+playerLevel=44;event="UNIT_LEVEL";arg1="player";V.events.scripts.OnEvent()
+check(V.rows[1].item[1]==7937 and not V.emptyLabel:IsVisible(),"A filtered item becomes visible as soon as the player reaches its level")
+V.hideHigherLevelCheckbox:SetChecked(nil);click(V.hideHigherLevelCheckbox)
+playerLevel=15;V:RefreshList()
+check(V.rows[1].metaLabel:GetWidth()==245,"Level fits within the existing item subtext area")
+local priorCalls=table.getn(calls)
+playerLevel=44;event="UNIT_LEVEL";arg1="target";V.events.scripts.OnEvent()
+check(string.find(V.rows[1].metaLabel:GetText(),"|cffff2020Level 44|r",1,true),"Another unit's level event leaves the player list alone")
+arg1="player";V.events.scripts.OnEvent()
+check(V.rows[1].metaLabel:GetText()=="Uncommon  /  |cffffffffLevel 44|r  /  7937","Reaching the requirement turns Level text white without reopening the browser")
+check(table.getn(calls)==priorCalls and not V.draft,"Level updates only refresh the list without applying gear or starting a draft")
+playerLevel=45;V:RefreshList()
+check(string.find(V.rows[1].metaLabel:GetText(),"|cffffffffLevel 44|r",1,true),"Requirements below the player's level stay white")
+cache[7937]=true;V:RefreshList()
+check(string.find(V.rows[1].metaLabel:GetText(),"Level 44",1,true),"Cached item data does not replace the required level with an item power level")
+cache[7937]=nil
+V.search:SetText("#10504") -- Green Lens requires an engineering skill, but no character level.
+check(string.find(V.rows[1].metaLabel:GetText(),"|cffffffffLevel 1|r",1,true),"Items without a character level requirement display Level 1 in white")
+V.quality="unobtainable";V.search:SetText("#"..prototype[1])
+check(V.rows[1].item.unobtainable and string.find(V.rows[1].metaLabel:GetText(),"Level ",1,true),"Unobtainable items also show level subtext")
+V:CloseBrowser();V:SetTab("weaponry");V:OpenBrowser(107);V.search:SetText("#19319")
+check(V.rows[1].item[1]==19319 and string.find(V.rows[1].metaLabel:GetText(),"Level "..math.max(1,V.rows[1].item[11]),1,true),"Quiver entries also show their required level")
+V.hideHigherLevelCheckbox:SetChecked(true);click(V.hideHigherLevelCheckbox)
+check(not V.rows[1].item,"Higher-level quivers use the same filter")
+V.hideHigherLevelCheckbox:SetChecked(nil);click(V.hideHigherLevelCheckbox)
+do
+    V:CloseBrowser();V:OpenBrowser(106);V.search:SetText("#7001")
+    playerLevel=17;V:RefreshList()
+    check(string.find(V.rows[1].metaLabel:GetText(),"|cffff2020Level 18|r",1,true),"Known quest rewards display their inferred minimum in red below that level")
+    local oldAddLine=GameTooltip.AddLine;local tooltipLine
+    GameTooltip.AddLine=function(self,text) tooltipLine=text end
+    local oldThis=this;this=V.rows[1];V.rows[1].scripts.OnEnter();this=oldThis
+    check(tooltipLine=="Quest minimum: Level 18","Tooltip explains when the displayed level comes from a quest")
+    GameTooltip.AddLine=oldAddLine
+    V.hideHigherLevelCheckbox:SetChecked(true);click(V.hideHigherLevelCheckbox)
+    check(V.emptyLabel:IsVisible(),"Default level filter hides an above-level reward despite its zero equip requirement")
+    playerLevel=18;event="UNIT_LEVEL";arg1="player";V.events.scripts.OnEvent()
+    check(V.rows[1].item[1]==7001 and string.find(V.rows[1].metaLabel:GetText(),"|cffffffffLevel 18|r",1,true),"Quest reward becomes visible and white at the quest minimum")
+    V.hideHigherLevelCheckbox:SetChecked(nil);click(V.hideHigherLevelCheckbox)
+end
+V:CloseBrowser();V:SetTab("armor");V:OpenBrowser(1)
+playerLevel=15;V:RefreshList()
 check(V.slotButtons[1].icon.texture==priorIcon and V.slotButtons[1].selected.blend=="ADD","Slot selection preserves the image under an additive highlight")
 check(V.browser:IsVisible() and GetDoublewideFrame()==V.frame,"Slot opens neighboring window and reserves both columns")
 check(table.getn(V.rows)==8,"Scrollable rows initialized")
@@ -471,13 +660,15 @@ for _,incompatible in ipairs({0,30000,30007,40000,"30400"}) do
     testedRenderer=incompatible;check(not V:BodyAvailable(),"Unrecognized renderer remains unavailable")
 end
 testedRenderer=shippedRenderer
+check(VanityStudioCharacter.useRaceVoice==nil,"Retired voice preference is removed")
 check(V:LoadOutfit("Elf combo"),"Full armor and body combo loads")
 check(visible(1)==0 and VanityStudioCharacter.body.race==4,"Hidden armor loads and race definition remains saved")
 check(V:SaveOutfit("Elf combo",true),"Updating preserves body combination")
 check(VanityStudioDB.outfits["Elf combo"].body.race==4,"Update does not lose saved race")
 V:SetTab("body")
+check(not V.raceVoiceButton and not V.raceVoiceCheck,"Body page has no separate voice control")
 check(not V.bodyRows.race.button.disabled,"Race dropdown is enabled")
-check(V.model:IsVisible() and V.pagesByName.armor:IsVisible() and not V.armorDecorationFrame:IsVisible(),"Race view keeps the live wardrobe model visible without armor decorations")
+check(V.model:IsVisible() and V.pagesByName.armor:IsVisible() and not V.armorDecorationFrame:IsVisible(),"Race view keeps the original background and live model visible without outfit decorations")
 local function chooseNextBody(key)
     click(V.bodyRows[key].button)
     local index=1
@@ -528,7 +719,7 @@ end end
 V:SetTab("armor");V:LoadOutfit("Elf combo")
 local originalSaved=V:Copy(VanityStudioDB.outfits["Elf combo"])
 V:Select(1,head);V:Select(5,0)
-check(VanityStudioCharacter.activeUnsaved and not VanityStudioCharacter.activeOutfit and V:ActiveOutfitText()=="(Unsaved)","Edits activate (Unsaved)")
+check(VanityStudioCharacter.activeUnsaved and not VanityStudioCharacter.activeOutfit and V:ActiveOutfitText()=="(Unsaved Look)","Edits activate (Unsaved)")
 check(VanityStudioDB.outfits["Elf combo"].slots[1]==originalSaved.slots[1],"Editing never overwrites saved original")
 local unsaved=V:Copy(VanityStudioCharacter.unsaved)
 check(V:OutfitKeys()[1]==V.UNSAVED,"Single unsaved entry sorts first")
@@ -632,7 +823,7 @@ check(VanityStudioCharacter.body.race==arrowRace and not V.editingBody,"Failed a
 bodyFailure=nil
 click(V.realBodyButton)
 check(VanityStudioCharacter.body==nil and renderedBody==nil,"Reset body still restores the native appearance")
-check(V:UsingTrueModel() and V.trueModelCheck:IsShown() and V.trueModelLabel:GetText()=="Use True Model","Real body is an explicit checked control")
+check(V:UsingTrueModel() and V.trueModelCheck:IsShown() and V.trueModelLabel:GetText()=="Passthrough","Real body is an explicit checked control")
 local nativeBodyReader=SaureksClosetRealBody
 local originalCharacter=V:Copy(VanityStudioCharacter)
 local trueBody=V:NormalizeBody({race=2,sex=0})
@@ -775,12 +966,16 @@ local migrationCharacter=V:Copy(VanityStudioCharacter)
 VanityStudioCharacter.activeOutfit="Elf combo";VanityStudioCharacter.activeUnsaved=nil
 VanityStudioCharacter.unsaved=nil;VanityStudioCharacter.outfitDirty=true
 local migrationSlots=V:Copy(VanityStudioCharacter.selected)
-V:Initialize();V:Initialize()
+VanityStudioCharacter.useRaceVoice=false;V:Initialize()
+check(VanityStudioCharacter.useRaceVoice==nil,"Old disabled voice preference cannot prevent automatic voices")
+VanityStudioCharacter.useRaceVoice=true;V:Initialize()
+check(VanityStudioCharacter.useRaceVoice==nil,"Old enabled voice preference is also retired")
 check(VanityStudioCharacter.activeUnsaved and not VanityStudioCharacter.activeOutfit and VanityStudioCharacter.unsaved.baseName=="Elf combo","Legacy dirty state migrates to the singleton unsaved outfit")
 for slot,id in pairs(migrationSlots) do check(VanityStudioCharacter.unsaved.slots[slot]==id,"Migration retains unsaved armor") end
 local unsavedCount=0;for _,key in ipairs(V:OutfitKeys()) do if key==V.UNSAVED then unsavedCount=unsavedCount+1 end end
 check(unsavedCount==1,"Reloading never duplicates (Unsaved)")
 check(not V:SaveOutfit("(Unsaved)"),"Special entry name cannot become a duplicate saved outfit")
+check(not V:SaveOutfit("(Unsaved Look)") and V:OutfitLabel(V.UNSAVED)=="(Unsaved Look)","New unsaved label is shown consistently and reserved from named saves")
 VanityStudioCharacter=migrationCharacter
 -- Static race/gender icons must work without a renderer or any model activity.
 local savedDB=V:Copy(VanityStudioDB);local savedChar=V:Copy(VanityStudioCharacter)
@@ -844,11 +1039,11 @@ V:SetTab("armor");VanityStudioDB=savedDB;VanityStudioCharacter=savedChar
 
 
 -- Physical placements persist independently and never use fake inventory slots.
-local weaponCalls={};local weaponWorld={}
+local weaponCalls={};local weaponWorld={};local weaponPreviewCalls={}
 function SaureksClosetSetWeapons(token,...)
-    check(arg.n==10,"Weapon API has seven positions and three real equipment IDs")
+    check(arg.n==14,"Weapon API includes seven positions, real weapons, three display options and the equipped quiver")
     local record={token=token,values=arg};table.insert(weaponCalls,record)
-    if token==0 then weaponWorld=V:Copy(arg) end
+    if token==0 then weaponWorld=V:Copy(arg) else weaponPreviewCalls[token]=V:Copy(arg) end
     return 1
 end
 function SaureksClosetPreviewStatus(token) return token>0 and 1 or -1 end
@@ -860,6 +1055,20 @@ function methods:SetUnit(unit)
     detailSetUnit(self,unit)
 end
 V:ClearAll();V:SetEnabled(true);V:SetTab("weaponry")
+HideUIPanel(V.frame);check(not V.weaponOptions:IsShown(),"Closing the wardrobe also closes weapon options")
+V:Toggle(true);check(not V.weaponOptions:IsShown(),"Reopening the wardrobe on Weaponry leaves its options closed")
+click(V.weaponOptionsButton)
+check(not V.horizontalQuiverCheckbox:GetChecked() and not V.horizontalQuiverCheckbox.disabled,"Horizontal defaults off and is enabled with the new DLL")
+check(V.weaponOptions:IsShown() and V.horizontalQuiverCheckbox:GetParent():GetParent()==V.weaponOptions,"Horizontal lives in the manually opened options pane")
+check(not V.hideRangedWhenStoredCheckbox:GetChecked() and not V.hideMeleeWhenStoredCheckbox:GetChecked(),"Stored-weapon hide options default off")
+check(V.hideRangedWhenStoredCheckbox:GetParent():GetParent()==V.weaponOptions and V.hideMeleeWhenStoredCheckbox:GetParent():GetParent()==V.weaponOptions,"Both visibility checkboxes live outside the primary wardrobe pane")
+check(V.horizontalQuiverCheckbox.point[4]+V.horizontalQuiverCheckbox:GetWidth()<V.horizontalQuiverLabel.point[4],"Horizontal caption is to the right of the checkbox")
+testedRenderer=30439;V:Refresh()
+check(V.horizontalQuiverCheckbox.disabled and not V:SetQuiverHorizontal(true) and not VanityStudioCharacter.weapons.quiverHorizontal,"Older DLLs cannot silently accept an unsupported quiver angle")
+testedRenderer=30448;V:Refresh()
+check(V.hideRangedWhenStoredCheckbox.disabled and V.hideMeleeWhenStoredCheckbox.disabled and not V:SetWeaponStoredHidden("ranged",true),"Older DLLs cannot silently accept unsupported visibility options")
+testedRenderer=shippedRenderer;V:Refresh()
+check(not V:SetWeaponStoredHidden("shield",true),"Visibility controls reject unsupported weapon kinds")
 local weaponIDs={}
 for _,slot in ipairs(V.weaponOrder) do
     check(table.getn(V.slots[slot])>0,"Each position has verified model assets")
@@ -872,10 +1081,27 @@ for _,slot in ipairs(V.weaponOrder) do check(V:Select(slot,weaponIDs[slot]),"Eac
 check(VanityStudioCharacter.activeUnsaved,"Placement changes create the unsaved look")
 for _,slot in ipairs(V.weaponOrder) do check(VanityStudioCharacter.unsaved.weapons[slot]==weaponIDs[slot],"All placements enter the saved-look transaction") end
 check(weaponWorld[8]==35 and weaponWorld[9]==0 and weaponWorld[10]==0,"Drawing follows actual equipment, including empty ranged slot")
+V.horizontalQuiverCheckbox:SetChecked(true);click(V.horizontalQuiverCheckbox)
+check(weaponWorld[11]==1 and VanityStudioCharacter.weapons.quiverHorizontal and VanityStudioCharacter.unsaved.weapons.quiverHorizontal,"Horizontal checkbox updates the world and unsaved look")
+check(V:WeaponSignature(VanityStudioCharacter.weapons)~=V:WeaponSignature(weaponIDs),"Saved preview signatures distinguish the quiver angle")
+V.hideRangedWhenStoredCheckbox:SetChecked(true);click(V.hideRangedWhenStoredCheckbox)
+V.hideMeleeWhenStoredCheckbox:SetChecked(true);click(V.hideMeleeWhenStoredCheckbox)
+check(weaponWorld[12]==1 and weaponWorld[13]==1 and VanityStudioCharacter.unsaved.weapons.hideRangedWhenStored and VanityStudioCharacter.unsaved.weapons.hideMeleeWhenStored,"Visibility checkboxes update the world and unsaved look")
 check(V:SaveOutfit("Seven placements"),"Save simultaneous weapon placements")
+V:SetWeaponStoredHidden("ranged",false);V:SetWeaponStoredHidden("melee",false)
+check(weaponWorld[12]==0 and weaponWorld[13]==0 and VanityStudioDB.outfits["Seven placements"].weapons.hideRangedWhenStored and VanityStudioDB.outfits["Seven placements"].weapons.hideMeleeWhenStored,"Editing current visibility leaves the saved look intact")
+V:SetQuiverHorizontal(false)
+check(weaponWorld[11]==0 and VanityStudioDB.outfits["Seven placements"].weapons.quiverHorizontal,"Changing the current angle leaves the saved original intact")
 V:ClearSlot(103)
 check(not VanityStudioCharacter.weapons[103] and VanityStudioDB.outfits["Seven placements"].weapons[103]==35,"Clearing a placement preserves its saved original")
 check(V:LoadOutfit("Seven placements") and VanityStudioCharacter.weapons[103]==35,"Activating a saved look restores all placements")
+check(VanityStudioCharacter.weapons.quiverHorizontal and weaponWorld[11]==1 and V.horizontalQuiverCheckbox:GetChecked(),"Loading a saved look restores its quiver angle and checkbox")
+check(weaponWorld[12]==1 and weaponWorld[13]==1 and V.hideRangedWhenStoredCheckbox:GetChecked() and V.hideMeleeWhenStoredCheckbox:GetChecked(),"Loading a look restores both visibility options and checkbox states")
+do
+    local worldAngle=weaponWorld[11]
+    V:DressWeaponPlacements({weaponToken=99},{[107]=weaponIDs[107]}, {})
+    check(weaponCalls[table.getn(weaponCalls)].values[11]==0 and weaponWorld[11]==worldAngle,"An old look without the optional angle previews vertically without changing the world")
+end
 local beforeWorld=V:Copy(weaponWorld);local callsBefore=table.getn(calls)
 V:OpenBrowser(103);V:DraftSlot(103,nil)
 now=now+3;V:RefreshPreview();now=now+.5;V:RefreshPreview()
@@ -884,11 +1110,16 @@ check(V.model.weaponToken and V.model.weaponToken>0,"Wardrobe preview has an ind
 check(not scopeArmed,"Wardrobe preview always closes the native copy scope")
 local last=weaponCalls[table.getn(weaponCalls)]
 check(last.token>0 and last.values[3]==35,"Clearing the draft appearance previews the equipped staff independently")
+check(last.values[11]==1,"Wardrobe previews carry the saved quiver angle")
 V:CloseBrowser();V:SetEnabled(false)
 for i=1,7 do check(weaponWorld[i]==0,"Toggle removes all attached cosmetic weapons") end
+check(weaponWorld[11]==0 and VanityStudioCharacter.weapons.quiverHorizontal,"Toggle off clears the rendered angle while preserving the saved preference")
+check(weaponWorld[12]==0 and weaponWorld[13]==0 and VanityStudioCharacter.weapons.hideRangedWhenStored and VanityStudioCharacter.weapons.hideMeleeWhenStored,"Disabling clears rendered hide options but preserves their preferences")
 V:SetEnabled(true)
 for i,slot in ipairs(V.weaponOrder) do check(weaponWorld[i]==weaponIDs[slot],"Toggle restores all saved attachments") end
 V:ClearAll()
+check(not VanityStudioCharacter.weapons.quiverHorizontal and weaponWorld[11]==0 and not V.horizontalQuiverCheckbox:GetChecked(),"Reset restores default quiver orientation")
+check(not VanityStudioCharacter.weapons.hideRangedWhenStored and not VanityStudioCharacter.weapons.hideMeleeWhenStored and weaponWorld[12]==0 and weaponWorld[13]==0 and not V.hideRangedWhenStoredCheckbox:GetChecked() and not V.hideMeleeWhenStoredCheckbox:GetChecked(),"Reset restores default weapon visibility")
 for i=1,7 do check(weaponWorld[i]==(i==3 and 35 or 0),"Reset clears customs and restores the equipped staff") end
 -- Ranged appearance alone stays on the back; no fake equipped weapon is reported.
 V:Select(106,weaponIDs[106]);check(V:PreviewWeaponRoutes(VanityStudioCharacter.weapons)[18]==nil,"Cosmetic ranged weapon is not drawn without real ranged equipment")
@@ -897,6 +1128,28 @@ check(V:Select(101,weaponIDs[101]),"A legacy weapon look can be edited with phys
 check(not VanityStudioCharacter.selected[16] and VanityStudioCharacter.weapons[103]==35,"Legacy staff is moved to a back position before clearing its old inventory override")
 for _,call in ipairs(calls) do check(call.slot<100,"Physical positions never reach SetUnitVisibleItemID") end
 V:ClearAll();real[16]=nil;real[18]=nil
+
+-- The native quiver is equipped in a bag slot, separate from customization.
+do
+    local quiver=weaponIDs[107]
+    real[20]=nil;real[21]=nil;real[22]=nil;real[23]=nil
+    check(V:RealQuiverItem()==0,"No equipped quiver is reported as zero")
+    real[20]=25;check(V:RealQuiverItem()==0,"A non-quiver bag item cannot become a quiver appearance")
+    for _,slot in ipairs({20,21,22,23}) do
+        real[slot]=quiver;check(V:RealQuiverItem()==quiver,"Each equipped bag slot can supply the native quiver");real[slot]=nil
+    end
+    real[22]=quiver
+    V:SetQuiverHorizontal(true)
+    check(weaponWorld[7]==0 and weaponWorld[11]==1 and weaponWorld[14]==quiver,"Horizontal works with a native quiver without selecting a custom item")
+    check(not VanityStudioCharacter.weapons[107] and not VanityStudioCharacter.unsaved.weapons[107],"Native quiver passthrough is never stored as a customization")
+    local signature=V:WeaponSignature({})
+    real[22]=nil;check(V:WeaponSignature({})~=signature,"Changing equipped quiver invalidates its preview signature")
+    V.lastEquippedQuiver=0;V.needsSync=false;event="BAG_UPDATE";arg1=1;V.events.scripts.OnEvent()
+    check(not V.needsSync,"Ordinary bag updates do not restart the wardrobe preview")
+    real[23]=quiver;V.events.scripts.OnEvent();check(V.needsSync,"Changing the equipped quiver schedules an appearance refresh")
+    V.needsSync=false;V.events.scripts.OnEvent();check(not V.needsSync,"Repeated unchanged quiver notifications stay idle")
+    real[23]=nil;V.lastEquippedQuiver=nil;V:ClearAll()
+end
 
 -- Reported client failure: real sword 4939 and bow 2507 disappear when stored.
 do
@@ -957,12 +1210,33 @@ do
     ready=true;frame()
     check(dresses==before+1 and V.previewReveal and V.model.alpha==0,"Preview advances within a screen frame, then waits after dressing before reveal")
     dirty=1;frame();check(V.model.alpha==0,"A dirty outfit compositor is not exposed")
+    V:SetWeaponStoredHidden("ranged",true);V:SetQuiverHorizontal(true)
+    V:SetWeaponStoredHidden("ranged",false);V:SetQuiverHorizontal(false)
+    check(dresses==before+1 and V.previewReveal,"Changing display options while the preview finishes does not restart dressing")
     dirty=0;frame()
     check(V.model.alpha==1 and not V.previewDressAt and not V.previewReveal,"Finished preview is revealed exactly once")
     local settled=V.model;local count=copies;before=dresses
     for i=1,10 do V:RefreshPreviewForModelEvent();frame() end
     V:SetTab("body");V:SetTab("weaponry");V:SetTab("armor");frame()
     check(copies==count and dresses==before and V.model==settled,"Same-body notifications and wardrobe page changes preserve the finished model")
+    V:SetTab("weaponry");frame()
+    check(not V.weaponOptions:IsShown(),"Returning to Weaponry leaves its options pane closed")
+    V:CloseWeaponOptions();V:OpenWeaponOptions();V:CloseWeaponOptions();frame()
+    check(copies==count and dresses==before and V.model==settled and not V.previewReveal,"Opening and closing weapon options preserves the finished preview")
+    V:SetTab("armor");frame()
+    local quiver=V.slots[107][1][1]
+    V:Select(107,quiver);for i=1,3 do frame() end
+    before=dresses
+    V:SetQuiverHorizontal(true);frame()
+    check(copies==count and dresses==before and V.model==settled and not V.previewReveal,"Rotating a settled quiver updates without recopying or undressing the preview")
+    check(weaponPreviewCalls[V.model.weaponToken][11]==1 and weaponWorld[11]==1,"Horizontal quiver reaches both settled preview and world")
+    V:SetQuiverHorizontal(false);frame()
+    check(copies==count and dresses==before and weaponPreviewCalls[V.model.weaponToken][11]==0,"Restoring the default angle leaves the finished preview intact")
+    V:SetWeaponStoredHidden("ranged",true);V:SetWeaponStoredHidden("melee",true);frame()
+    check(copies==count and dresses==before and weaponPreviewCalls[V.model.weaponToken][12]==1 and weaponPreviewCalls[V.model.weaponToken][13]==1 and not V.previewReveal,"Visibility changes update the finished preview without redressing or copying")
+    V:SetWeaponStoredHidden("ranged",false);V:SetWeaponStoredHidden("melee",false);frame()
+    check(copies==count and dresses==before and weaponPreviewCalls[V.model.weaponToken][12]==0 and weaponPreviewCalls[V.model.weaponToken][13]==0,"Turning visibility options off also preserves the finished preview")
+    V:ClearSlot(107);for i=1,3 do frame() end
     V:DraftSlot(1,head);V:DraftSlot(1,other);V:CancelDraft();V:RefreshPreview()
     for i=1,3 do frame() end
     check(copies==count and not V.previewReveal and V.previewSignature,"Rapid item changes and cancellation settle without another model copy")
@@ -1012,6 +1286,8 @@ do
     check(V.detailPending and V.detailPending.phase=="reveal" and V.outfitModel.alpha==0,"Saved outfit remains hidden until its dressed textures finish")
     dirty=0;frame()
     check(not V.detailPending and V.outfitModel.alpha==1,"Saved outfit reveals a finished model")
+    check(weaponPreviewCalls[V.outfitModel.weaponToken][11]==1 and weaponWorld[11]==0,"Saved preview uses its own horizontal angle without changing the current world look")
+    check(weaponPreviewCalls[V.outfitModel.weaponToken][12]==1 and weaponPreviewCalls[V.outfitModel.weaponToken][13]==1 and weaponWorld[12]==0 and weaponWorld[13]==0,"Saved preview uses its own visibility choices without changing the current world look")
     count=copies;before=dresses
     for i=1,10 do V:StartOutfitPreview();frame() end
     check(copies==count and dresses==before,"Repeated saved-outfit refresh requests leave a completed preview alone")

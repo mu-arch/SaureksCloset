@@ -4,5 +4,25 @@
   "dump": "Full_DB/ClassicDB_1_12_1_z2815.sql.gz",
   "sha256": "4f92db520868ab4e566726f68b5b2e380ae781209beaf22237b4f7f04600d0c0",
   "count": 9665,
-  "scope": "Visible vanilla armor, shirts, tabards, shields and weapons; includes unused/developer entries present in the database. Server custom items are not included."
+  "scope": "Visible vanilla armor, shirts, tabards, shields and weapons; includes unused/developer entries present in the database. Server custom items are not included.",
+  "unobtainable": {
+    "count": 1238,
+    "method": "Explicit developer, NPC, test, placeholder and retired-item name markers. Missing acquisition records alone do not classify an item; uncertain items remain in normal rarities.",
+    "reasons": {
+      "asset_code_prototypes": 10,
+      "durability_test_series": 13,
+      "explicit_markers": 540,
+      "gm_weapons": 7,
+      "joined_test_marker": 2,
+      "monster_equipment": 515,
+      "numbered_test_series": 100,
+      "old_marker": 31,
+      "pvp_prototypes": 12,
+      "zz_placeholders": 8
+    }
+  },
+  "quest_minimum_level": {
+    "count": 1143,
+    "method": "Lowest quest MinLevel among every fixed or choice reward source, only for bind-on-pickup equipment with no equip level requirement. Quest-supplied items and known loot, vendor, starter, conversion or script-created alternatives are excluded. ItemLevel and recommended QuestLevel are not eligibility requirements; unknown sources receive no inferred restriction."
+  }
 }
