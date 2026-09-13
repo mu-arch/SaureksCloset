@@ -283,8 +283,8 @@ function V:CreateWardrobeSelector()
     self.rotationControls:SetAllPoints(box)
     local left=getglobal(self.model:GetName().."RotateLeftButton")
     local right=getglobal(self.model:GetName().."RotateRightButton")
-    left:ClearAllPoints();left:SetPoint("RIGHT",box,"LEFT",-3,0)
-    right:ClearAllPoints();right:SetPoint("LEFT",box,"RIGHT",3,0)
+    left:ClearAllPoints();left:SetPoint("RIGHT",box,"LEFT",-3,-1)
+    right:ClearAllPoints();right:SetPoint("LEFT",box,"RIGHT",3,-1)
     self.wardrobeSelectorLabel=label(box,"Outfit",8,5,102,17,true)
     self.wardrobeSelectorLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
     self.wardrobeSelectorLabel:SetJustifyV("MIDDLE")
@@ -352,7 +352,7 @@ function V:CreateArmorPage(p)
         if part[2]>0 then
             shadow:SetWidth(part[4]-4);shadow:SetTexCoord(0,(part[4]-4)/part[4],0,1)
         end
-        shadow:SetAlpha(.60)
+        shadow:SetAlpha(.45)
     end
     -- The shadow must be below both preview buffers, not above the character.
     shadowLayer:SetFrameLevel(p:GetFrameLevel()+1)
@@ -385,7 +385,7 @@ function V:CreateArmorPage(p)
         b.borderLight=b:CreateTexture(nil,"ARTWORK")
         b.borderLight:SetTexture("Interface\\Buttons\\UI-Quickslot2")
         b.borderLight:SetAllPoints(b.border)
-        b.borderLight:SetBlendMode("ADD");b.borderLight:SetAlpha(.08)
+        b.borderLight:SetBlendMode("ADD");b.borderLight:SetAlpha(.20)
     end
     -- A sibling frame above BOTH model buffers, anchored just above the weapons.
     local note=CreateFrame("Frame",nil,p);self.previewNoteOverlay=note

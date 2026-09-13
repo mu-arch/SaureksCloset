@@ -47,6 +47,6 @@ for prefix in ['ArmorSlots', 'ArmorShadow']:
     # Preserve the original TGA's sub-1% alpha noise rather than editing the artwork.
     assert layer.getchannel('A').crop((150,150,350,350)).getextrema()[1] <= 1
 ui = (root / 'addon/SaureksCloset/UI.lua').read_text()
-assert 'armorShadowFrame' in ui and 'shadow:SetAlpha(.60)' in ui
+assert 'armorShadowFrame' in ui and 'shadow:SetAlpha(.45)' in ui
 assert 'ArmorDecorations.blp' not in ui
 print('PASS: texture inventory, payloads, checksums, restored art and separate shadow layers')
