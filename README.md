@@ -20,7 +20,7 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 - **Arrange your weaponry:** select appearances for both sides of the waist, both sides of the back, a shield, a ranged weapon, and a quiver. Or all at once!
 - **See your bags:** Equip and position your bags on your back and hips.
 - **Get dirty:** Sweat, dust, mud, and blood. It gets all over you, and you'll need to visit an inn, or take a dip to clean it off.
-- **Share your look with others:** If another player has the addon they can see your custom look (if you approve sharing your looks)
+- **Share your look with others:** If another player has the addon they can see your custom look (if you authorize broadcasting your transmog data)
 
 ## Take a look inside
 
@@ -130,6 +130,11 @@ Several custom weapons can be displayed at once. When you draw weapons, matching
 
 Weaponry is still being refined. Some combinations may clip, and attachment positions cannot yet be adjusted manually. The **Bags** view is a placeholder; bag appearance customization is not available yet.
 
+### Can I get banned from a private server for using this?
+
+Probably not. Warden could in theory detect it, but I would think it's unlikely considering it only changes player object related properties.
+
+If you enable transmog broadcasting so other players with the addon can see your custom look: the server can see you are using Saurek's Closet.
 
 ## Licensing
 
