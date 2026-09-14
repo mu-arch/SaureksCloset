@@ -160,4 +160,4 @@ Entertainment, remain subject to the rights of their respective owners.
 Permissions already granted under prior licenses remain unaffected.
 
 
-<img src="Screenshots/linux_nvidia_meme.png" alt="Bag motion demonstration 2" width="240">
+<img src="Screenshots/linux_nvidia_meme.png" alt="Linux Nvidia Meme" width="240">
