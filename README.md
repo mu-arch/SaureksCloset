@@ -14,22 +14,15 @@ Supported on Linux, Windows, and Mac
 
 Saurek's Closet morphs how your character looks on your own client, and for others with the addon. Your actual equipment, stats, and gameplay stay the same.
 
-### Dress your character
-- Browse the item database, filter by quality and type, and preview an item before activating it.
-### Choose what shows
-- Customize an armor slot, hide it, or pass through your real equipment.
-### Customize your body
-- Change race, gender, skin, face, hair, and available features.
-### Arrange your weaponry
-- Select appearances for both sides of the waist, both sides of the back, a shield, a ranged weapon, and a quiver. Or all at once!
-### See your bags
-- Equip and position your bags on your back and hips.
-### Advanced physics
-- Optionally enable modern pre-computed (baked) cape, bag, sheathed weapon physics with no runtime performance cost. Watch as jumping, running, falling, and combat motions realistically deform and swing your equipment on your character!
-### Get dirty
-- Sweat, dust, mud, and blood. It gets all over you, and you'll need to visit an inn, or take a dip to clean it off.
-### Share your look with others
-- If another player has the addon they can see your custom look (if you authorize broadcasting your transmog data)
+- **Dress your character:** browse the item database, filter by quality and type, and preview an item before activating it.
+- **Choose what shows:** customize an armor slot, hide it, or pass through your real equipment.
+- **Customize your body:** change race, gender, skin, face, hair, and available features.
+- **Arrange your weaponry:** select appearances for both sides of the waist, both sides of the back, a shield, a ranged weapon, and a quiver. Or all at once!
+- **See your bags:** Equip and position your bags on your back and hips.
+- **Advanced physics:** Optionally enable modern pre-computed (baked) cape, bag, sheathed weapon physics with no runtime performance cost. Watch as jumping, running, falling, and combat motions realistically deform and swing your equipment on your character!
+- **Get dirty:** Sweat, dust, mud, and blood. It gets all over you, and you'll need to visit an inn, or take a dip to clean it off.
+- **Share your look with others:** If another player has the addon they can see your custom look (if you authorize broadcasting your transmog data)
+
 
 ## Take a look inside
 
