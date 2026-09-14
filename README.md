@@ -31,9 +31,9 @@ Saurek's Closet morphs how your character looks on your own client, and for othe
 ### Visible Bags with dynamic physics
 
 - 15 bag models with soft and hard physics systems based on the bag type. Equip and precisely position up to 3 bags on the back and 2 on the hips.
-- Bags stay consistently sized for realism, so a Runecloth bag on a gnome would take up their whole back, versus a Tauren that could comfortably fit 4 or more. In the bag precision tuner you can adjust their size if you want to.
-- Hard physics: Hard leather bags rock and bounce realistically as if they had weight. Jumping/falling causes the bag to tilt and fly up in the air realistically.
-- Soft physics, cloth bags are simulated with different sized cubes jostling around inside Blender with motion vectors extracted from all race and gender combos. The resulting bag movements are recoded and baked into the game. This makes it appear as if advanced source engine style physics are utilized with no runtime cost.
+- Bags stay consistently sized for realism. A Runecloth bag on a gnome would take up their whole back, versus a Tauren that could comfortably fit 4 or more. In the bag precision tuner you can adjust their size if you want to.
+- Hard physics: Hard leather bags rock and bounce realistically, as if they had weight. Jumping/falling causes the bag to tilt and fly up in the air realistically.
+- Soft physics: cloth bags are simulated with different sized cubes jostling around inside the bags in Blender, using motion vectors extracted from all race and gender combos performing different animations. The resulting bag movements are recoded and baked into the game. This makes it appear as if advanced source engine style physics are utilized with no runtime cost.
 
 <table>
 <tr>
