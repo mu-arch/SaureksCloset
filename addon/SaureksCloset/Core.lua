@@ -2,7 +2,7 @@
 VanityStudio = { index = {}, slots = {}, applied = {}, pending = {}, errors = {} }
 local V = VanityStudio
 -- Read from reloaded code; client addon metadata can retain the startup version.
-V.VERSION = "3.5.1"
+V.VERSION = "0.3.6.7"
 V.UNSAVED = {} -- Runtime key; the single draft itself lives in character saved variables.
 V.slotOrder = {1,3,15,4,5,19,9,10,6,7,8,16,17,18}
 V.slotNames = {[1]="Head",[3]="Shoulders",[4]="Shirt",[5]="Chest",[6]="Waist",[7]="Legs",[8]="Feet",[9]="Wrists",[10]="Hands",[15]="Back",[16]="Main hand",[17]="Off hand",[18]="Ranged",[19]="Tabard"}
@@ -108,6 +108,7 @@ function V:Initialize()
     -- as the player is available, without activating body customization.
     self.trueBody=nil;self.bodyControlValues=nil
     self:RefreshTrueBody()
+    self:InitializeBagTuning()
     if c.outfitDirty then self:TrackUnsaved() end
     self.ready = true
     self:CreateLauncher()
@@ -324,6 +325,7 @@ function V:LoadOutfit(name)
     local outfit=self:GetOutfit(name)
     if not outfit then return false end
     if next(outfit.weapons or {}) and not self:WeaponRendererAvailable() then self:Message("Update SaureksCloset.dll and restart WoW before loading this look.");return false end
+    if outfit.weapons and outfit.weapons.backBag and not self:BagRendererAvailable() then self:Message("Update SaureksCloset.dll and restart WoW before loading a look with visible bags.");return false end
     self:CancelDraft()
     local selected={}
     for slot,id in pairs(outfit.slots or outfit) do
@@ -395,10 +397,34 @@ SlashCmdList["VANITYSTUDIO"] = function(msg)
     elseif msg == "on" then V:SetEnabled(true)
     elseif msg == "retry" then V:Retry()
     elseif msg == "weaponscan" then V:StartWeaponryCapture()
+    elseif msg == "bagtune" or msg == "bagtuner" or msg == "bagdebug" then V:OpenBagTuner()
     elseif msg == "diagnose" then V:Diagnose()
     elseif msg == "updates" then V:Toggle(true);V:OpenInfoPage("updates")
     elseif msg == "home" then V:Toggle(true)
     else V:Toggle() end
+end
+
+function V:QueueRespawnRecovery()
+    -- PLAYER_ALIVE also fires when releasing to a ghost. Wait for the live
+    -- player before starting the bounded model-loading recovery window.
+    self.respawnRecovery = { next = GetTime() + .25, passes = 0 }
+end
+
+function V:UpdateRespawnRecovery()
+    local recovery = self.respawnRecovery
+    if not recovery then return end
+    if UnitIsDeadOrGhost("player") then return end
+    local now = GetTime()
+    if not recovery.expires then recovery.expires = now + 5 end
+    if now > recovery.expires then self.respawnRecovery = nil;return end
+    if now < recovery.next then return end
+    if recovery.passes >= 3 and not next(self.errors) and not self.bodyError then return end
+    recovery.passes = recovery.passes + 1
+    recovery.next = now + 1
+    -- The client can replace the model without an inventory/world-entry event.
+    -- Forget only the applied cache; preserve the user's choices and toggle.
+    self.applied = {}
+    self.needsSync = true
 end
 
 V.events = CreateFrame("Frame")
@@ -409,8 +435,13 @@ V.events:RegisterEvent("BAG_UPDATE")
 V.events:RegisterEvent("UNIT_MODEL_CHANGED")
 V.events:RegisterEvent("UNIT_PORTRAIT_UPDATE")
 V.events:RegisterEvent("UNIT_LEVEL")
+V.events:RegisterEvent("PLAYER_DEAD")
+V.events:RegisterEvent("PLAYER_ALIVE")
+V.events:RegisterEvent("PLAYER_UNGHOST")
 V.events:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == "SaureksCloset" then V:Initialize()
+    elseif V.ready and (event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST") then
+        V:QueueRespawnRecovery()
     elseif V.ready and event == "BAG_UPDATE" then
         local quiver=V:RealQuiverItem()
         if V.lastEquippedQuiver~=quiver then
@@ -422,10 +453,15 @@ V.events:SetScript("OnEvent", function()
     elseif V.ready and event == "UNIT_PORTRAIT_UPDATE" and arg1 == "player" then
         V:RefreshPortraits()
     elseif V.ready and event == "UNIT_MODEL_CHANGED" and arg1 == "player" then
+        local recovery = V.respawnRecovery
+        if recovery and not V.syncingRespawn then
+            recovery.next = GetTime() + .25
+            recovery.passes = 0
+        end
         V:RefreshTrueBody();V:RefreshBody()
         V:RefreshPortraits();V:RefreshPreviewForModelEvent()
     elseif V.ready and (event == "PLAYER_ENTERING_WORLD" or (event == "UNIT_INVENTORY_CHANGED" and arg1 == "player")) then
-        if event == "PLAYER_ENTERING_WORLD" then V.applied = {}; V.appliedRace = nil;V:RefreshTrueBody();V:RefreshBody() end
+        if event == "PLAYER_ENTERING_WORLD" then V.applied = {}; V.appliedRace = nil;V.bagTunerSynced={};V:RefreshTrueBody();V:RefreshBody() end
         if event == "PLAYER_ENTERING_WORLD" then V:RefreshPortraits();V:InvalidatePreviewModel(.25,true) end
         V.needsSync = true
         if V.outfitDetails and V.outfitDetails:IsShown() then V:StartOutfitPreview() end
@@ -440,6 +476,7 @@ V.events:SetScript("OnUpdate", function()
     elapsed = elapsed + arg1
     if elapsed < .5 then return end
     elapsed = 0
+    V:UpdateRespawnRecovery()
     if V.trueBodyPending and V:BodyAvailable() and V:RefreshTrueBody() then
         V:RefreshBody()
     end
@@ -449,7 +486,9 @@ V.events:SetScript("OnUpdate", function()
     end
     if V.needsSync or pending then
         V.needsSync = false
+        V.syncingRespawn = V.respawnRecovery ~= nil
         V:Sync()
+        V.syncingRespawn = nil
         V:Refresh()
     end
     if VanityStudioCharacter.enabled or next(VanityStudioCharacter.weapons or {}) then V:SyncWeapons() end

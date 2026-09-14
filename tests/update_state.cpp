@@ -20,6 +20,9 @@ int main(int argc,char** argv){
     assert(parsePublishedVersion(toc,std::strlen(toc),false,value)&&value.patch==15);
     assert(parsePublishedVersion(dll,std::strlen(dll),true,value)&&value.dll==30400);
     assert(!parsePublishedVersion("## Version: 3.4.15junk",21,false,value));
+    const char* dev="## Version: 0.3.6.7\n";
+    assert(parsePublishedVersion(dev,std::strlen(dev),false,value)&&value.major==3&&value.minor==6&&value.patch==7);
+    assert(!parsePublishedVersion("## Version: 0.3.6.7.8",21,false,value));
     UpdateMailbox box;unsigned ticket=0;
     assert(!box.begin(ticket)&&box.status()==-2);
     box.enable(true);assert(box.begin(ticket)&&box.status()==1);

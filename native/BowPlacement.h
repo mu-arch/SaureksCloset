@@ -28,8 +28,8 @@ static bool animatedAttachmentMatrix(std::uintptr_t parent,unsigned point,std::a
     for(auto value:local)if(!std::isfinite(value))return false;
     for(auto value:matrix)if(!std::isfinite(value))return false;
     if(std::fabs(matrix[15]-1.f)>.001f)return false;
-    // Same bone-space -> parent-space calculation as 0x7186A6..0x718756.
-    // Do not multiply by the parent or scene matrix a second time.
+    // Same attachment calculation as 0x7186A6..0x718756. Bone matrices already
+    // include CM2Model+0xFC (model/view); do not apply that transform twice.
     for(unsigned axis=0;axis<3;++axis){
         matrix[12+axis]=matrix[12+axis]+local[0]*matrix[axis]+
             local[1]*matrix[4+axis]+local[2]*matrix[8+axis];

@@ -1,0 +1,46 @@
+SAUREK'S CLOSET — PROPRIETARY ARTWORK AND ASSETS LICENSE
+
+All rights reserved by the respective copyright holders.
+
+Scope
+
+This license applies only to the original creative contributions in artwork,
+textures, graphics, interface artwork, icons, images, audio, and other creative
+assets supplied with Saurek's Closet. In this source repository, these assets
+are located in addon/SaureksCloset/Textures, Screenshots, and
+addon/SaureksCloset/Screenshots. In the addon download, they are located in
+Textures and Screenshots. Copies and converted versions of those original
+assets are subject to the same terms.
+
+These original assets are proprietary and are NOT licensed under the GNU
+General Public License v3.0. Source code, compiled program code (including
+the DLL), and catalog data are not covered by this asset license; their
+respective licenses and notices continue to apply.
+
+Permitted use
+
+You may download, install, and display the assets as part of using Saurek's
+Closet, and make personal backup copies for that purpose.
+
+Restrictions
+
+Except for the permitted use above, applicable law, or permissions separately
+granted by the copyright holder, you may not extract, copy, modify, redistribute,
+sell, or use these assets in another project without the copyright holder's
+explicit written permission. The source code's GPLv3 license does not grant
+permission to reuse these separately licensed assets.
+
+Third-party material and existing permissions
+
+Third-party assets, including assets derived from or owned by Blizzard
+Entertainment, remain subject to the rights and terms of their respective
+owners. This license claims no ownership of, and grants no additional rights
+to, third-party material. Existing third-party notices must be preserved.
+
+This license does not revoke rights already granted under a prior license,
+restrict rights granted for the source code, or limit rights that applicable
+law does not permit the copyright holder to restrict.
+
+For permissions beyond the permitted use above, contact the relevant
+copyright holder through the Saurek's Closet project maintainers:
+https://github.com/mu-arch/SaureksCloset

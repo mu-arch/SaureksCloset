@@ -174,8 +174,8 @@ function V:SetTab(tab)
     if tab~="weaponry" then self:CloseWeaponOptions() end
     self:CloseOutfitMenu();self:CloseOutfitDetails();self:CloseBrowser();self.tab=tab
     self.selectedOutfit=nil;self.confirmDelete=nil
-    local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags"
-    local sideControls=tab=="body" or tab=="weaponry" or tab=="bags"
+    local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="exposure"
+    local sideControls=tab=="body" or tab=="weaponry" or tab=="bags" or tab=="exposure"
     if character then self.wardrobePage=tab end
     for name,p in pairs(self.pagesByName) do
         if name==tab or (name=="armor" and character) then p:Show() else p:Hide() end
@@ -186,7 +186,7 @@ function V:SetTab(tab)
     end
     if character then
         self.wardrobeSelectorBox:Show()
-        self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags"})[tab])
+        self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags",exposure="Exposure"})[tab])
     else self.wardrobeSelectorBox:Hide() end
     if tab=="armor" then
         self.armorDecorationFrame:Show();self.armorShadowFrame:Show()
@@ -240,7 +240,7 @@ function V:CreateUI()
     self.outfitMenu=CreateFrame("Frame","SaureksClosetOutfitMenu",f)
     self.outfitMenu.displayMode="MENU";self.outfitMenu:Hide()
     self.outfitMenu.initialize=function(level) V:BuildOutfitMenu(level) end
-    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),outfits=page(f),settings=page(f)}
+    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),exposure=page(f),outfits=page(f),settings=page(f)}
     self.tabButtons={}
     local function fitTab(b)
         local text=getglobal(b:GetName().."Text")
@@ -267,6 +267,7 @@ function V:CreateUI()
     self:CreateBodyPage(self.pagesByName.body)
     self:CreateWeaponryPage(self.pagesByName.weaponry)
     self:CreateBagsPage(self.pagesByName.bags)
+    self:CreateExposurePage(self.pagesByName.exposure)
     self:CreateOutfitPage(self.pagesByName.outfits)
     self:CreateSettingsPage(self.pagesByName.settings)
     self:CreateBrowser()
@@ -276,26 +277,26 @@ function V:CreateUI()
     self:SetTab("armor")
 end
 function V:CreateWardrobeSelector()
-    local box=section(self.frame,115,392,136,27,true,nil,.75)
+    local box=section(self.frame,0,392,106,27,true,nil,.75)
+    -- Position the navigation at the user-adjusted visual center.
+    box:ClearAllPoints();box:SetPoint("TOP",self.frame,"TOP",-9,-392)
     box:SetFrameLevel(self.frame:GetFrameLevel()+10)
     self.wardrobeSelectorBox=box
-    -- Place each turning arrow beside the selector on every wardrobe page.
-    self.rotationControls:SetAllPoints(box)
-    local left=getglobal(self.model:GetName().."RotateLeftButton")
-    local right=getglobal(self.model:GetName().."RotateRightButton")
-    left:ClearAllPoints();left:SetPoint("RIGHT",box,"LEFT",-3,-1)
-    right:ClearAllPoints();right:SetPoint("LEFT",box,"RIGHT",3,-1)
-    self.wardrobeSelectorLabel=label(box,"Outfit",8,5,102,17,true)
+    -- Flank the navigation with equal gaps and retain the visual vertical alignment.
+    self.rotationControls:ClearAllPoints()
+    self.rotationControls:SetWidth(box:GetWidth()+78)
+    self.rotationControls:SetPoint("CENTER",box,"CENTER",0,-1)
+    self.wardrobeSelectorLabel=label(box,"Outfit",8,5,72,17,true)
     self.wardrobeSelectorLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
     self.wardrobeSelectorLabel:SetJustifyV("MIDDLE")
     local b=CreateFrame("Button","SaureksClosetWardrobeSelector",box)
     self.wardrobeSelector=b;b:SetAllPoints(box)
-    local hover=texture(b,"Interface\\QuestFrame\\UI-QuestTitleHighlight",4,4,128,19,"OVERLAY")
+    local hover=texture(b,"Interface\\QuestFrame\\UI-QuestTitleHighlight",4,4,98,19,"OVERLAY")
     hover:SetBlendMode("ADD");hover:SetAlpha(.45);hover:Hide()
     b:SetScript("OnEnter",function() hover:Show() end)
     b:SetScript("OnLeave",function() hover:Hide() end)
     b:SetScript("OnHide",function() hover:Hide() end)
-    texture(b,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",110,3,22,22,"ARTWORK")
+    texture(b,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",80,3,22,22,"ARTWORK")
     local menu=CreateFrame("Frame","SaureksClosetWardrobeMenu",self.frame)
     self.wardrobeMenu=menu;menu.displayMode="MENU";menu:Hide()
     menu.initialize=function()
@@ -303,7 +304,7 @@ function V:CreateWardrobeSelector()
             UIDropDownMenu_AddButton({text=text,checked=V.tab==page and 1 or nil,
                 func=function() V:SetTab(page) end})
         end
-        choice("Outfit","armor");choice("Weaponry","weaponry");choice("Body","body");choice("Bags","bags")
+        choice("Outfit","armor");choice("Weaponry","weaponry");choice("Body","body");choice("Bags","bags");choice("Exposure","exposure")
     end
     b:SetScript("OnClick",function() ToggleDropDownMenu(1,nil,menu,b:GetName(),0,0) end)
 end
@@ -323,7 +324,8 @@ function V:CreateArmorPage(p)
     -- No keyboard handlers or character/equipment mouse callbacks.
     for i,direction in ipairs({"Left","Right"}) do
         local b=CreateFrame("Button",m:GetName().."Rotate"..direction.."Button",controls)
-        b:SetPoint("TOPLEFT",controls,"TOPLEFT",(i-1)*31,0);b:SetWidth(35);b:SetHeight(35)
+        local edge=direction=="Left" and "LEFT" or "RIGHT"
+        b:SetPoint(edge,controls,edge,0,0);b:SetWidth(35);b:SetHeight(35)
         b:SetHitRectInsets(2,2,0,0)
         b:SetNormalTexture("Interface\\Buttons\\UI-Rotation"..direction.."-Button-Up")
         b:SetPushedTexture("Interface\\Buttons\\UI-Rotation"..direction.."-Button-Down")
@@ -515,11 +517,65 @@ end
 function V:CreateBagsPage(p)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
     label(p,"Bags",33,87,124,18)
-    local note=label(p,"Bag appearance customization is not available yet.",33,113,128,70,true)
-    note:SetJustifyV("TOP")
+    self.bagDescription=label(p,"Bag appearance customization is not available yet.",33,113,128,66,true)
+    self.bagDescription:SetFont("Fonts\\FRIZQT__.TTF",11)
+    self.bagDescription:SetTextColor(1,1,1);self.bagDescription:SetJustifyV("TOP")
+    local back=section(p,33,187,124,136,true,nil,.65)
+    local hips=section(p,33,331,124,58,true,nil,.65)
+    for _,entry in ipairs({{back,"Back"},{hips,"Hips"}}) do
+        local title=label(entry[1],entry[2],8,6,108,14)
+        title:SetFont("Fonts\\FRIZQT__.TTF",11);title:SetJustifyH("CENTER")
+    end
+    self.bagSlots={}
+    local positions={{"Top Left",back,20,22},{"Center",back,50,58},{"Top Right",back,80,22},
+        {"Bottom Left",back,20,94},{"Bottom Right",back,80,94},{"Left Hip",hips,20,20},{"Right Hip",hips,80,20}}
+    for i,entry in ipairs(positions) do
+        local b=self:CreateSlotButton(entry[2],entry[2],200+i,entry[3],entry[4],24)
+        self.slotButtons[200+i]=nil;self.bagSlots[i]=b;b.selected:Hide()
+        b.icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag")
+        local caption=label(entry[2],entry[1],entry[3]-13,entry[4]+25,50,13,true)
+        caption:SetFont("Fonts\\FRIZQT__.TTF",9);caption:SetJustifyH("CENTER")
+        b.bagTitle=entry[1];b.bagIndex=i
+        b:SetScript("OnEnter",function()
+            GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText(this.bagTitle,1,.82,0)
+            local text=this.bagIndex==1 and ((VanityStudioCharacter.weapons or {}).backBag==1 and "Runecloth Bag" or "Choose a visible bag.") or "Not implemented yet."
+            GameTooltip:AddLine(text,1,1,1);GameTooltip:Show()
+        end)
+        b:SetScript("OnClick",function() if this.bagIndex==1 then V:OpenBackBagMenu() end end)
+        if i~=1 then b:Disable();b:SetAlpha(.4);caption:SetAlpha(.4) end
+    end
+    local menu=CreateFrame("Frame","SaureksClosetBackBagMenu",self.frame)
+    self.backBagMenu=menu;menu.displayMode="MENU";menu:Hide()
+    menu.initialize=function()
+        local id=(VanityStudioCharacter.weapons or {}).backBag
+        UIDropDownMenu_AddButton({text="None",checked=not id and 1 or nil,func=function() V:SelectBackBag(nil) end})
+        UIDropDownMenu_AddButton({text="Runecloth Bag",checked=id==1 and 1 or nil,func=function() V:SelectBackBag(1) end})
+    end
+    self.bagSlots[1]:SetScript("OnHide",function() V.bagSlots[1].selected:Hide();CloseDropDownMenus() end)
+    self.bagTunerButton=settingsButton(p,"Bag Tuner",0,90,nil,function() V:OpenBagTuner() end,.75,26)
+    self.bagTunerButton:ClearAllPoints()
+    self.bagTunerButton:SetPoint("TOPLEFT",p,"TOPLEFT",336-self.bagTunerButton:GetWidth(),-90)
+    self:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled)
+end
+function V:OpenBackBagMenu()
+    self:WatchSlotMenuDismissal()
+    GameTooltip:Hide()
+    self:CloseBrowser()
+    ToggleDropDownMenu(1,nil,self.backBagMenu,self.bagSlots[1]:GetName(),0,0)
+    self:RefreshSlotHighlights()
+end
+function V:CreateExposurePage(p)
+    p:SetFrameLevel(self.frame:GetFrameLevel()+12)
+    label(p,"Exposure",33,87,124,18)
+    self.exposureNote=label(p,"Exposure is not implemented yet.\n\nThis planned feature will add visual effects such as blood, dust, water, and filth to your character's model and weapons.",33,113,128,0,true)
+    self.exposureNote:SetJustifyV("TOP")
 end
 function V:RefreshSlotHighlights()
     if not self.slotButtons then return end
+    if self.bagSlots then
+        local active=self.tab=="bags" and UIDROPDOWNMENU_OPEN_MENU==self.backBagMenu:GetName() and DropDownList1:IsShown()
+        if active then self.bagSlots[1].selected:Show() else self.bagSlots[1].selected:Hide() end
+    end
     local slot
     if self.frame and self.frame:IsVisible() then
         if self.slotMenu and UIDROPDOWNMENU_OPEN_MENU==self.slotMenu:GetName() and DropDownList1:IsShown() then
@@ -530,6 +586,15 @@ function V:RefreshSlotHighlights()
         if id==slot then b.selected:Show() else b.selected:Hide() end
     end
 end
+function V:WatchSlotMenuDismissal()
+    if self.watchingSlotMenuDismissal then return end
+    self.watchingSlotMenuDismissal=true
+    local onHide=DropDownList1:GetScript("OnHide")
+    DropDownList1:SetScript("OnHide",function()
+        if onHide then onHide() end
+        V:RefreshSlotHighlights()
+    end)
+end
 function V:OpenSlotMenu(slot)
     if not self.slotButtons[slot] or (self:IsWeaponPosition(slot) and self.tab~="weaponry") then return end
     GameTooltip:Hide()
@@ -538,11 +603,7 @@ function V:OpenSlotMenu(slot)
         self.slotMenu.displayMode="MENU";self.slotMenu:Hide()
         -- The visible list is shared by all native dropdowns; the owner frame
         -- itself never shows. Keep its original submenu cleanup when dismissed.
-        local onHide=DropDownList1:GetScript("OnHide")
-        DropDownList1:SetScript("OnHide",function()
-            if onHide then onHide() end
-            V:RefreshSlotHighlights()
-        end)
+        self:WatchSlotMenuDismissal()
         self.slotMenu.initialize=function()
             local selectedSlot=V.menuSlot
             local selected=V:SlotSelection(selectedSlot)
@@ -1052,6 +1113,9 @@ function V:CreateSettingsPage(p)
     checkbox:SetPoint("TOPLEFT",privacy,"TOPLEFT",36,-126);checkbox:SetWidth(24);checkbox:SetHeight(24)
     label(privacy,"Automatically check for updates",67,131,254,36,true)
     checkbox:SetScript("OnClick",function() V:SetAutoUpdates(this:GetChecked()) end)
+    self.autoUpdatesDescription=label(privacy,"Vanilla Closet can automatically check the program's repository on Github.com to see if a newer version is available. If you disable this feature Vanilla Closet will not check for updates.",67,158,254,0,true)
+    self.autoUpdatesDescription:SetFont("Fonts\\FRIZQT__.TTF",11)
+    self.autoUpdatesDescription:SetTextColor(.8,.8,.8)
 
     local updates=self.infoPages.updates
     self.updatesSummary=label(updates,"",38,84,284,202,true)
@@ -1204,6 +1268,7 @@ function V:RefreshOutfits()
                 if outfit.slots and outfit.slots[slot]~=nil then count=count+1 end
             end
             for _,slot in ipairs(self.weaponOrder) do if outfit.weapons and outfit.weapons[slot] then count=count+1 end end
+            if outfit.weapons and outfit.weapons.backBag then count=count+1 end
             row.detail:SetText(count..(count==1 and " slot customized" or " slots customized"))
         else row:Hide() end
     end
@@ -1238,6 +1303,9 @@ function V:Refresh()
         self.weaponNotice:SetText(not storedAvailable and "Update SaureksCloset.dll and restart WoW." or self.weaponError or "")
     end
     self.activeOutfitLabel:SetText(self:ActiveOutfitText())
+    if self.bagSlots then
+        self.bagSlots[1].icon:SetTexture(c.weapons and c.weapons.backBag==1 and "Interface\\Icons\\INV_Misc_Bag_08" or "Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag")
+    end
     for slot,b in pairs(self.slotButtons) do
         local id=self:SlotSelection(slot);local icon
         if id and id>0 then local n,l,q,lev,typ,sub,stack,loc,path=GetItemInfo(id);icon=path or self:CatalogIcon(id)
@@ -1246,7 +1314,7 @@ function V:Refresh()
         if id==0 then b.hiddenOverlay:Show() else b.hiddenOverlay:Hide() end
     end
     self:RefreshSlotHighlights()
-    if self.tab=="armor" or self.tab=="weaponry" or self.tab=="bags" then self:RefreshPreview()
+    if self.tab=="armor" or self.tab=="weaponry" or self.tab=="bags" or self.tab=="exposure" then self:RefreshPreview()
     elseif self.tab=="body" then self:RefreshBody();self:RefreshPreview()
     elseif self.tab=="outfits" then self:RefreshOutfits() end
     if self.browser:IsShown() then self:RefreshList() end

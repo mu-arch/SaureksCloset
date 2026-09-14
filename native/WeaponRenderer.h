@@ -1,6 +1,7 @@
 #pragma once
 #include "WeaponState.h"
 #include "BowPlacement.h"
+#include "BagPlacement.h"
 // Included after the bridge's player reader, registry and Lua result helpers.
 using WeaponCompose=int (__fastcall *)(void*,void*,unsigned,unsigned,unsigned,unsigned,unsigned);
 using SheathPoint=int (__fastcall *)(unsigned,unsigned);
@@ -25,6 +26,16 @@ static UpdateAttachedModel updateAttachedOriginal=nullptr;
 static BowStringDraw bowStringDrawOriginal=nullptr;
 #ifndef SAUREKS_WEAPON_TEST
 template<typename T> static T weaponFunction(std::uintptr_t address){return reinterpret_cast<T>(address);}
+static long long bagCounterFrequency=0;
+static std::uint32_t bagClockMilliseconds(){
+    // Called with the renderer's model state on its single update thread.
+    if(!bagCounterFrequency){LARGE_INTEGER value{};bagCounterFrequency=QueryPerformanceFrequency(&value)?value.QuadPart:-1;}
+    const auto frequency=bagCounterFrequency;
+    LARGE_INTEGER counter{};
+    if(frequency>0&&QueryPerformanceCounter(&counter))
+        return static_cast<std::uint32_t>((counter.QuadPart/frequency)*1000+(counter.QuadPart%frequency)*1000/frequency);
+    return GetTickCount();
+}
 #endif
 static const auto retainChild=weaponFunction<DestroyModel>(0x710390);
 static const auto detachChild=weaponFunction<DestroyModel>(0x713020);
@@ -39,6 +50,9 @@ struct WeaponContext {
     bool quiverHorizontal=false,hideRangedWhenStored=false,hideMeleeWhenStored=false;
     unsigned actualQuiver=0;
     void* passthroughQuiver=nullptr;
+    unsigned backBag=0;
+    void* backpack=nullptr;
+    BagMotion bagMotion;
     std::array<int,3> routes{{-1,-1,-1}};
     std::array<void*,7> extra{};
 };
@@ -50,6 +64,7 @@ static WeaponContext* weaponContext(std::uintptr_t model){
     return nullptr;
 }
 static bool ownedExtra(const WeaponContext& c,void* child){
+    if(child&&c.backpack==child)return true;
     if(child&&c.passthroughQuiver==child)return true;
     for(auto p:c.extra)if(p&&p==child)return true;
     return false;
@@ -73,6 +88,111 @@ static bool weaponModelMatches(void* child,const char* filename){
 }
 static bool nativeQuiverModel(void* child){
     return weaponModelMatches(child,"Item\\ObjectComponents\\Quiver\\Quiver_A.mdx");
+}
+static bool bagIsRunning(const WeaponContext& context){
+    // Build 5875 reads this movement word at 0x602D9B (XY motion) and
+    // 0x5FD83C (swimming). Preview models have their own stationary pose.
+    unsigned flags=0;
+    constexpr unsigned notRunning=0x100|0x400|0x800|0x2000|0x4000|0x200000|0x800000|0x1000000|0x8000000;
+    return !context.token&&context.unit&&read(context.unit+0x9E8,flags)&&(flags&0xF)&&!(flags&notRunning);
+}
+static bool bagIsAirborne(const WeaponContext& context){
+    // Build 5875 starts jump/drop motion with 0x2000 at 7C620B; extended
+    // falling adds 0x4000 at 633240. Landing clears both at 7C629B.
+    // 7C61D6 excludes nonground modes from natural fall start. Do not reject
+    // walking, transport or feather-fall: these can still be real jumps.
+    unsigned flags=0;
+    constexpr unsigned nonBallistic=0x400|0x800|0x200000|0x800000|0x1000000|0x8000000;
+    return !context.token&&context.unit&&read(context.unit+0x9E8,flags)&&(flags&0x6000)&&!(flags&nonBallistic);
+}
+static float bagAirLiftTarget(const WeaponContext& context){
+    if(!bagIsAirborne(context))return 0;
+    unsigned elapsed=0,flags=0;float initialDown=0;
+    if(!read(context.unit+0xA20,elapsed)||!read(context.unit+0xA48,initialDown)
+        ||!std::isfinite(initialDown)||!read(context.unit+0x9E8,flags)||!(flags&0x2000))return 0;
+    // 7C5D70/7C5D20 use native fall milliseconds and initial DOWNWARD
+    // velocity. A normal jump starts negative; do not lift during ascent.
+    // Native elapsed can be corrected by collision, so use it as-is.
+    const float downSpeed=std::fmin((flags&0x20000000)?7.f:60.148f,
+        initialDown+19.29110527f*(elapsed*.001f));
+    // Build toward full lift over the first eight units/second of descent;
+    // crossing the apex starts at zero rather than switching to full tilt.
+    return std::fmax(0.f,std::fmin(1.f,downSpeed/8.f));
+}
+static bool bagTuningLuaKey(void* L,unsigned& bag,unsigned& race,unsigned& sex){
+    unsigned values[3]{};
+    for(int i=0;i<3;++i){
+        if(!isNumber(L,i+1))return false;
+        const double value=toNumber(L,i+1);
+        if(!std::isfinite(value)||value<0||value>8||value!=static_cast<unsigned>(value))return false;
+        values[i]=static_cast<unsigned>(value);
+    }
+    bag=values[0];race=values[1];sex=values[2];
+    return bagTuningKey(bag,race,sex);
+}
+static int __fastcall getBagFitDefaults(void* L){
+    unsigned bag=0,race=0,sex=0;BagTuningValues values;
+    if(!bagTuningLuaKey(L,bag,race,sex)||!bagTuningDefaults(bag,race,sex,values))return result(L,-2);
+    pushNumber(L,1);
+    for(float value:{values.left,values.inset,values.up,values.pitch,values.roll,values.yaw,values.scale})pushNumber(L,value);
+    return 8;
+}
+static int __fastcall setBagFit(void* L){
+    unsigned bag=0,race=0,sex=0;
+    if(!bagTuningLuaKey(L,bag,race,sex)||!isNumber(L,4))return result(L,-2);
+    const double enabled=toNumber(L,4);
+    if(enabled!=0&&enabled!=1)return result(L,-2);
+    BagTuningValues values;
+    if(enabled==1){
+        float* fields[]={&values.left,&values.inset,&values.up,&values.pitch,&values.roll,&values.yaw,&values.scale};
+        for(int i=0;i<7;++i){
+            if(!isNumber(L,i+5))return result(L,-2);
+            const double value=toNumber(L,i+5);
+            const double minimum=i<3?-1:(i<6?-180:25),maximum=i<3?1:(i<6?180:200);
+            // Validate as a double before narrowing; just-outside values must
+            // not round back into the permitted float range.
+            if(!std::isfinite(value)||value<minimum||value>maximum)return result(L,-2);
+            *fields[i]=static_cast<float>(value);
+        }
+        if(!isNumber(L,12))return result(L,-2);
+        const double motion=toNumber(L,12);
+        if(motion!=0&&motion!=1)return result(L,-2);
+        values.motion=motion==1;
+    }
+    const auto guid=getPlayer();
+    // A successful draft apply must belong to an actual player. Returning a
+    // retryable failure during login prevents Lua caching a pre-login success
+    // that would be discarded when the first character model arrives.
+    if(enabled==1&&!guid)return result(L,-1);
+    bagTuningUseOwner(guid);
+    return result(L,bagTuningSet(bag,race,sex,enabled==1,values)?1:-2);
+}
+static bool positionBackpack(void* child,std::array<float,16>& adjusted,bool smooth=false){
+    const auto model=reinterpret_cast<std::uintptr_t>(child);
+    std::uintptr_t parent=0,data=0,header=0,attachments=0,lookup=0;
+    unsigned point=0;std::uint16_t index=0;
+    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point)||point!=28)return false;
+    auto* context=weaponContext(parent);
+    if(!context||context->guid!=getPlayer()||context->backpack!=child||context->backBag!=1)return false;
+    bagTuningUseOwner(context->guid);
+    std::array<float,16> back,torso,local,modelToRender;std::array<float,3> position;
+    if(!animatedAttachmentMatrix(parent,28,back,&torso)||!read(model+0xBC,local)||!read(parent+0xFC,modelToRender)||
+       !read(parent+0x30,data)||!read(data+0x130,header)||!read(header+0x110,lookup)||
+       !read(lookup+56,index)||!read(header+0x108,attachments)||!read(attachments+48*index+8,position)){
+        context->bagMotion={};return false;
+    }
+    // 7076BE copies the graphics view to scene+0x9C; 714389 composes it
+    // through root/attachment placement into model+0xFC. Cancel that shared
+    // basis to get world vertical even on a mount, independent of the camera.
+    // If the scene is between updates, retain a rigid visible bag until ready.
+    BagMatrix worldToRender;std::uintptr_t scene=0;
+    if(smooth&&(!read(parent+0x2C,scene)||!scene||!read(scene+0x9C,worldToRender))){
+        context->bagMotion={};smooth=false;
+    }
+    const bool valid=bagPlacement(back,torso,local,position,adjusted,context->backBag,
+        smooth?&context->bagMotion:nullptr,smooth?bagClockMilliseconds():0,header,bagIsRunning(*context),&modelToRender,smooth?&worldToRender:nullptr,bagAirLiftTarget(*context));
+    if(!valid)context->bagMotion={};
+    return valid;
 }
 static bool positionStoredBow(void* child,const float* attachment,std::array<float,16>& adjusted){
     std::uintptr_t parent=0;unsigned point=0;
@@ -225,6 +345,14 @@ static void __fastcall bowStringDrawHook(void* model,void* renderState,void* uni
 }
 static void updateWeaponAttachment(void* model,const float* matrix,const float* color,const float* lighting,float alpha){
     std::array<float,16> adjusted;
+    std::uintptr_t parent=0;read(reinterpret_cast<std::uintptr_t>(model)+0x1CC,parent);
+    const auto* context=weaponContext(parent);
+    if(context&&context->backpack==model){
+        // Wait for valid animated bones instead of briefly drawing a shield pose.
+        if(positionBackpack(model,adjusted,true))updateAttachedOriginal(model,adjusted.data(),color,lighting,alpha);
+        else updateAttachedOriginal(model,matrix,color,lighting,0);
+        return;
+    }
     // Zero effective alpha skips the native mesh draw, while its normal update
     // still runs. No native ownership or visibility state is changed; removing
     // the custom quiver restores the original alpha on the next frame.
@@ -255,8 +383,15 @@ static void releasePassthroughQuiver(WeaponContext& c){
     if(read(reinterpret_cast<std::uintptr_t>(child)+0x1CC,parent)&&parent==c.parent)detachChild(child);
     releaseModel(child);
 }
+static void releaseBackpack(WeaponContext& c){
+    auto* child=c.backpack;c.backpack=nullptr;c.bagMotion={};
+    if(!child)return;
+    std::uintptr_t parent=0;
+    if(read(reinterpret_cast<std::uintptr_t>(child)+0x1CC,parent)&&parent==c.parent)detachChild(child);
+    releaseModel(child);
+}
 static void forgetWeapons(std::uintptr_t model){
-    if(auto* c=weaponContext(model)){releaseExtras(*c);releasePassthroughQuiver(*c);*c={};}
+    if(auto* c=weaponContext(model)){releaseExtras(*c);releasePassthroughQuiver(*c);releaseBackpack(*c);*c={};}
 }
 static void discardInheritedPreviewWeapons(std::uintptr_t parent){
     const auto* preview=previews.find(parent);
@@ -415,6 +550,29 @@ static bool ensurePassthroughQuiver(WeaponContext& c){
     c.passthroughQuiver=reinterpret_cast<void*>(after);retainChild(c.passthroughQuiver);
     unsigned loaded=0;return read(after+0x10,loaded)&&loaded;
 }
+static bool ensureBackpack(WeaponContext& c){
+    if(!c.backBag){releaseBackpack(c);return true;}
+    if(!hasPoint(reinterpret_cast<void*>(c.parent),28))return false;
+    if(!c.backpack){
+        std::uintptr_t before=0,after=0;read(c.parent+0x1DC,before);
+        loadingExtraParent=c.parent;
+        loadChild(reinterpret_cast<void*>(c.parent),28,
+            "Interface\\AddOns\\SaureksCloset\\Models\\DarkSchoolbag.mdx",
+            "Interface\\AddOns\\SaureksCloset\\Models\\DarkSchoolbag.blp",0);
+        loadingExtraParent=0;read(c.parent+0x1DC,after);
+        std::uintptr_t owner=0;unsigned point=0;
+        if(!after||after==before||!read(after+0x1CC,owner)||owner!=c.parent||!read(after+0x1D0,point)||point!=28)return false;
+        c.backpack=reinterpret_cast<void*>(after);retainChild(c.backpack);
+    }
+    std::uintptr_t parent=0;unsigned loaded=0;
+    if(!read(reinterpret_cast<std::uintptr_t>(c.backpack)+0x1CC,parent))return false;
+    if(!parent)attachChild(c.backpack,reinterpret_cast<void*>(c.parent),28);
+    if((parent&&parent!=c.parent)||!read(reinterpret_cast<std::uintptr_t>(c.backpack)+0x10,loaded)||!loaded)return false;
+    if(!weaponModelMatches(c.backpack,"Interface\\AddOns\\SaureksCloset\\Models\\DarkSchoolbag.mdx")){
+        releaseBackpack(c);return false;
+    }
+    return true;
+}
 static int __fastcall setWeapons(void* L){
     unsigned values[11]{};
     for(int i=0;i<11;++i){
@@ -438,6 +596,12 @@ static int __fastcall setWeapons(void* L){
         const auto* asset=weaponAsset(actualQuiver);
         if(actualQuiver&&(!asset||asset->kind!=5))return result(L,-2);
     }
+    unsigned backBag=0;
+    if(isNumber(L,16)){
+        const double value=toNumber(L,16);
+        if(value!=0&&value!=1)return result(L,-2);
+        backBag=static_cast<unsigned>(value);
+    }
     WeaponSelection selection;
     for(unsigned i=0;i<7;++i)selection.items[i]=values[i+1];
     for(unsigned i=0;i<3;++i)selection.equipped[i]=values[i+8];
@@ -449,12 +613,12 @@ static int __fastcall setWeapons(void* L){
         for(auto& e:previews.entries)if(e.token==token&&e.guid==p.guid&&e.status==1)parent=e.model;
         if(!parent)return result(L,-1);
     }else if(p.display!=p.native){
-        if(auto* c=weaponContext(parent)){releaseExtras(*c);releasePassthroughQuiver(*c);*c={};}
+        if(auto* c=weaponContext(parent)){releaseExtras(*c);releasePassthroughQuiver(*c);releaseBackpack(*c);*c={};}
         return result(L,0);
     }
     unsigned loaded=0;if(!parent||!read(parent+0x10,loaded)||!loaded)return result(L,0);
     auto* c=weaponContext(parent);
-    const bool keepContext=!selection.empty()||options[0]||options[1]||options[2]||(token&&actualQuiver);
+    const bool keepContext=!selection.empty()||options[0]||options[1]||options[2]||(token&&actualQuiver)||backBag;
     if(!c&&!keepContext)return result(L,1);
     if(!c){
         for(auto& entry:weaponContexts)if(!entry.parent){c=&entry;break;}
@@ -462,6 +626,7 @@ static int __fastcall setWeapons(void* L){
         c->parent=parent;c->unit=token?0:p.unit;c->guid=p.guid;c->token=token;
     }
     if(c->guid!=p.guid||c->token!=token)return result(L,-1);
+    if(c->backBag!=backBag){releaseBackpack(*c);c->backBag=backBag;}
     // Visual options alone must not destroy or rebuild any weapon children.
     c->quiverHorizontal=options[0];c->hideRangedWhenStored=options[1];c->hideMeleeWhenStored=options[2];
     if(c->actualQuiver!=actualQuiver){releasePassthroughQuiver(*c);c->actualQuiver=actualQuiver;}
@@ -492,7 +657,8 @@ static int __fastcall setWeapons(void* L){
         }
     }
     const bool extrasComplete=ensureExtras(*c);
-    const bool complete=ensurePassthroughQuiver(*c)&&extrasComplete;
+    const bool bagComplete=ensureBackpack(*c);
+    const bool complete=ensurePassthroughQuiver(*c)&&extrasComplete&&bagComplete;
     if(!keepContext){releasePassthroughQuiver(*c);*c={};}
     return result(L,complete?1:0);
 }

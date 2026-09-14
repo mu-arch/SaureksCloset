@@ -2,7 +2,7 @@
 ## Title: Saurek's Closet
 ## Notes: Character-sheet wardrobe, preview before applying, hidden slots, saved looks. Custom race, skin, face and hair. /closet
 ## Author: Saurek
-## Version: 3.5.1
+## Version: 0.3.6.7
 ## SavedVariables: VanityStudioDB
 ## SavedVariablesPerCharacter: VanityStudioCharacter
 Catalog.lua
@@ -14,8 +14,10 @@ Updates.lua
 Weaponry.lua
 WeaponryProbe.lua
 Body.lua
+BagTuner.lua
 Preview.lua
 OutfitPreview.lua
 OutfitPortraits.lua
+BagTunerUI.lua
 UI.lua
 Bindings.xml

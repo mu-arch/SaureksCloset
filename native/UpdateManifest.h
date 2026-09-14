@@ -55,6 +55,8 @@ inline bool parsePublishedVersion(const char* text,std::size_t size,bool dll,Upd
         if(static_cast<std::size_t>(stop-line)<length||std::memcmp(line,prefix,length))continue;
         if(found)return false;
         found=true;line+=length;
+        // Development releases use 0.x.y.z; keep the existing three-number wire ABI.
+        if(!dll&&stop-line>2&&line[0]=='0'&&line[1]=='.')line+=2;
         if(dll){
             if(!updateNumber(line,stop,out.dll,999999)||!out.dll||stop-line!=3||std::memcmp(line,");}",3))return false;
         }else if(!updateNumber(line,stop,out.major,65535)||line==stop||*line++!='.'||

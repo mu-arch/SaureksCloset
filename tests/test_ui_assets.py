@@ -8,7 +8,9 @@ from PIL import Image
 root = Path(__file__).resolve().parents[1]
 folder = root / 'addon/SaureksCloset/Textures'
 manifest = json.loads((root / 'addon/SaureksCloset/ARTWORK.json').read_text())
-assert {p.name for p in folder.iterdir()} == {entry['texture'] for entry in manifest}
+assert {p.name for p in folder.iterdir()} == {entry['texture'] for entry in manifest} | {'ASSETS-LICENSE'}
+assert '../ASSETS-LICENSE' in (folder / 'ASSETS-LICENSE').read_text()
+assert (folder.parent / 'ASSETS-LICENSE').read_bytes() == (root / 'ASSETS-LICENSE').read_bytes()
 for entry in manifest:
     p = folder / entry['texture'];data = p.read_bytes()
     assert len(data) == entry['bytes']

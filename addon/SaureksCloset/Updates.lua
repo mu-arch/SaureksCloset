@@ -1,8 +1,10 @@
 local V=VanityStudio
-V.REQUIRED_RENDERER=30501
+V.REQUIRED_RENDERER=30607
 V.websiteURLs={"https://github.com/mu-arch/SaureksCloset","https://github.com/mu-arch/SaureksCloset/releases","https://discord.gg/6mfxCdNbM6"}
 function V:VersionParts(version)
-    local _,_,major,minor,patch=string.find(version or "","^(%d+)%.(%d+)%.(%d+)$")
+    -- The development prefix does not reset release ordering from legacy 3.x releases.
+    version=string.gsub(version or "","^0%.(%d+%.%d+%.%d+)$","%1")
+    local _,_,major,minor,patch=string.find(version,"^(%d+)%.(%d+)%.(%d+)$")
     major=tonumber(major);minor=tonumber(minor);patch=tonumber(patch)
     if not major or major<1 or major>65535 or minor>65535 or patch>65535 then return nil end
     return {major,minor,patch}
@@ -15,7 +17,7 @@ function V:VersionIsNewer(candidate,current)
 end
 function V:RendererVersionText(version)
     if type(version)~="number" or version<1 or version>999999 or version~=math.floor(version) then return "Not loaded" end
-    return string.format("%d.%d.%d",math.floor(version/10000),math.mod(math.floor(version/100),100),math.mod(version,100))
+    return (version>=30607 and "0." or "")..string.format("%d.%d.%d",math.floor(version/10000),math.mod(math.floor(version/100),100),math.mod(version,100))
 end
 function V:RefreshUpdateUI()
     local alert=self.updateMismatch or self.remoteUpdateAvailable
@@ -115,7 +117,7 @@ function V:UpdateUpdates()
         if type(value)~="number" or value~=math.floor(value) or value<0 or value>(i==6 and 999999 or 65535) then valid=false end
     end
     if valid and values[3]>0 and values[6]>0 then
-        local addon=string.format("%d.%d.%d",values[3],values[4],values[5])
+        local addon=(values[6]>=30607 and "0." or "")..string.format("%d.%d.%d",values[3],values[4],values[5])
         self.remoteRelease={addon=addon,dll=values[6]}
         self.remoteUpdateAvailable=self:VersionIsNewer(addon,self.VERSION) or values[6]>self.REQUIRED_RENDERER
         self.updateStatus=self.remoteUpdateAvailable and "Update available on GitHub." or "You have the latest published version or newer."

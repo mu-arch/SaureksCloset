@@ -11,6 +11,7 @@
 #include "Appearance.h"
 #include "PreviewState.h"
 #include "WeaponryProbe.h"
+#include "BagAssetFiles.h"
 using Register=void (__fastcall *)(const char*,std::uintptr_t);
 using GetPlayer=std::uint64_t (__fastcall *)();
 using ObjectPtr=void* (__fastcall *)(std::uint32_t,const char*,std::uint64_t,int);
@@ -323,7 +324,7 @@ static int __fastcall weaponryProbe(void* L){
 #include "WeaponRenderer.h"
 #include "UpdateChecker.h"
 #include "VoiceRenderer.h"
-static int __fastcall version(void* L){return result(L,30501);}
+static int __fastcall version(void* L){return result(L,30607);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
@@ -337,6 +338,8 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
         registerOriginal("SaureksClosetInspectPreview",reinterpret_cast<std::uintptr_t>(&inspectPreview));
         registerOriginal("SaureksClosetInspect",reinterpret_cast<std::uintptr_t>(&inspect));
         registerOriginal("SaureksClosetSetWeapons",reinterpret_cast<std::uintptr_t>(&setWeapons));
+        registerOriginal("SaureksClosetGetBagFitDefaults",reinterpret_cast<std::uintptr_t>(&getBagFitDefaults));
+        registerOriginal("SaureksClosetSetBagFit",reinterpret_cast<std::uintptr_t>(&setBagFit));
         registerOriginal("SaureksClosetWeaponryProbe",reinterpret_cast<std::uintptr_t>(&weaponryProbe));
         registerOriginal("SaureksClosetSetUpdateChecks",reinterpret_cast<std::uintptr_t>(&setUpdateChecks));
         registerOriginal("SaureksClosetStartUpdateCheck",reinterpret_cast<std::uintptr_t>(&startUpdateCheck));
@@ -355,6 +358,7 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     if(!compatible()||MH_Initialize()!=MH_OK)return TRUE;
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
+        {0x647E60,reinterpret_cast<void*>(&resolveAssetFileHook),reinterpret_cast<void**>(&resolveAssetFileOriginal)},
         {0x611770,reinterpret_cast<void*>(&sheathTransitionHook),reinterpret_cast<void**>(&sheathTransitionOriginal)},
         {0x60C480,reinterpret_cast<void*>(&voiceSoundDataHook),reinterpret_cast<void**>(&voiceSoundDataOriginal)},
         {0x60C6A0,reinterpret_cast<void*>(&voiceRaceHook),reinterpret_cast<void**>(&voiceRaceOriginal)},

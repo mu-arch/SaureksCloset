@@ -2,7 +2,7 @@ local now,starts,enabled,remote=0,0,false,{1}
 local messages={}
 GetTime=function() return now end
 VanityStudioDB={}
-VanityStudio={VERSION="3.5.1",Message=function(self,value) table.insert(messages,value) end}
+VanityStudio={VERSION="0.3.6.7",Message=function(self,value) table.insert(messages,value) end}
 SaureksClosetRendererVersion=function() return VanityStudio.REQUIRED_RENDERER end
 SaureksClosetSetUpdateChecks=function(value) enabled=value==1;return 1 end
 SaureksClosetStartUpdateCheck=function() assert(enabled);starts=starts+1;return 1 end
@@ -17,15 +17,15 @@ V:InitializeUpdates()
 assert(VanityStudioDB.autoCheckUpdates==true and enabled and starts==0)
 assert(not V.updateMismatch and table.getn(messages)==0)
 now=3;V:UpdateUpdates();assert(starts==1 and V.updatePolling)
-remote={2,3,5,2,V.REQUIRED_RENDERER+1,0};now=3.3;V:UpdateUpdates()
+remote={2,3,6,8,V.REQUIRED_RENDERER+1,0};now=3.3;V:UpdateUpdates()
 assert(V.remoteUpdateAvailable and title.text=="Saurek's Closet (Update Available)")
-assert(string.find(V.updatesSummary.text,"GitHub current version addon: 3.5.2",1,true))
-assert(string.find(V.updatesSummary.text,"GitHub current version DLL: 3.5.2",1,true))
+assert(string.find(V.updatesSummary.text,"GitHub current version addon: 0.3.6.8",1,true))
+assert(string.find(V.updatesSummary.text,"GitHub current version DLL: "..V:RendererVersionText(V.REQUIRED_RENDERER+1),1,true))
 assert(table.getn(messages)==1)
 V:CheckForUpdates(true);now=4;V:UpdateUpdates();assert(table.getn(messages)==1)
 V:CheckForUpdates(true);local before=starts
 V:SetAutoUpdates(false);remote={2,9,9,9,90909,0};now=50;V:UpdateUpdates()
-assert(not enabled and not V.updatePolling and starts==before and V.remoteRelease.addon=="3.5.2")
+assert(not enabled and not V.updatePolling and starts==before and V.remoteRelease.addon=="0.3.6.8")
 assert(string.find(V.updatesSummary.text,"GitHub current version addon: Unknown",1,true))
 assert(string.find(V.updatesSummary.text,"GitHub current version DLL: Unknown",1,true))
 assert(V:CheckForUpdates(true)==false and starts==before)
@@ -51,3 +51,9 @@ local opened
 SaureksClosetOpenWebsite=function(page) opened=page;return 1 end
 assert(V:OpenWebsite(2) and opened==2 and not V:OpenWebsite(9))
 print("PASS: default-on/persisted-off checks, cancellation, mismatch/missing DLL alerts, numeric versions, deduplication, errors, timeout and website actions")
+
+assert(V:VersionIsNewer("0.3.6.7","3.5.1"))
+assert(not V:VersionIsNewer("3.5.1","0.3.6.7"))
+assert(V:VersionIsNewer("0.3.6.8","0.3.6.7"))
+assert(not V:VersionIsNewer("0.3.6.7","0.3.6.7"))
+assert(V:RendererVersionText(30607)=="0.3.6.7")

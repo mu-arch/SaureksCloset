@@ -1,6 +1,8 @@
 function UnitRace() return "Human", "Human" end
 function UnitSex() return 2 end
 local playerLevel=15
+local playerDeadOrGhost=false
+function UnitIsDeadOrGhost(unit) return unit=="player" and playerDeadOrGhost end
 function UnitLevel(unit) if unit=="player" then return playerLevel end end
 -- Run with the actual Lua 5.0.3 interpreter, from the VanityStudio directory.
 local passed = 0
@@ -13,6 +15,7 @@ local methods = {}
 local function noop() end
 for _,name in ipairs({"SetFont","SetTextColor","SetJustifyH","SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetHighlightTexture","SetTextInsets","SetAutoFocus","SetMaxLetters","ClearFocus","SetClampedToScreen","SetMovable","RegisterForDrag","StartMoving","StopMovingOrSizing","SetFrameStrata","EnableMouse","EnableMouseWheel","SetNormalTexture","SetOwner","ClearLines","AddLine","RegisterEvent","SetAllPoints","SetAlpha","RegisterForClicks","SetFocus","SetJustifyV","SetHitRectInsets","SetPushedTexture","SetVertexColor","SetValueStep","SetDisabledTexture","SetTexCoord","SetBlendMode"}) do methods[name]=noop end
 function methods:SetFont(path,size) self.fontPath=path;self.fontSize=size end
+function methods:RegisterEvent(name) self.events=self.events or {};self.events[name]=true end
 function methods:SetJustifyV(v) self.justifyV=v end
 function methods:SetAlpha(v) self.alpha=v end
 function methods:SetBlendMode(v) self.blend=v end
@@ -219,9 +222,11 @@ dofile("addon/SaureksCloset/Core.lua")
 dofile("addon/SaureksCloset/Updates.lua")
 dofile("addon/SaureksCloset/Weaponry.lua")
 dofile("addon/SaureksCloset/Body.lua")
+dofile("addon/SaureksCloset/BagTuner.lua")
 dofile("addon/SaureksCloset/Preview.lua")
 dofile("addon/SaureksCloset/OutfitPreview.lua")
 dofile("addon/SaureksCloset/OutfitPortraits.lua")
+dofile("addon/SaureksCloset/BagTunerUI.lua")
 dofile("addon/SaureksCloset/UI.lua")
 local V=VanityStudio
 VanityStudioDB={outfits={["Legacy armor"]={[1]=16955}}}
@@ -342,7 +347,7 @@ local initialTabWidth=savedTab:GetWidth()
 for i=1,3 do savedTab:Hide();savedTab:Show() end
 check(savedTab:GetWidth()==initialTabWidth and getglobal(savedTab:GetName().."Text"):GetWidth()>=savedTab:GetTextWidth()+12,"Saved Looks retains full single-line text width and padding across repeated shows")
 click(V.wardrobeSelector)
-check(table.getn(menuEntries)==4 and menuEntries[2].text=="Weaponry" and menuEntries[4].text=="Bags" and not menuEntries[1].isTitle and menuEntries[1].text=="Outfit" and menuEntries[1].checked and menuEntries[3].text=="Body","Wardrobe selector orders Outfit, Weaponry, Body, Bags with the active choice checked")
+check(table.getn(menuEntries)==5 and menuEntries[5].text=="Exposure" and menuEntries[2].text=="Weaponry" and menuEntries[4].text=="Bags" and not menuEntries[1].isTitle and menuEntries[1].text=="Outfit" and menuEntries[1].checked and menuEntries[3].text=="Body","Wardrobe selector orders Outfit, Weaponry, Body, Bags, Exposure with the active choice checked")
 click(getglobal("DropDownList1Button3"))
 check(V.tab=="body" and V.pagesByName.body:IsVisible() and V.wardrobeSelectorLabel:GetText()=="Body" and not DropDownList1:IsShown(),"Race selection switches pages and closes the menu")
 click(V.tabButtons.outfits)
@@ -362,6 +367,7 @@ check(V.uiReady and V.slotButtons[8] and V.browser,"Every required widget exists
 check(not V.quickLook and not V.quickPrev and not V.quickNext,"Armor footer has been removed")
 check(table.getn(V.wardrobeBackgrounds)==1 and table.getn(V.armorSlotPanels)==4 and V.armorDecorationFrame.width==327 and V.armorDecorationFrame.height==357,"Original armor quadrants use the v3.4.34 decoration dimensions")
 check(not V.wardrobeFrameOverlay,"The extra wardrobe frame overlay is removed")
+check(V.wardrobeSelectorBox.point[1]=="TOP" and V.wardrobeSelectorBox.point[2]==V.frame and V.frame:GetWidth()/2+V.wardrobeSelectorBox.point[4]==183,"Navigation preserves the user-adjusted visual center")
 check(V.armorDecorationFrame.point[4]==19 and V.armorDecorationFrame.point[5]==-75 and V.armorDecorationFrame:GetFrameLevel()>V.model:GetFrameLevel() and V.armorDecorationFrame:GetFrameLevel()>V.previewBuffer:GetFrameLevel(),"Outfit decorations keep their page anchor above both model buffers")
 check(V.slotButtons[1]:GetParent()==V.armorDecorationFrame and V.armorDecorationFrame:GetFrameLevel()>V.model:GetFrameLevel(),"Item buttons sit above the decoration panels and character model")
 for _,slot in ipairs(V.wardrobeSlots) do
@@ -483,6 +489,12 @@ check(not V.weaponOptions:IsShown() and not V.weaponOptionsButton:IsVisible(),"O
 check(V.model:IsVisible() and V.pagesByName.bags:IsVisible() and not V.slotButtons[101]:IsVisible() and V.wardrobeSelectorLabel:GetText()=="Bags","Bags has its own page and retains the character preview")
 V:SetTab("outfits");V:SetTab("character")
 check(V.tab=="bags","Wardrobe remembers the Bags section")
+click(V.wardrobeSelector);click(getglobal("DropDownList1Button5"))
+check(V.tab=="exposure" and V.wardrobeSelectorLabel:GetText()=="Exposure" and V.model:IsVisible() and V.pagesByName.exposure:IsVisible(),"Exposure opens from the dropdown and retains the wardrobe preview")
+check(not V.pagesByName.bags:IsVisible() and not V.armorDecorationFrame:IsVisible() and not V.weaponOptionsButton:IsVisible(),"Exposure hides controls from the other wardrobe pages")
+check(string.find(V.exposureNote:GetText(),"not implemented yet",1,true) and string.find(V.exposureNote:GetText(),"blood, dust, water, and filth",1,true) and string.find(V.exposureNote:GetText(),"model and weapons",1,true),"Exposure explains its planned effects and placeholder status")
+V:SetTab("settings");V:SetTab("character")
+check(V.tab=="exposure" and V.exposureNote:IsVisible(),"Wardrobe remembers the Exposure section")
 V:SetTab("armor")
 -- Weapon-category filtering remains shared with the dedicated section.
 V:OpenBrowser(1);V.slot=16;click(V.materialButton)
@@ -618,6 +630,37 @@ V:ClearAll();check(visible(1)==777 and visible(3)==222,"Reset all restores real 
 VanityStudioCharacter.selected={[1]=head};V.applied={};V.needsSync=true
 event="PLAYER_ENTERING_WORLD";V.events.scripts.OnEvent()
 arg1=.6;V.events.scripts.OnUpdate();check(visible(1)==head,"World entry restores saved armor")
+do
+    local function fire(name,unit) event=name;arg1=unit;V.events.scripts.OnEvent() end
+    local function tick(seconds) now=now+seconds;arg1=seconds;V.events.scripts.OnUpdate() end
+    check(V.events.events.PLAYER_DEAD and V.events.events.PLAYER_ALIVE and V.events.events.PLAYER_UNGHOST,"Listen for all original-client death and resurrection transitions")
+    V:Select(3,0);V:Toggle(false)
+    local savedLook=V:Copy(VanityStudioCharacter.selected)
+    local activeLook=VanityStudioCharacter.activeOutfit
+    local dirtyLook=VanityStudioCharacter.outfitDirty
+    playerDeadOrGhost=true;fire("PLAYER_DEAD");world={}
+    local before=table.getn(calls)
+    tick(1);fire("PLAYER_ALIVE");tick(30)
+    check(table.getn(calls)==before,"Releasing to a ghost does not consume recovery attempts or reapply armor")
+    playerDeadOrGhost=false;fire("PLAYER_UNGHOST");tick(.6)
+    check(visible(1)==head and visible(3)==0,"Resurrection restores customized and hidden slots with the wardrobe closed")
+    check(visible(5)==real[5],"Respawn leaves passthrough slots alone")
+    world={};tick(1)
+    check(visible(1)==head and visible(3)==0,"A delayed client model replacement is repaired by the follow-up pass")
+    tick(1);world={};fire("UNIT_MODEL_CHANGED","player");tick(.6)
+    check(visible(1)==head,"Late resurrection model events schedule another application")
+    tick(6);before=table.getn(calls);tick(5)
+    check(not V.respawnRecovery and table.getn(calls)==before,"Recovery stops after the bounded loading window")
+    check(VanityStudioCharacter.enabled and VanityStudioCharacter.selected[1]==savedLook[1] and VanityStudioCharacter.selected[3]==savedLook[3] and VanityStudioCharacter.activeOutfit==activeLook and VanityStudioCharacter.outfitDirty==dirtyLook,"Respawn preserves the enabled setting and saved look state")
+    world={};fire("PLAYER_ALIVE");fail=true;tick(.6)
+    check(V.errors[1] and not V.applied[1],"An unavailable player helper leaves the appearance eligible for retry")
+    fail=false;tick(1)
+    check(visible(1)==head and not V.errors[1],"Direct resurrection retries successfully after the player becomes ready")
+    tick(6)
+    V:SetEnabled(false);world={};fire("PLAYER_UNGHOST");tick(.6);tick(1);tick(6)
+    check(not VanityStudioCharacter.enabled and visible(1)==real[1] and visible(3)==real[3],"Resurrection never enables a disabled transmog")
+    V:SetEnabled(true);V:Toggle(true)
+end
 V:ClearAll()
 local helper=SetUnitVisibleItemID;SetUnitVisibleItemID=nil
 cache[other]=nil;V:Select(1,other)
@@ -1041,7 +1084,7 @@ V:SetTab("armor");VanityStudioDB=savedDB;VanityStudioCharacter=savedChar
 -- Physical placements persist independently and never use fake inventory slots.
 local weaponCalls={};local weaponWorld={};local weaponPreviewCalls={}
 function SaureksClosetSetWeapons(token,...)
-    check(arg.n==14,"Weapon API includes seven positions, real weapons, three display options and the equipped quiver")
+    check(arg.n==15,"Placement API includes weapons, visibility, equipped quiver and top-left backpack")
     local record={token=token,values=arg};table.insert(weaponCalls,record)
     if token==0 then weaponWorld=V:Copy(arg) else weaponPreviewCalls[token]=V:Copy(arg) end
     return 1
@@ -1055,6 +1098,35 @@ function methods:SetUnit(unit)
     detailSetUnit(self,unit)
 end
 V:ClearAll();V:SetEnabled(true);V:SetTab("weaponry")
+do
+    V:SetTab("bags")
+    check(table.getn(V.bagSlots)==7 and not V.bagSlots[1].disabled,"Bags exposes five back and two hip positions")
+    for i=2,7 do check(V.bagSlots[i].disabled,"Only Top Left is implemented") end
+    check(V.bagDescription:GetText()=="Bag appearance customization is not available yet.","Bags preserves the requested description")
+    check(V.bagSlots[1]:GetParent().point[5] < V.bagDescription.point[5]-V.bagDescription:GetHeight(),"Bag slots are below the description")
+    click(V.bagSlots[1]);check(menuEntries[1].text=="None" and menuEntries[2].text=="Runecloth Bag","Top Left offers the first bag and removal")
+    check(V.bagSlots[1].selected:IsShown(),"The bag slot highlights while its menu is open")
+    CloseDropDownMenus();check(not V.bagSlots[1].selected:IsShown(),"Dismissing the bag menu clears its highlight")
+    local oldRenderer=testedRenderer;testedRenderer=30501
+    check(not V:SelectBackBag(1) and not VanityStudioCharacter.weapons.backBag,"Old DLL cannot silently accept a bag")
+    testedRenderer=oldRenderer
+    local before=table.getn(calls)
+    check(V:SelectBackBag(1) and weaponWorld[15]==1,"Bag selection reaches the world renderer")
+    check(table.getn(calls)==before,"A visible bag does not write equipment or inventory slots")
+    check(VanityStudioCharacter.unsaved.weapons.backBag==1,"Unsaved looks include bags")
+    check(V:SaveOutfit("Bag regression") and VanityStudioDB.outfits["Bag regression"].weapons.backBag==1,"Saved looks retain bags")
+    V:SetEnabled(false);check(weaponWorld[15]==0 and VanityStudioCharacter.weapons.backBag==1,"World toggle hides the bag without forgetting it")
+    V:SetEnabled(true);check(weaponWorld[15]==1,"World toggle restores the bag")
+    local signature=V:WeaponSignature(VanityStudioCharacter.weapons)
+    V:SelectBackBag(nil);check(weaponWorld[15]==0 and V:WeaponSignature(VanityStudioCharacter.weapons)~=signature,"Removing a bag clears it and invalidates the preview")
+    check(V:LoadOutfit("Bag regression") and weaponWorld[15]==1,"Loading a saved look restores its bag")
+    local live=weaponWorld[15]
+    V:ApplyWeaponRenderer(99,{backBag=1});check(weaponPreviewCalls[99][15]==1 and weaponWorld[15]==live,"Bag preview targets are isolated from the world")
+    V:ApplyWeaponRenderer(99,{});check(weaponPreviewCalls[99][15]==0 and weaponWorld[15]==live,"Previewing no bag clears only that preview")
+    V:ClearAll();check(weaponWorld[15]==0 and not VanityStudioCharacter.weapons.backBag,"Reset all removes the bag")
+    VanityStudioDB.outfits["Bag regression"]=nil
+    V:SetTab("weaponry")
+end
 HideUIPanel(V.frame);check(not V.weaponOptions:IsShown(),"Closing the wardrobe also closes weapon options")
 V:Toggle(true);check(not V.weaponOptions:IsShown(),"Reopening the wardrobe on Weaponry leaves its options closed")
 click(V.weaponOptionsButton)
@@ -1305,6 +1377,94 @@ do
     frame()
     methods.SetUnit=originalSetUnit;methods.Undress=originalUndress
     SaureksClosetPreviewStatus=originalStatus;SaureksClosetInspectPreview=originalInspect
+end
+
+-- Exercise the new debug window against the actual persistence/controller
+-- code, including the native client's scrolling-edit helper functions.
+do
+    local oldReader,oldVersion=SaureksClosetRealBody,SaureksClosetRendererVersion
+    local liveFits={};local gender=0
+    SaureksClosetRendererVersion=function() return 30515 end
+    SaureksClosetRealBody=function() return 2,gender,0,0,0,0,0 end
+    SaureksClosetGetBagFitDefaults=function(bag,race,sex) return 1,.126,0,-.06,sex==0 and 15 or 10,15,0,85 end
+    SaureksClosetSetBagFit=function(bag,race,sex,on,left,inset,up,pitch,roll,yaw,scale,motion)
+        liveFits[race..":"..sex]=on==1 and {left=left,inset=inset,up=up,pitch=pitch,roll=roll,yaw=yaw,scale=scale,motion=motion} or nil;return 1
+    end
+    VanityStudioCharacter.body=nil;VanityStudioCharacter.enabled=true;VanityStudioCharacter.weapons.backBag=1
+    V:InitializeBagTuning()
+    local function run(widget,script)
+        local original=this;this=widget;widget.scripts[script]();this=original
+    end
+    local clear=methods.ClearFocus
+    function methods:ClearFocus() if self.scripts.OnEditFocusLost then run(self,"OnEditFocusLost") end end
+    methods.SetMultiLine=noop;methods.SetFontObject=noop;methods.UpdateScrollChildRect=noop
+    function methods:HighlightText() self.highlighted=true end
+    function methods:GetVerticalScroll() return self.verticalScroll or 0 end
+    function methods:GetVerticalScrollRange() return 1000 end
+    V:OpenBagTuner();local tuner=V.bagTunerWindow
+    check(tuner:IsShown() and tuner:GetParent()==UIParent and table.getn(tuner.rows)==7,"Debug tuner is an independent window with seven controls")
+    local originalSet=methods.SetUnit;local reloads=0
+    methods.SetUnit=function(self,unit) reloads=reloads+1;return originalSet(self,unit) end
+    run(tuner.rows[1].plus,"OnClick")
+    check(math.abs(liveFits["2:0"].left-.131)<.000001,"Nudge reaches the live fit controller")
+    IsShiftKeyDown=function() return 1 end;run(tuner.rows[1].minus,"OnClick");IsShiftKeyDown=nil
+    check(math.abs(liveFits["2:0"].left-.081)<.000001,"Shift uses a larger nudge")
+    local editor=tuner.rows[2].editor
+    run(editor,"OnEditFocusGained");editor:SetText("0.075");run(editor,"OnEnterPressed")
+    check(liveFits["2:0"].inset==.075,"Typed inset reaches renderer")
+    run(editor,"OnEditFocusGained");editor:SetText("2");run(editor,"OnEnterPressed")
+    check(liveFits["2:0"].inset==.075,"Out-of-range edit keeps previous inset")
+    run(editor,"OnEditFocusGained");editor:SetText("0.075");run(editor,"OnEnterPressed")
+    tuner.pause:SetChecked(true);run(tuner.pause,"OnClick");check(liveFits["2:0"].motion==0,"Pause disables motion while fitting")
+    run(tuner.save,"OnClick");V:SetBagTunerValue("inset",.08);run(tuner.load,"OnClick")
+    check(liveFits["2:0"].inset==.075,"Save and Load restore the actual stored fit")
+    V:SetBagTunerValue("inset",.08)
+    run(editor,"OnEditFocusGained");editor:SetText("invalid");run(tuner.save,"OnClick")
+    check(VanityStudioDB.bagTuning.fits["1:2:0"].values.inset==.075,"Invalid pending input blocks Save instead of masking its error")
+    run(editor,"OnEditFocusGained");editor:SetText("invalid");editor:ClearFocus();run(tuner.save,"OnClick")
+    check(VanityStudioDB.bagTuning.fits["1:2:0"].values.inset==.075,"Focus loss before Save cannot bypass invalid-input protection")
+    local function resetField(row)
+        run(row.reset,"OnEnter");run(row.reset,"OnMouseDown")
+        for _,other in ipairs(tuner.rows) do if other.editor.editing then other.editor:ClearFocus() end end
+        run(row.reset,"OnClick");run(row.reset,"OnLeave")
+    end
+    resetField(tuner.rows[2])
+    check(liveFits["2:0"].inset==0 and not tuner.invalidInput,"Field reset clears its own invalid-input guard")
+    run(editor,"OnEditFocusGained");editor:SetText("0.07")
+    resetField(tuner.rows[1])
+    check(editor.editing and editor:GetText()=="0.07" and liveFits["2:0"].inset==0,"Reset preserves another field's unfinished edit without applying it")
+    run(editor,"OnEnterPressed");check(liveFits["2:0"].inset==.07,"Preserved pending edit can still be applied")
+    local defaults=V:BagTunerDefaults(1,2,0)
+    for _,row in ipairs(tuner.rows) do V:SetBagTunerValue(row.editor.field.key,defaults[row.editor.field.key]+row.editor.field.step) end
+    for _,row in ipairs(tuner.rows) do
+        local field=row.editor.field;local before=V:Copy(V:GetBagTunerState().values)
+        check(row.reset.closetEnabled,"Every available field has an enabled Reset button")
+        run(row.editor,"OnEditFocusGained");row.editor:SetText("invalid");resetField(row)
+        check(liveFits["2:0"][field.key]==defaults[field.key] and not row.editor.editing,"Each Reset discards its pending text and applies its own default")
+        for _,other in ipairs(tuner.rows) do
+            local key=other.editor.field.key
+            if key~=field.key then check(liveFits["2:0"][key]==before[key],"Field Reset preserves every other value") end
+        end
+        check(VanityStudioDB.bagTuning.fits["1:2:0"].values.inset==.075,"Field Reset never overwrites the saved fit")
+    end
+    V:SetBagTunerValue("inset",.08);V:RefreshBagTunerUI()
+    run(tuner.rows[2].reset,"OnEnter");run(tuner.rows[2].reset,"OnMouseDown");gender=1
+    V:SetBagTunerValue("inset",.09);V:RefreshBagTunerUI()
+    run(tuner.rows[2].reset,"OnClick");run(tuner.rows[2].reset,"OnLeave")
+    check(liveFits["2:1"].inset==.09,"Reset rejects a model change between mouse down and click")
+    V:SetBagTunerValue("inset",0);gender=0;V:RefreshBagTunerUI()
+    run(editor,"OnEditFocusGained");editor:SetText("0.9");gender=1
+    run(editor,"OnEnterPressed");check(liveFits["2:1"].inset==0,"Pending edit cannot bleed into a different gender")
+    V.bagTunerWindow:Hide();check(liveFits["2:1"].motion==1,"Closing tuner resumes motion")
+    V:OpenBagTuner();run(tuner.export,"OnClick")
+    local export=V.bagTunerExportWindow
+    check(export:IsShown() and export.editor.highlighted,"Export opens selected, copyable text")
+    check(string.find(export.editor:GetText(),'"savedFits"',1,true)~=nil,"Export contains saved fitting data")
+    arg1=0;arg2=-700;arg3=1;arg4=14;run(export.editor,"OnCursorChanged");run(export.editor,"OnUpdate")
+    check(export.scroll:GetVerticalScroll()>0,"Long exports scroll with the native text editor helper")
+    check(reloads==0,"Tuning never reloads the character preview")
+    export:Hide();tuner:Hide();methods.SetUnit=originalSet;methods.ClearFocus=clear
+    SaureksClosetRealBody=oldReader;SaureksClosetRendererVersion=oldVersion
 end
 
 local seen={}

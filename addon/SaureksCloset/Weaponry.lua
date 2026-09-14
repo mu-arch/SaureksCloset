@@ -23,7 +23,26 @@ function V:NormalizeWeapons(source)
     for _,name in ipairs({"quiverHorizontal","hideRangedWhenStored","hideMeleeWhenStored"}) do
         if source and source[name]==true then result[name]=true end
     end
+    if source and source.backBag==1 then result.backBag=1 end
     return result
+end
+function V:BagRendererAvailable()
+    if not self:WeaponRendererAvailable() or type(SaureksClosetRendererVersion)~="function" then return false end
+    local ok,version=pcall(SaureksClosetRendererVersion)
+    return ok and type(version)=="number" and version>=30515
+end
+function V:SelectBackBag(id)
+    if id~=nil and id~=1 then return false end
+    if id and not self:BagRendererAvailable() then
+        self:Message("Copy the updated SaureksCloset.dll and fully restart WoW to use visible bags.")
+        return false
+    end
+    self:CancelDraft()
+    local c=VanityStudioCharacter;c.weapons=c.weapons or {}
+    -- Saved with physical placements so looks, reset, and the world toggle
+    -- include bags without changing actual inventory or equipped bag slots.
+    c.weapons.backBag=id
+    self:TrackUnsaved();self:SyncWeapons();self:Refresh();return true
 end
 function V:InitializeWeapons()
     for _,item in ipairs(SaureksClosetQuivers) do
@@ -142,10 +161,12 @@ end
 function V:ApplyWeaponRenderer(token,weapons)
     if not self:WeaponRendererAvailable() then return false end
     local w=weapons or {};local real=self:RealWeaponItems()
-    local ok,status=pcall(SaureksClosetSetWeapons,token,w[101] or 0,w[102] or 0,w[103] or 0,w[104] or 0,w[105] or 0,w[106] or 0,w[107] or 0,real[1],real[2],real[3],w.quiverHorizontal and 1 or 0,w.hideRangedWhenStored and 1 or 0,w.hideMeleeWhenStored and 1 or 0,self:RealQuiverItem())
+    if w.backBag and not self:BagRendererAvailable() then return false,-2 end
+    local ok,status=pcall(SaureksClosetSetWeapons,token,w[101] or 0,w[102] or 0,w[103] or 0,w[104] or 0,w[105] or 0,w[106] or 0,w[107] or 0,real[1],real[2],real[3],w.quiverHorizontal and 1 or 0,w.hideRangedWhenStored and 1 or 0,w.hideMeleeWhenStored and 1 or 0,self:RealQuiverItem(),w.backBag or 0)
     return ok and status==1,status
 end
 function V:SyncWeapons()
+    if self.SyncBagTuning then self:SyncBagTuning() end
     local c=VanityStudioCharacter
     local weapons=c.enabled and self:EffectiveWeapons(c.weapons,c.selected) or {}
     if not self:WeaponRendererAvailable() then return end
@@ -161,7 +182,7 @@ function V:PreviewWeapons()
 end
 function V:WeaponDisplaySignature(weapons)
     local w=weapons or {}
-    return ":q"..(w.quiverHorizontal and 1 or 0)..":r"..(w.hideRangedWhenStored and 1 or 0)..":m"..(w.hideMeleeWhenStored and 1 or 0)
+    return ":q"..(w.quiverHorizontal and 1 or 0)..":r"..(w.hideRangedWhenStored and 1 or 0)..":m"..(w.hideMeleeWhenStored and 1 or 0)..":bag"..(w.backBag or 0)
 end
 function V:WeaponSignature(weapons,overrides,omitDisplayOptions)
     weapons=self:EffectiveWeapons(weapons,overrides)

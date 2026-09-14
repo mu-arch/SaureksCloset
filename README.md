@@ -25,6 +25,25 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 
 ![Wardrobe and searchable item appearance browser](Screenshots/1.png)
 
+### Visible Bags with dynamic physics
+
+- 15 bag models with soft and hard physics systems based on the bag type
+
+<table>
+<tr>
+<td width="50%">
+<video src="Screenshots/1.webm" controls preload="metadata" width="400">
+  <a href="Screenshots/1.webm">Watch bag demonstration 1</a>
+</video>
+</td>
+<td width="50%">
+<video src="Screenshots/2.webm" controls preload="metadata" width="400">
+  <a href="Screenshots/2.webm">Watch bag demonstration 2</a>
+</video>
+</td>
+</tr>
+</table>
+
 ### Expanded weapon positioning, and fixes for Blizzard's 1.12 weapon sheathing bugs
 
 ![Wardrobe and searchable item appearance browser](Screenshots/5.png)
@@ -106,3 +125,26 @@ Several custom weapons can be displayed at once. When you draw weapons, matching
 
 Weaponry is still being refined. Some combinations may clip, and attachment positions cannot yet be adjusted manually. The **Bags** view is a placeholder; bag appearance customization is not available yet.
 
+
+## Licensing
+
+### Source Code
+
+Unless otherwise stated, the source code in this repository is licensed under
+the GNU General Public License v3.0. See [LICENSE](LICENSE).
+
+### Artwork and Assets
+
+Original artwork, textures, graphics, interface artwork, icons, images, audio,
+and other creative assets included with Saurek's Closet are proprietary,
+separately licensed, and are not covered by the GPLv3. See
+[ASSETS-LICENSE](ASSETS-LICENSE).
+
+Apart from installation, use with Saurek's Closet, personal backups, and other
+permissions described in that license, these assets may not be extracted,
+copied, modified, redistributed, or used in another project without explicit
+permission from the copyright holder.
+
+Third-party assets, including assets derived from or owned by Blizzard
+Entertainment, remain subject to the rights of their respective owners.
+Permissions already granted under prior licenses remain unaffected.

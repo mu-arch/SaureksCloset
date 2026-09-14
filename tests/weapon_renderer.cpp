@@ -22,6 +22,8 @@ static std::map<std::uintptr_t,std::uint64_t> memory;
 static std::map<std::uintptr_t,int> refs;
 static unsigned loads=0,meleeRefreshes=0,rangedRefreshes=0;
 static bool factoryModelsLoaded=true;
+static unsigned bagTestTime=1000;
+static unsigned bagClockMilliseconds(){return bagTestTime;}
 static std::uintptr_t nextModel=0x100000,rangeHolder=0;
 static void forgetWeapons(std::uintptr_t);
 static void* pointer(std::uintptr_t p){return reinterpret_cast<void*>(p);}
@@ -34,6 +36,8 @@ static std::map<std::uintptr_t,std::array<float,16>> matrices;
 static bool read(std::uintptr_t a,std::array<float,16>& out){auto i=matrices.find(a);if(i==matrices.end())return false;out=i->second;return true;}
 static std::map<std::uintptr_t,std::array<float,3>> positions;
 static bool read(std::uintptr_t a,std::array<float,3>& out){auto i=positions.find(a);if(i==positions.end())return false;out=i->second;return true;}
+static std::map<std::uintptr_t,float> scalars;
+static bool read(std::uintptr_t a,float& out){auto i=scalars.find(a);if(i==scalars.end())return false;out=i->second;return true;}
 static std::map<std::uintptr_t,std::array<char,260>> resourceNames;
 static bool read(std::uintptr_t a,std::array<char,260>& out){auto i=resourceNames.find(a);if(i==resourceNames.end())return false;out=i->second;return true;}
 static std::map<std::string,std::uintptr_t> modelResources;
@@ -54,6 +58,8 @@ static std::uint64_t getPlayer(){return player.guid;}
 struct Lua {std::vector<double> values;};
 static bool isNumber(void* L,int i){return static_cast<unsigned>(i)<=static_cast<Lua*>(L)->values.size();}
 static double toNumber(void* L,int i){return static_cast<Lua*>(L)->values[i-1];}
+static std::vector<double> luaOutput;
+static void pushNumber(void*,double value){luaOutput.push_back(value);}
 static int result(void*,int status){return status;}
 static void detach(void* p){
     auto child=address(p);auto parent=memory[child+0x1CC];assert(parent);
@@ -189,16 +195,72 @@ static BowStringSubmission bowStringSubmission;
 static void observeBowString(void* model,void* renderState,void* unit){
     bowStringSubmission={model,renderState,unit,bowStringSubmission.calls+1};
 }
-static Lua request(unsigned token,const WeaponSelection& s,int quiverHorizontal=-1,int hideRanged=-1,int hideMelee=-1,int actualQuiver=-1){
+static Lua request(unsigned token,const WeaponSelection& s,int quiverHorizontal=-1,int hideRanged=-1,int hideMelee=-1,int actualQuiver=-1,int backBag=-1){
     Lua L;L.values.push_back(token);for(auto v:s.items)L.values.push_back(v);for(auto v:s.equipped)L.values.push_back(v);
-    const int optional[]={quiverHorizontal,hideRanged,hideMelee,actualQuiver};
-    for(unsigned i=0;i<4;++i){
-        bool later=false;for(unsigned j=i;j<4;++j)if(optional[j]>=0)later=true;
+    const int optional[]={quiverHorizontal,hideRanged,hideMelee,actualQuiver,backBag};
+    for(unsigned i=0;i<5;++i){
+        bool later=false;for(unsigned j=i;j<5;++j)if(optional[j]>=0)later=true;
         if(later)L.values.push_back(optional[i]<0?0:optional[i]);
     }
     return L;
 }
 int main(){
+    {
+        // Exercise the actual Lua bridge, including validation before narrowing
+        // numeric values and the four-argument clear operation after reload.
+        for(unsigned race=1;race<=8;++race)for(unsigned sex=0;sex<2;++sex){
+            Lua defaults{{1.,double(race),double(sex)}};luaOutput.clear();
+            assert(getBagFitDefaults(&defaults)==8&&luaOutput.size()==8&&luaOutput[0]==1);
+            BagTuningValues expected;assert(bagTuningDefaults(1,race,sex,expected));
+            assert(luaOutput[1]==expected.left&&luaOutput[2]==expected.inset&&luaOutput[3]==expected.up&&
+                luaOutput[4]==expected.pitch&&luaOutput[5]==expected.roll&&luaOutput[6]==0&&luaOutput[7]==85);
+        }
+        Lua valid{{1,2,0,1,.15,.05,-.02,16,14,8,90,1}};
+        const auto loggedInGuid=player.guid;
+        player.guid=0;
+        const auto beforeLoginOwner=bagTuningOwner;
+        const auto beforeLoginRevision=bagTuningEntries[2].revision;
+        assert(setBagFit(&valid)==-1&&!bagTuningEntries[2].enabled&&
+            bagTuningEntries[2].revision==beforeLoginRevision&&bagTuningOwner==beforeLoginOwner);
+        auto invalidBeforeLogin=valid;invalidBeforeLogin.values[4]=2;
+        assert(setBagFit(&invalidBeforeLogin)==-2);
+        Lua clearBeforeLogin{{1,2,0,0}};assert(setBagFit(&clearBeforeLogin)==1);
+        player.guid=loggedInGuid;
+        assert(setBagFit(&valid)==1&&bagTuningEntries[2].enabled);
+        const auto revision=bagTuningEntries[2].revision;
+        assert(setBagFit(&valid)==1&&bagTuningEntries[2].revision==revision);
+        for(unsigned index=0;index<12;++index){
+            for(double value:{std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity(),-std::numeric_limits<double>::infinity()}){
+                auto invalid=valid;invalid.values[index]=value;
+                assert(setBagFit(&invalid)==-2&&bagTuningEntries[2].revision==revision);
+            }
+            auto missing=valid;missing.values.resize(index);
+            assert(setBagFit(&missing)==-2&&bagTuningEntries[2].revision==revision);
+        }
+        for(unsigned index=0;index<4;++index){
+            auto invalid=valid;invalid.values[index]=.5;
+            assert(setBagFit(&invalid)==-2);
+        }
+        for(unsigned index=4;index<11;++index){
+            const double minimum=index<7?-1:(index<10?-180:25),maximum=index<7?1:(index<10?180:200);
+            for(double value:{std::nextafter(minimum,-std::numeric_limits<double>::infinity()),
+                              std::nextafter(maximum,std::numeric_limits<double>::infinity())}){
+                auto invalid=valid;invalid.values[index]=value;assert(setBagFit(&invalid)==-2);
+            }
+        }
+        for(double value:{-.1,.5,2.}){auto invalid=valid;invalid.values[11]=value;assert(setBagFit(&invalid)==-2);}
+        for(auto key:std::vector<std::vector<double>>{{0,2,0},{2,2,0},{1,0,0},{1,9,0},{1,2,2},{1,2,-1},{1,.5,0}}){
+            Lua invalid{key};assert(getBagFitDefaults(&invalid)==-2);
+            invalid.values.push_back(0);assert(setBagFit(&invalid)==-2);
+        }
+        Lua clear{{1,2,0,0}};assert(setBagFit(&clear)==1&&!bagTuningEntries[2].enabled);
+        const auto cleared=bagTuningEntries[2].revision;
+        assert(setBagFit(&clear)==1&&bagTuningEntries[2].revision==cleared);
+        // Login ownership is checked before drawing as well as on API writes.
+        assert(setBagFit(&valid)==1);
+        bagTuningUseOwner(player.guid+1);assert(!bagTuningEntries[2].enabled);
+        bagTuningUseOwner(player.guid);
+    }
     (void)&updateAttachedHook;
     sheathPointOriginal=&sheath;weaponComposeOriginal=&compose;moveWeaponOriginal=&move;findChildOriginal=&find;clearChildrenOriginal=&clear;
     rebuildWeaponOriginal=&rebuild;
@@ -291,6 +353,8 @@ int main(){
     };
     const auto setBack=[&](WeaponContext* context,const BowAttachmentFixture& fixture){
         const auto base=context==c?0x2000000u:0x3000000u;
+        matrices[context->parent+0xFC]=identity;
+        memory[context->parent+0x2C]=base+0xA000;matrices[base+0xA000+0x9C]=identity;
         memory[context->parent+0x30]=base;memory[base+0x130]=base+0x1000;
         memory[base+0x1000+0x10C]=37;memory[base+0x1000+0x110]=base+0x2000;
         memory[base+0x2000+2*28]=fixture.index;
@@ -452,6 +516,7 @@ int main(){
     for(const auto& fixture:bowFixtures)for(auto context:{c,pc}){
         // Deliberately unrelated to player race or any fixed attachment index.
         const auto base=context==c?0x2000000u:0x3000000u;
+        matrices[context->parent+0xFC]=identity;
         memory[context->parent+0x30]=base;
         memory[base+0x130]=base+0x1000;
         memory[base+0x1000+0x10C]=37;memory[base+0x1000+0x110]=base+0x2000;
@@ -924,5 +989,245 @@ int main(){
         auto invalid=request(8,plain,0,0,0,0);invalid.values[14]=value;
         assert(setWeapons(&invalid)==-2&&!weaponContext(0x6000));
     }
-    std::cout<<"PASS: native hook simulation (routing, draw reuse, callback ownership, preview isolation, detach recovery, destruction, idempotence, input validation)\n";
+    {
+        WeaponSelection empty;
+        auto bag=request(0,empty,0,0,0,0,1);
+        factoryModelsLoaded=false;
+        assert(setWeapons(&bag)==0);
+        auto* bc=weaponContext(player.model);assert(bc&&bc->backBag==1&&bc->backpack);
+        void* pack=bc->backpack;const auto beforeLoads=loads;
+        assert(setWeapons(&bag)==0&&loads==beforeLoads&&bc->backpack==pack);
+        memory[address(pack)+0x10]=1;factoryModelsLoaded=true;
+        assert(setWeapons(&bag)==1&&loads==beforeLoads);
+        modelName(pack,"World\\Generic\\PassiveDoodads\\ErrorCube\\ErrorCube.mdx");
+        assert(setWeapons(&bag)==0&&!bc->backpack&&!refs[address(pack)]);
+        assert(setWeapons(&bag)==1);pack=bc->backpack;
+        assert(refs[address(pack)]==2&&ownedExtra(*bc,pack));
+        assert(findChildHook(pointer(player.model),nullptr,28)!=pack);
+        clearChildrenHook(pointer(player.model),nullptr,28);
+        assert(memory[address(pack)+0x1CC]==player.model);
+        for(const auto& fixture:bowFixtures){
+            const auto bone=setBack(bc,fixture);matrices[address(pack)+0xBC]=identity;
+            std::array<float,16> placed;
+            assert(positionBackpack(pack,placed));
+            const float scale=.45f*.85f;
+            for(unsigned col:{0u,4u,8u}){float length=0;for(unsigned i=0;i<3;++i)length+=placed[col+i]*placed[col+i];assert(std::fabs(std::sqrt(length)-scale)<.00001f);}
+            const auto& fit=bagFits[2*(fixture.race-1)+fixture.sex];
+            if(fixture.race==2){
+                // Orc male's centered pivot moves up/in; other fits stay put.
+                const float adjustment=fixture.sex==0?.0375f:0;
+                assert(std::fabs(placed[12]-fixture.position[0]-fit.depth-adjustment)<.00001f);
+                assert(std::fabs(placed[13]-fixture.position[1]-.28f*.45f)<.00001f);
+                assert(std::fabs(placed[14]-fixture.position[2]-(.20f*.45f-.15f+adjustment))<.00001f);
+                assert(placed[8]<0&&placed[9]>0); // Bottom goes inward (+X), right (-Y).
+                assert(std::fabs(std::asin(-placed[8]/scale)*57.2957795f-(fixture.sex==0?15.f:10.f))<.001f);
+                assert(std::fabs(std::atan2(placed[9],placed[10])*57.2957795f-15.f)<.001f);
+            }else{
+                assert(std::fabs(placed[0]-scale)<.00001f&&std::fabs(placed[5]-scale)<.00001f&&std::fabs(placed[10]-scale)<.00001f);
+                assert(std::fabs(placed[12]-fixture.position[0]-fit.depth)<.00001f&&placed[13]>fixture.position[1]);
+                assert(std::fabs(placed[14]-fixture.position[2]-(.20f*.45f-.15f))<.00001f);
+            }
+            auto animated=identity;animated[0]=.8f;animated[2]=-.6f;animated[8]=.6f;animated[10]=.8f;animated[12]=.4f;animated[14]=-.3f;
+            const auto base=bc==c?0x2000000u:0x3000000u;
+            const auto torso=quiverBackParents[2*(fixture.race-1)+fixture.sex];
+            matrices[bone]=animated;matrices[base+0x5000+64*torso]=animated;
+            std::array<float,16> bent,expected{};assert(positionBackpack(pack,bent));
+            for(unsigned row=0;row<4;++row)for(unsigned col=0;col<4;++col)for(unsigned k=0;k<4;++k)
+                expected[col*4+row]+=animated[k*4+row]*placed[col*4+k];
+            for(unsigned i=0;i<16;++i)assert(std::fabs(bent[i]-expected[i])<.00001f);
+            // Different skeleton scales must not resize the same pack.
+            for(float characterScale:{.55f,1.f,1.5f}){
+                auto scaled=animated;
+                for(unsigned column:{0u,4u,8u})for(unsigned row=0;row<3;++row)
+                    scaled[column+row]*=characterScale*(column==4?1.2f:1.f);
+                matrices[bone]=scaled;matrices[base+0x5000+64*torso]=scaled;
+                std::array<float,16> fixed;assert(positionBackpack(pack,fixed));
+                for(unsigned column:{0u,4u,8u}){
+                    float squared=0;for(unsigned row=0;row<3;++row)squared+=fixed[column+row]*fixed[column+row];
+                    assert(std::fabs(std::sqrt(squared)-scale)<.00001f);
+                }
+            }
+            setBack(bc,fixture);
+            // A factory-local rotation/scale/translation must not tilt the bag,
+            // change its contact surface or move it around the attachment pivot.
+            auto local=identity;local[0]=0;local[1]=2;local[4]=-2;local[5]=0;local[10]=2;local[12]=.3f;local[14]=-.2f;
+            matrices[address(pack)+0xBC]=local;
+            std::array<float,16> compensated;assert(positionBackpack(pack,compensated));
+            std::array<float,16> product{};
+            for(unsigned row=0;row<4;++row)for(unsigned col=0;col<4;++col)for(unsigned k=0;k<4;++k)
+                product[col*4+row]+=compensated[k*4+row]*local[col*4+k];
+            for(unsigned i=0;i<16;++i)assert(std::fabs(product[i]-placed[i])<.00001f);
+            local[0]=local[1]=0;matrices[address(pack)+0xBC]=local;
+            assert(!positionBackpack(pack,compensated));
+        }
+        unsigned tuningLoads=0;
+        {
+            const auto beforeTuningLoads=loads;
+            // The real bridge changes only the matching displayed race/sex,
+            // simultaneously on the world bag and independently owned preview.
+            setBack(bc,bowFixtures[2]);matrices[address(pack)+0xBC]=identity;
+            BagMatrix originalPose;assert(positionBackpack(pack,originalPose));
+            Lua tune{{1,2,0,1,.2,.075,.02,20,10,12,70,0}};
+            assert(setBagFit(&tune)==1);
+            BagMatrix worldPose;assert(positionBackpack(pack,worldPose,true));
+            assert(!bc->bagMotion.ready&&std::fabs(worldPose[13]-originalPose[13]-(.2f-.126f))<.00001f);
+            auto previewBag=request(8,empty,0,0,0,0,1);assert(setWeapons(&previewBag)==1);
+            auto* tuningPreview=weaponContext(0x6000);assert(tuningPreview&&tuningPreview->backpack);
+            setBack(tuningPreview,bowFixtures[2]);matrices[address(tuningPreview->backpack)+0xBC]=identity;
+            BagMatrix previewPose;assert(positionBackpack(tuningPreview->backpack,previewPose,true));
+            for(unsigned i=0;i<16;++i)assert(std::fabs(worldPose[i]-previewPose[i])<.00001f);
+            setBack(tuningPreview,bowFixtures[3]);assert(positionBackpack(tuningPreview->backpack,previewPose,true));
+            assert(tuningPreview->bagMotion.ready); // Female retained default enabled motion.
+            assert(!bc->bagMotion.ready);
+            forgetWeapons(tuningPreview->parent);
+            Lua clear{{1,2,0,0}};assert(setBagFit(&clear)==1);
+            setBack(bc,bowFixtures[2]);assert(positionBackpack(pack,worldPose,true));
+            for(unsigned i=0;i<16;++i)assert(std::fabs(worldPose[i]-originalPose[i])<.00001f);
+            tuningLoads=loads-beforeTuningLoads;
+        }
+        // Production rendering owns persistent motion; walking, jumping, swimming,
+        // turning in place and a stationary preview must not trigger run sway.
+        for(unsigned moving:{1u,2u,4u,8u}){memory[bc->unit+0x9E8]=moving;assert(bagIsRunning(*bc));}
+        for(unsigned stopped:{0u,0x10u,0x20u,0x101u,0x2001u,0x4001u,0x200001u,0x8000001u}){
+            memory[bc->unit+0x9E8]=stopped;assert(!bagIsRunning(*bc));
+        }
+        auto previewContext=*bc;previewContext.token=8;memory[bc->unit+0x9E8]=1;assert(!bagIsRunning(previewContext));
+        for(unsigned airborne:{0x2000u,0x4000u,0x6000u,0x2101u,0x2200u,0x20002000u}){
+            memory[bc->unit+0x9E8]=airborne;assert(bagIsAirborne(*bc)&&!bagIsAirborne(previewContext));
+        }
+        for(unsigned grounded:{0u,1u,0x100u,0x200u,0x200000u,0x202000u,0x2400u,0x2800u,0x802000u,0x1002000u,0x8002000u}){
+            memory[bc->unit+0x9E8]=grounded;assert(!bagIsAirborne(*bc));
+        }
+        memory.erase(bc->unit+0x9E8);assert(!bagIsAirborne(*bc));
+        // Native downward velocity: no lift on ascent, gradual lift after the
+        // apex, and no use of stale fall data after landing or in a preview.
+        memory[bc->unit+0x9E8]=0x2000;scalars[bc->unit+0xA48]=-8.f;
+        for(unsigned elapsed:{0u,100u,400u}){memory[bc->unit+0xA20]=elapsed;assert(bagAirLiftTarget(*bc)==0);}
+        memory[bc->unit+0xA20]=416;assert(bagAirLiftTarget(*bc)>0&&bagAirLiftTarget(*bc)<.02f);
+        memory[bc->unit+0xA20]=600;assert(bagAirLiftTarget(*bc)>.4f&&bagAirLiftTarget(*bc)<.6f);
+        memory[bc->unit+0xA20]=1200;assert(bagAirLiftTarget(*bc)==1&&bagAirLiftTarget(previewContext)==0);
+        memory[bc->unit+0xA20]=400;assert(bagAirLiftTarget(*bc)==0); // Native collision time can rewind.
+        scalars[bc->unit+0xA48]=0;memory[bc->unit+0xA20]=0;assert(bagAirLiftTarget(*bc)==0);
+        memory[bc->unit+0xA20]=2000;assert(bagAirLiftTarget(*bc)==1); // Walk-off fall.
+        memory[bc->unit+0x9E8]=0x20002000;assert(std::fabs(bagAirLiftTarget(*bc)-.875f)<.000001f);
+        memory[bc->unit+0xA20]=0;scalars[bc->unit+0xA48]=5;assert(bagAirLiftTarget(*bc)==.625f); // Feather-fall rebases its clock.
+        memory[bc->unit+0xA20]=2000;
+        for(unsigned blocked:{0u,0x4000u,0x202000u,0x2400u}){memory[bc->unit+0x9E8]=blocked;assert(bagAirLiftTarget(*bc)==0);}
+        memory[bc->unit+0x9E8]=0x2000;
+        for(float invalid:{std::numeric_limits<float>::infinity(),std::numeric_limits<float>::quiet_NaN()}){
+            scalars[bc->unit+0xA48]=invalid;assert(bagAirLiftTarget(*bc)==0);
+        }
+        scalars.erase(bc->unit+0xA48);assert(bagAirLiftTarget(*bc)==0);
+        scalars[bc->unit+0xA48]=0;memory.erase(bc->unit+0xA20);assert(bagAirLiftTarget(*bc)==0);
+        memory[bc->unit+0x9E8]=0;
+        const auto motionBone=setBack(bc,bowFixtures[2]);matrices[address(pack)+0xBC]=identity;
+        std::array<float,16> stillPose;assert(positionBackpack(pack,stillPose));
+        const auto torsoAddress=(bc==c?0x2000000u:0x3000000u)+0x5000+64*quiverBackParents[2];
+        bc->bagMotion={};
+        for(unsigned frame=0;frame<60;++frame){
+            auto camera=identity;const float angle=frame*.1f;
+            camera[0]=-std::cos(angle);camera[1]=-std::sin(angle);camera[4]=-std::sin(angle);camera[5]=std::cos(angle);
+            camera[12]=10+frame*.5f;camera[14]=-5;
+            matrices[bc->parent+0xFC]=camera;matrices[motionBone]=camera;matrices[torsoAddress]=camera;
+            matrices[memory[bc->parent+0x2C]+0x9C]=camera;
+            bagTestTime=1000+frame*16;std::array<float,16> rendered;assert(positionBackpack(pack,rendered,true));
+            const auto expected=bagMatrixProduct(camera,stillPose);
+            for(unsigned i=0;i<16;++i)assert(std::fabs(rendered[i]-expected[i])<.00005f);
+        }
+        setBack(bc,bowFixtures[2]);
+        bc->bagMotion={};bagTestTime=1000;
+        updateWeaponAttachment(pack,identity.data(),nullptr,nullptr,1);
+        assert(bc->bagMotion.ready&&attachmentUpdate.alpha==1);
+        const float startX=bc->bagMotion.position[0];
+        matrices[motionBone][12]+=.008f;bagTestTime+=16;
+        updateWeaponAttachment(pack,identity.data(),nullptr,nullptr,1);
+        assert(std::fabs(bc->bagMotion.position[0]-(startX+.008f))<.000001f);
+        matrices[motionBone][12]+=.04f;bagTestTime+=16;
+        updateWeaponAttachment(pack,identity.data(),nullptr,nullptr,1);
+        assert(std::fabs(bc->bagMotion.position[0]-(startX+.048f))<.000001f); // The bag never trails its anchor.
+        memory[bc->unit+0x9E8]=1;
+        for(unsigned i=0;i<60;++i){bagTestTime+=16;updateWeaponAttachment(pack,identity.data(),nullptr,nullptr,1);}
+        assert(bc->bagMotion.runWeight>.99f);
+        std::array<float,16> runningPose,rigidPose;
+        assert(positionBackpack(pack,runningPose,true)&&positionBackpack(pack,rigidPose,false));
+        for(unsigned i=0;i<16;++i)assert(std::fabs(runningPose[i]-rigidPose[i])<.00001f); // No free-running sway on a static torso.
+        // Read world up through the actor's scene, including a sideways actor
+        // and a camera basis unrelated to the attachment or bag orientation.
+        auto actor=identity;actor[0]=0;actor[2]=-1;actor[8]=1;actor[10]=0;
+        auto camera=identity;camera[5]=0;camera[6]=1;camera[9]=-1;camera[10]=0;camera[12]=6;camera[14]=9;
+        const auto modelView=bagMatrixProduct(camera,actor);
+        BagMatrix renderToWorld;assert(bagAffineInverse(camera,renderToWorld));
+        bc->bagMotion={};float largestGive=0;
+        for(unsigned frame=0;frame<100;++frame){
+            auto body=identity;body[12]=.04f*std::sin(frame*.29f);
+            matrices[bc->parent+0xFC]=modelView;matrices[memory[bc->parent+0x2C]+0x9C]=camera;
+            matrices[motionBone]=bagMatrixProduct(modelView,body);matrices[torsoAddress]=matrices[motionBone];
+            bagTestTime+=16;
+            BagMatrix moving,raw;assert(positionBackpack(pack,moving,true)&&positionBackpack(pack,raw,false));
+            moving=bagMatrixProduct(renderToWorld,moving);raw=bagMatrixProduct(renderToWorld,raw);
+            assert(std::fabs(moving[12]-raw[12])<.00001f&&std::fabs(moving[13]-raw[13])<.00001f);
+            largestGive=std::fmax(largestGive,std::fabs(moving[14]-raw[14]));
+        }
+        assert(largestGive>.003f&&largestGive<1.239f*.45f*.85f*.0401f);
+        const auto scene=memory[bc->parent+0x2C];memory[bc->parent+0x2C]=0;
+        BagMatrix noScene,raw;assert(positionBackpack(pack,noScene,true)&&positionBackpack(pack,raw,false));
+        assert(noScene==raw&&!bc->bagMotion.ready);memory[bc->parent+0x2C]=scene;
+        // A real jump keeps the bag settled throughout ascent, then lifts its
+        // bottom outward/up as downward momentum builds. Landing settles it.
+        setBack(bc,bowFixtures[2]);bc->bagMotion={};memory[bc->unit+0x9E8]=0;
+        BagMatrix resting,airPose;assert(positionBackpack(pack,resting,true));
+        memory[bc->unit+0x9E8]=0x2000;scalars[bc->unit+0xA48]=-8.f;
+        for(unsigned frame=0;frame<100;++frame){
+            memory[bc->unit+0xA20]=(frame+1)*16;bagTestTime+=16;assert(positionBackpack(pack,airPose,true));
+            if(frame<25){assert(bc->bagMotion.airborneWeight==0);assert(airPose==resting);}
+        }
+        assert(bc->bagMotion.airborneWeight>.99f);
+        const auto restBottom=transformPoint(resting,{{0,0,-.6195f}}),liftedBottom=transformPoint(airPose,{{0,0,-.6195f}});
+        assert(liftedBottom[0]<restBottom[0]-.08f&&liftedBottom[2]>restBottom[2]+.001f);
+        BagTuningValues paused;assert(bagTuningDefaults(1,2,0,paused));paused.motion=false;
+        assert(bagTuningSet(1,2,0,true,paused));assert(positionBackpack(pack,airPose,true));
+        assert(!bc->bagMotion.ready);for(unsigned i=0;i<16;++i)assert(std::fabs(airPose[i]-resting[i])<.00001f);
+        assert(bagTuningSet(1,2,0,false));bagTestTime+=16;assert(positionBackpack(pack,airPose,true));
+        assert(bc->bagMotion.airborneWeight==0);
+        for(unsigned frame=0;frame<40;++frame){bagTestTime+=16;assert(positionBackpack(pack,airPose,true));}
+        memory[bc->unit+0x9E8]=0;
+        // The same decay now starts from double the swing; allow one second
+        // to reach this strict absolute pose tolerance after landing.
+        for(unsigned frame=0;frame<60;++frame){bagTestTime+=16;assert(positionBackpack(pack,airPose,true));}
+        for(unsigned i=0;i<16;++i)assert(std::fabs(airPose[i]-resting[i])<.00001f);
+        setBack(bc,bowFixtures[3]);bagTestTime+=16;
+        updateWeaponAttachment(pack,identity.data(),nullptr,nullptr,1);
+        assert(bc->bagMotion.runWeight==0); // Changing race/gender discards old history.
+        matrices[address(pack)+0xBC][0]=0;bagTestTime+=16;
+        updateWeaponAttachment(pack,identity.data(),nullptr,nullptr,1);
+        assert(!bc->bagMotion.ready&&attachmentUpdate.alpha==0);
+        matrices[address(pack)+0xBC]=identity;memory[bc->unit+0x9E8]=0;
+        detach(pack);assert(refs[address(pack)]==1);
+        assert(setWeapons(&bag)==1&&memory[address(pack)+0x1CC]==player.model&&loads==beforeLoads+1+tuningLoads);
+        for(double invalidValue:{-1.,2.,.5,std::numeric_limits<double>::quiet_NaN()}){
+            auto invalid=bag;invalid.values[15]=invalidValue;
+            assert(setWeapons(&invalid)==-2&&bc->backpack==pack);
+        }
+        WeaponSelection withShield;for(const auto& asset:weaponAssets)if(asset.kind==3){withShield.items[4]=asset.item;break;}
+        auto shieldBag=request(0,withShield,0,0,0,0,1);assert(setWeapons(&shieldBag)==1&&bc->backpack==pack&&bc->extra[4]);
+        auto* shieldChild=bc->extra[4];auto withoutBag=request(0,withShield);
+        assert(setWeapons(&withoutBag)==1&&!bc->backpack&&!bc->bagMotion.ready&&bc->extra[4]==shieldChild&&!refs[address(pack)]);
+        auto off=request(0,empty);assert(setWeapons(&off)==1&&!weaponContext(player.model));
+        auto previewBag=request(8,empty,0,0,0,0,1);assert(setWeapons(&previewBag)==1);
+        auto* pc=weaponContext(0x6000);assert(pc&&pc->backpack&&pc->token==8);
+        pack=pc->backpack;discardInheritedPreviewWeapons(pc->parent);
+        assert(memory[address(pack)+0x1CC]==pc->parent);
+        setBack(pc,bowFixtures[2]);memory[player.unit+0x9E8]=0x2000;
+        BagMatrix previewRest,previewJump;assert(positionBackpack(pack,previewRest,false));
+        for(unsigned frame=0;frame<40;++frame){bagTestTime+=16;assert(positionBackpack(pack,previewJump,true));}
+        assert(pc->bagMotion.airborneWeight==0);
+        for(unsigned i=0;i<16;++i)assert(std::fabs(previewRest[i]-previewJump[i])<.00001f);
+        memory[player.unit+0x9E8]=0;
+        forgetWeapons(pc->parent);assert(!refs[address(pack)]&&!weaponContext(0x6000));
+        assert(setWeapons(&bag)==1);bc=weaponContext(player.model);pack=bc->backpack;
+        player.display=999;assert(setWeapons(&bag)==0&&!refs[address(pack)]&&!weaponContext(player.model));
+        player.display=player.native;assert(setWeapons(&bag)==1);
+        assert(setWeapons(&off)==1&&!weaponContext(player.model));
+    }
+    std::cout<<"PASS: native hook simulation (weapons, bags, all race/sex anchors, loading, ownership, previews, destruction, idempotence, input validation)\n";
 }
