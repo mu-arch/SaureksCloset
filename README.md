@@ -12,7 +12,7 @@ Supported on Linux, Windows, and Mac
 
 ## Your character, your look
 
-Saurek's Closet morphs how your character looks on your own client. Your actual equipment, stats, and gameplay stay the same; other players do not see these appearance changes.
+Saurek's Closet morphs how your character looks on your own client. Your actual equipment, stats, and gameplay stay the same. Other players cannot see your Saurek's Closet look, unless they also have the addon installed.
 
 - **Dress your character:** browse the item database, filter by quality and type, and preview an item before activating it.
 - **Choose what shows:** customize an armor slot, hide it, or pass through your real equipment.
@@ -20,6 +20,7 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 - **Arrange your weaponry:** select appearances for both sides of the waist, both sides of the back, a shield, a ranged weapon, and a quiver. Or all at once!
 - **See your bags:** Equip and position your bags on your back and hips.
 - **Get dirty:** Sweat, dust, mud, and blood. It gets all over you, and you'll need to visit an inn, or take a dip to clean it off.
+- **Share your look with others:** If another player has the addon they can see your custom look (if you approve sharing your looks)
 
 ## Take a look inside
 
