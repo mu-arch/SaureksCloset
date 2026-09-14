@@ -1,6 +1,6 @@
 <div align="center">
 
-# Saurek's Closet - A damn fine 1.12 Transmog
+# Saurek's Closet - A Damn Fine 1.12 Transmog
 
 Supported on Linux, Windows, and Mac
 
