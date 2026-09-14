@@ -17,7 +17,9 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 - **Dress your character:** browse the item database, filter by quality and type, and preview an item before activating it.
 - **Choose what shows:** customize an armor slot, hide it, or pass through your real equipment.
 - **Customize your body:** change race, gender, skin, face, hair, and available features.
-- **Arrange your weaponry:** select appearances for both sides of the waist, both sides of the back, a shield, a ranged weapon, and a quiver. Or all at once! Also, Hunters can rejoice, because Saurek's Closet fixes Vanilla WoW's bugged behavior that hides our bows after switching to melee in a fight.
+- **Arrange your weaponry:** select appearances for both sides of the waist, both sides of the back, a shield, a ranged weapon, and a quiver. Or all at once!
+- **See your bags:** Equip and position your bags on your back and hips.
+- **Get dirty:** Sweat, dust, mud, and blood. It gets all over you, and you'll need to visit an inn, or take a dip to clean it off.
 
 ## Take a look inside
 
@@ -27,7 +29,7 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 
 ### Visible Bags with dynamic physics
 
-- 15 bag models with soft and hard physics systems based on the bag type
+- 15 bag models with soft and hard physics systems based on the bag type.
 
 <table>
 <tr>
