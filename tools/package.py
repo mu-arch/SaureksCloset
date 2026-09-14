@@ -32,7 +32,7 @@ for p in addon.rglob('*'):
     if relative.parts[0] == 'Textures':
         include = p.name in {e['texture'] for e in artwork} or p.name == 'ASSETS-LICENSE'
     elif relative.parts[0] == 'Screenshots':
-        include = p.suffix.lower() in ('.png', '.webm') or p.name == 'ASSETS-LICENSE'
+        include = p.suffix.lower() in ('.png', '.gif') or p.name == 'ASSETS-LICENSE'
     elif relative.parts[0] == 'Models':
         include = p.name in ('DarkSchoolbag.m2', 'DarkSchoolbag.blp', 'ASSETS-LICENSE')
     elif relative.parts[0] == 'Installation instructions':

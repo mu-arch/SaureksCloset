@@ -32,14 +32,10 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 <table>
 <tr>
 <td width="50%">
-<video src="Screenshots/1.webm" controls preload="metadata" width="400">
-  <a href="Screenshots/1.webm">Watch bag demonstration 1</a>
-</video>
+<img src="Screenshots/1.gif" alt="Bag motion demonstration 1" width="240">
 </td>
 <td width="50%">
-<video src="Screenshots/2.webm" controls preload="metadata" width="400">
-  <a href="Screenshots/2.webm">Watch bag demonstration 2</a>
-</video>
+<img src="Screenshots/2.gif" alt="Bag motion demonstration 2" width="240">
 </td>
 </tr>
 </table>
