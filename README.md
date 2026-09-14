@@ -2,7 +2,7 @@
 
 # Saurek's Closet - A damn fine 1.12 Transmog
 
-**World of Warcraft 1.12.1 · Build 5875**
+Supported on Linux, Windows, and Mac
 
 <a href="https://discord.gg/6mfxCdNbM6"><img src="https://invidget.switchblade.xyz/6mfxCdNbM6" alt="Join Saurek's Addons on Discord — online and total member counts" width="430" height="110"></a>
 
@@ -29,7 +29,9 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 
 ### Visible Bags with dynamic physics
 
-- 15 bag models with soft and hard physics systems based on the bag type.
+- 15 bag models with soft and hard physics systems based on the bag type. Equip and precisely position up to 3 bags on the back and 2 on the hips.
+- Bags stay consistently sized for realism, so a Runecloth bag on a gnome would take up their whole back, versus a Tauren that could comfortably fit 4 or more. In the bag precision tuner you can adjust their size if you want to.
+- Hard physics: Hard leather bags rock and bounce realistically as if they had weight. Jumping/falling causes the bag to tilt and fly up in the air realistically.
 
 <table>
 <tr>
@@ -43,6 +45,10 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 </table>
 
 ### Expanded weapon positioning, and fixes for Blizzard's 1.12 weapon sheathing bugs
+
+- Greatly expand your ability to choose where items are placed on the body. Put your fishing rod on your back with a weapon, and your skinning knife on your hip, all at once.
+
+- Or as a hunter see your bow and quiver at all times, even with your sword on your back, and adjust the position of the quiver.
 
 ![Wardrobe and searchable item appearance browser](Screenshots/5.png)
 
@@ -62,7 +68,7 @@ Saurek's Closet morphs how your character looks on your own client. Your actual 
 
 ### What you need
 
-- The supported **Windows 1.12.1 client, build 5875**. This is not an addon for modern WoW Classic or Retail.
+- The supported **Windows 1.12.1 client, build 5875**. This is not an addon for modern WoW Classic or Retail. Other clients may be possible to be support, open a Github issue.
 - **VanillaFixes** configured to launch your game.
 - **VanillaHelpers.dll** installed and enabled in `dlls.txt`.
 - Both parts of Saurek's Closet: the **`SaureksCloset` addon folder** and **`SaureksCloset.dll`** from the release download.
