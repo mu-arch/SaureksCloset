@@ -34,6 +34,7 @@ Saurek's Closet morphs how your character looks on your own client, and for othe
 - Bags stay consistently sized for realism. A Runecloth bag on a gnome would take up their whole back, versus a Tauren that could comfortably fit 4 or more. In the bag precision tuner you can adjust their size if you want to.
 - Hard physics: Hard leather bags rock and bounce realistically, as if they had weight. Jumping/falling causes the bag to tilt and fly up in the air realistically.
 - Soft physics: cloth bags are simulated with different sized cubes jostling around inside the bags in Blender, using motion vectors extracted from all race and gender combos performing different animations. The resulting bag movements are recoded and baked into the game. This makes it appear as if advanced source engine style physics are utilized with no runtime cost.
+- Intelligent strap creation (Not shown in demo gifs) the addon computes a strap line from each bag to the players shoulder and draws it over the player texture in memory.
 
 <table>
 <tr>
