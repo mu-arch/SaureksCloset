@@ -1,8 +1,9 @@
 SAUREK'S CLOSET - DLL INSTALLATION
 
-Version 3.6.8 requires the matching DLL (renderer 30608), including
+Version 3.6.9 uses the included DLL (renderer 30608), including
 background update checks and loaded-version compatibility reporting.
-Replace BOTH the addon folder and the DLL for this update.
+For a fresh install, copy BOTH the addon folder and the DLL. The DLL is
+unchanged from 3.6.8, so existing 3.6.8 users only need the addon folder.
 
 1. Fully close World of Warcraft.
 2. Open your main WoW folder: the folder containing WoW.exe.

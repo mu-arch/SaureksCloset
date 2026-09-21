@@ -395,6 +395,36 @@ function V:CreateWardrobeSelector()
     end
     b:SetScript("OnClick",function() ToggleDropDownMenu(1,nil,menu,b:GetName(),0,0) end)
 end
+local function createWardrobeViewFrame(parent,name,root)
+    local border=CreateFrame("Frame",name,parent)
+    border:SetPoint("TOPLEFT",parent,"TOPLEFT",19,-75)
+    border:SetWidth(327);border:SetHeight(357)
+    border:SetFrameLevel(root:GetFrameLevel()+50)
+    border:EnableMouse(false)
+    border.parts={}
+    -- Keep one source of truth for the geometry, crop and tint shared by the
+    -- non-Outfit wardrobe pages and Settings.
+    for _,part in ipairs({{"TL",0,0,164},{"TR",164,0,163},
+        {"BL",0,357/2,164},{"BR",164,357/2,163}}) do
+        local piece=texture(border,art.."WardrobeFrameCrop"..part[1]..".tga",part[2],part[3],part[4],357/2,"OVERLAY")
+        if part[2]>0 then
+            piece:SetWidth(part[4]-1);piece:SetTexCoord(0,(part[4]-1)/part[4],0,1)
+        end
+        piece:SetVertexColor(.82,.88,1)
+        table.insert(border.parts,piece)
+    end
+    local shadow=CreateFrame("Frame",nil,parent)
+    shadow:SetAllPoints(parent);shadow:SetFrameLevel(parent:GetFrameLevel()+1)
+    for _,part in ipairs({{"TL",0,0,164},{"TR",164,0,163},
+        {"BL",0,357/2,164},{"BR",164,357/2,163}}) do
+        local piece=texture(shadow,art.."WardrobeFrameShadowCrop"..part[1]..".tga",22+part[2],79+part[3],part[4],357/2,"BACKGROUND")
+        if part[2]>0 then
+            piece:SetWidth(part[4]-4);piece:SetTexCoord(0,(part[4]-4)/part[4],0,1)
+        end
+        piece:SetAlpha(.45)
+    end
+    return border,shadow
+end
 function V:CreateArmorPage(p)
     -- Reuse the original baked background; inset only its right edge by 5px.
     self.wardrobeBackgrounds={texture(p,art.."Main.blp",19,75,323,355)}
@@ -408,37 +438,10 @@ function V:CreateArmorPage(p)
     -- This artwork is split across four power-of-two TGA files for the 1.12
     -- client. Keep it above every embedded menu and window-edge overlay so no
     -- sidebar can obscure the ornamental frame.
-    local viewBorder=CreateFrame("Frame","SaureksClosetWardrobeViewBorder",p)
+    local viewBorder,viewShadow=createWardrobeViewFrame(p,"SaureksClosetWardrobeViewBorder",self.frame)
     self.wardrobeViewBorder=viewBorder
-    viewBorder:SetPoint("TOPLEFT",p,"TOPLEFT",19,-75)
-    viewBorder:SetWidth(327);viewBorder:SetHeight(357)
-    viewBorder:SetFrameLevel(self.frame:GetFrameLevel()+50)
-    viewBorder:EnableMouse(false)
-    viewBorder.parts={}
-    -- Use Outfit's exact four-tile geometry, stretch, edge crop and tint.
-    for _,part in ipairs({{"TL",0,0,164},{"TR",164,0,163},
-        {"BL",0,357/2,164},{"BR",164,357/2,163}}) do
-        local border=texture(viewBorder,art.."WardrobeFrameCrop"..part[1]..".tga",part[2],part[3],part[4],357/2,"OVERLAY")
-        if part[2]>0 then
-            border:SetWidth(part[4]-1);border:SetTexCoord(0,(part[4]-1)/part[4],0,1)
-        end
-        border:SetVertexColor(.82,.88,1)
-        table.insert(viewBorder.parts,border)
-    end
     viewBorder:Hide()
-    -- Match Outfit's separate silhouette shadow exactly: 3px right, 4px down,
-    -- 45% opacity, the same right-edge clip, and beneath both model buffers.
-    local viewShadow=CreateFrame("Frame",nil,p)
     self.wardrobeViewShadowFrame=viewShadow
-    viewShadow:SetAllPoints(p);viewShadow:SetFrameLevel(p:GetFrameLevel()+1)
-    for _,part in ipairs({{"TL",0,0,164},{"TR",164,0,163},
-        {"BL",0,357/2,164},{"BR",164,357/2,163}}) do
-        local shadow=texture(viewShadow,art.."WardrobeFrameShadowCrop"..part[1]..".tga",22+part[2],79+part[3],part[4],357/2,"BACKGROUND")
-        if part[2]>0 then
-            shadow:SetWidth(part[4]-4);shadow:SetTexCoord(0,(part[4]-4)/part[4],0,1)
-        end
-        shadow:SetAlpha(.45)
-    end
     viewShadow:Hide()
     local controls=CreateFrame("Frame",nil,p);self.rotationControls=controls;controls:SetFrameLevel(self.frame:GetFrameLevel()+14);controls:SetWidth(66);controls:SetHeight(35)
     -- No keyboard handlers or character/equipment mouse callbacks.
@@ -464,7 +467,9 @@ function V:CreateArmorPage(p)
     self.armorDecorationFrame=slotLayer
     slotLayer:SetPoint("TOPLEFT",p,"TOPLEFT",19,-75)
     slotLayer:SetWidth(leftWidth+rightWidth);slotLayer:SetHeight(decorationHeight);slotLayer:SetAlpha(1)
-    slotLayer:SetFrameLevel(math.max(m:GetFrameLevel(),buffer:GetFrameLevel())+1)
+    -- Match the shared wardrobe border's top layer so the bottom ornament is
+    -- drawn over the native tab texture rather than being clipped beneath it.
+    slotLayer:SetFrameLevel(self.frame:GetFrameLevel()+50)
     -- Shadow follows the alpha silhouette of the complete decoration, behind the models.
     local shadowLayer=CreateFrame("Frame",nil,p);self.armorShadowFrame=shadowLayer
     shadowLayer:SetAllPoints(p)
@@ -1071,6 +1076,12 @@ function V:CreateOutfitPage(p)
     self.outfitEmptyHelp:SetFont("Fonts\\FRIZQT__.TTF",10)
     self.outfitEmptyHelp:SetTextColor(.72,.72,.72)
     self.outfitEmptyHelp:SetJustifyH("CENTER");self.outfitEmptyHelp:SetJustifyV("TOP")
+    self.savedLooksFooterRule=texture(list,"Interface\\Buttons\\WHITE8X8",10,273,276,1,"ARTWORK")
+    self.savedLooksFooterRule:SetVertexColor(.55,.49,.38,.4)
+    self.savedLooksHelp=label(list,"To create a new saved look, simply begin customizing on the wardrobe page. Your changes won't override the looks you currently have saved. You'll be able to save them as new, write those changes into your current looks, or discard them.",12,280,272,64,true)
+    self.savedLooksHelp:SetFont("Fonts\\FRIZQT__.TTF",9)
+    self.savedLooksHelp:SetTextColor(.68,.68,.68)
+    self.savedLooksHelp:SetJustifyH("LEFT");self.savedLooksHelp:SetJustifyV("TOP")
     p:EnableMouseWheel(true)
     p:SetScript("OnMouseWheel",function()
         V:SetOutfitOffset(V.outfitOffset-arg1*3)
@@ -1245,6 +1256,9 @@ end
 function V:CreateSettingsPage(p)
     -- Share the wardrobe's existing texture and framing without another background asset.
     self.settingsBackground=texture(p,art.."Main.blp",19,75,323,355)
+    -- Darken only this texture at runtime; no duplicate artwork is required.
+    self.settingsBackground:SetVertexColor(.6,.6,.6)
+    self.settingsBorder,self.settingsShadowFrame=createWardrobeViewFrame(p,"SaureksClosetSettingsViewBorder",self.frame)
     -- Keep the title and navigation at their established positions.
     self.settingsTitlePanel=CreateFrame("Frame",nil,p)
     self.settingsTitlePanel:SetPoint("TOPLEFT",p,"TOPLEFT",60,-115)
@@ -1456,7 +1470,15 @@ function V:RefreshOutfits()
     local dividerY=hasUnsaved and 146 or 27
     local rowY=hasUnsaved and 152 or 33
     local emptyY=hasUnsaved and 178 or 116
-    self.visibleOutfitRows=hasUnsaved and 3 or 5
+    local showSavedHelp=savedCount>0
+    if showSavedHelp then
+        self.savedLooksHelp:Show();self.savedLooksFooterRule:Show()
+    else
+        self.savedLooksHelp:Hide();self.savedLooksFooterRule:Hide()
+    end
+    -- Reserve the same footer area whether or not the unsaved-work panel is
+    -- open, keeping the guidance persistent without covering a saved row.
+    self.visibleOutfitRows=showSavedHelp and (hasUnsaved and 2 or 4) or (hasUnsaved and 3 or 5)
     self.savedLooksHeading:ClearAllPoints();self.savedLooksHeading:SetPoint("TOPLEFT",self.outfitList,"TOPLEFT",10,-headingY)
     self.savedLooksCount:ClearAllPoints();self.savedLooksCount:SetPoint("TOPLEFT",self.outfitList,"TOPLEFT",238,-headingY)
     self.savedLooksCount:SetText("("..savedCount..")")
