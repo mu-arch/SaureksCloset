@@ -111,6 +111,51 @@ local function textWidth(parent,text,size)
     measure:Hide()
     return width
 end
+local function ensureLeftFrameOverlay()
+    if V.leftPaneFrameOverlay then return end
+    local f=CreateFrame("Frame",nil,V.frame);V.leftPaneFrameOverlay=f
+    f:SetPoint("TOPLEFT",V.frame,"TOPLEFT",0,0);f:SetWidth(26);f:SetHeight(512)
+    f:SetFrameLevel(V.frame:GetFrameLevel()+30);f:EnableMouse(false)
+    local path="Interface\\PaperDollInfoFrame\\UI-Character-General-"
+    local top=texture(f,path.."TopLeft",0,0,26,256,"OVERLAY")
+    top:SetTexCoord(0,26/256,0,1)
+    local bottom=texture(f,path.."BottomLeft",0,256,26,256,"OVERLAY")
+    bottom:SetTexCoord(0,26/256,0,1)
+    f.parts={top,bottom};f:Hide()
+end
+-- Every character-options page uses the same pane inside the left side of the
+-- character frame. The real window-edge art is redrawn above it, making the
+-- pane sit beneath the existing frame rather than simulating that join.
+local function sidebar(parent,height)
+    ensureLeftFrameOverlay()
+    local f=CreateFrame("Frame",nil,parent)
+    -- Keep this tab wholly between the header controls and the bottom wardrobe
+    -- selector. It must never become part of either navigation strip.
+    height=height or 220
+    f:SetPoint("TOPLEFT",parent,"TOPLEFT",19,-80);f:SetWidth(145);f:SetHeight(height)
+    f:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=14,
+        insets={left=0,right=4,top=4,bottom=4}})
+    -- Use the exact dark CharacterFrame crop behind the Saved Looks list.
+    -- It is fully opaque; the ornamental wardrobe border covers the first 8px.
+    f.background=texture(f,"Interface\\PaperDollInfoFrame\\UI-Character-General-TopLeft",4,4,137,height-8,"BACKGROUND")
+    f.background:SetTexCoord(64/256,244/256,80/256,250/256)
+    f.background:SetAlpha(.8)
+    f:SetBackdropBorderColor(.72,.64,.48,.95)
+    f.sidebarHeight=height
+    return f
+end
+local function sidebarGroup(parent,title,y,height)
+    local box=CreateFrame("Frame",nil,parent)
+    box:SetPoint("TOPLEFT",parent,"TOPLEFT",6,-y);box:SetWidth(136);box:SetHeight(height)
+    local heading=label(box,title,15,5,106,14)
+    heading:SetFont("Fonts\\FRIZQT__.TTF",11)
+    heading:SetJustifyH("CENTER");heading:SetJustifyV("MIDDLE")
+    if y>0 then
+        local rule=box:CreateTexture(nil,"BORDER");rule:SetTexture(.55,.49,.35,.25)
+        rule:SetPoint("TOPLEFT",box,"TOPLEFT",16,0);rule:SetWidth(104);rule:SetHeight(1)
+    end
+    return box
+end
 local function settingsButton(parent,text,x,y,w,callback,opacity,height)
     local fitText=not w
     if fitText then w=textWidth(parent,text,11)+66 end
@@ -165,7 +210,14 @@ function V:Toggle(show)
     if not self.ready then return end
     if not self.frame then self:CreateUI() end
     if self.frame:IsShown() and not show then HideUIPanel(self.frame)
-    else ShowUIPanel(self.frame);self:Refresh() end
+    else
+        -- Main-window dragging is deliberately session-only. Every fresh open
+        -- returns to the original CharacterFrame-aligned position.
+        if not self.frame:IsShown() then
+            self.frame:ClearAllPoints();self.frame:SetPoint("TOPLEFT",UIParent,"TOPLEFT",0,-104)
+        end
+        ShowUIPanel(self.frame);self:Refresh()
+    end
 end
 function V:SetTab(tab)
     if tab=="character" then tab=self.wardrobePage or "armor" end
@@ -176,6 +228,7 @@ function V:SetTab(tab)
     self.selectedOutfit=nil;self.confirmDelete=nil
     local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="exposure"
     local sideControls=tab=="body" or tab=="weaponry" or tab=="bags" or tab=="exposure"
+    local leftPane=tab=="body" or tab=="weaponry" or tab=="bags"
     if character then self.wardrobePage=tab end
     for name,p in pairs(self.pagesByName) do
         if name==tab or (name=="armor" and character) then p:Show() else p:Hide() end
@@ -188,17 +241,27 @@ function V:SetTab(tab)
         self.wardrobeSelectorBox:Show()
         self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags",exposure="Exposure"})[tab])
     else self.wardrobeSelectorBox:Hide() end
+    if self.leftPaneFrameOverlay then
+        if leftPane then self.leftPaneFrameOverlay:Show() else self.leftPaneFrameOverlay:Hide() end
+    end
     if tab=="armor" then
         self.armorDecorationFrame:Show();self.armorShadowFrame:Show()
     else
         self.armorDecorationFrame:Hide();self.armorShadowFrame:Hide()
     end
-    local modelX=sideControls and 86 or 61
+    -- The non-Outfit wardrobe pages share the ornamental character-area
+    -- frame. Outfit keeps its purpose-built equipment-slot decoration.
+    if self.wardrobeViewBorder then
+        if sideControls then self.wardrobeViewBorder:Show() else self.wardrobeViewBorder:Hide() end
+    end
+    if self.wardrobeViewShadowFrame then
+        if sideControls then self.wardrobeViewShadowFrame:Show() else self.wardrobeViewShadowFrame:Hide() end
+    end
+    local modelX=sideControls and 96 or 61
     for _,model in ipairs({self.model,self.previewBuffer}) do
         model:ClearAllPoints();model:SetPoint("TOPLEFT",self.pagesByName.armor,"TOPLEFT",modelX,-86)
+        model:SetWidth(244);model:SetHeight(340)
     end
-    self.groundShadow:ClearAllPoints()
-    self.groundShadow:SetPoint("TOPLEFT",self.pagesByName.armor,"TOPLEFT",sideControls and 138 or 113,-394)
     if character and not wasCharacter then self:HidePreviewUntilReady();self:InvalidatePreviewModel(0,true) end
     self:Refresh()
 end
@@ -209,6 +272,9 @@ function V:CreateUI()
     self.frame=f;f:Hide();f:SetFrameStrata("MEDIUM")
     f.close:ClearAllPoints();f.close:SetPoint("CENTER",f,"TOPRIGHT",-46,-24)
     f:SetPoint("TOPLEFT",UIParent,"TOPLEFT",0,-104)
+    f:SetMovable(true);f:SetClampedToScreen(true);f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart",function() this:StartMoving() end)
+    f:SetScript("OnDragStop",function() this:StopMovingOrSizing() end)
     -- Reserve both native panel columns while the item browser is open.
     UIPanelWindows[f:GetName()]={area="left",pushable=0,whileDead=1}
     f.close:SetScript("OnClick",function() HideUIPanel(V.frame) end)
@@ -228,7 +294,7 @@ function V:CreateUI()
     local selector=CreateFrame("Button","SaureksClosetOutfitSelector",outfitBox)
     self.outfitSelector=selector;selector:SetAllPoints(outfitBox)
     selector:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
-    texture(selector,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",151,3,22,22,"ARTWORK")
+    texture(selector,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",149,1,26,26,"ARTWORK")
     selector:SetScript("OnClick",function() V:ToggleOutfitMenu() end)
     selector:SetScript("OnEnter",function()
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT")
@@ -236,6 +302,24 @@ function V:CreateUI()
         GameTooltip:AddLine("Click to switch saved outfits.",1,.82,0);GameTooltip:Show()
     end)
     selector:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    -- Restore the original master-toggle position with the same dark inset
+    -- treatment previously used by the outfit count.
+    local toggle=section(f,262,42,76,27,true,"Button")
+    self.enabledButton=toggle
+    toggle.caption=label(toggle,"",6,5,64,17)
+    toggle.caption:ClearAllPoints();toggle.caption:SetPoint("CENTER",toggle,"CENTER",0,0)
+    toggle.caption:SetFont("Fonts\\FRIZQT__.TTF",11)
+    toggle.caption:SetJustifyH("CENTER");toggle.caption:SetJustifyV("MIDDLE")
+    local toggleHover=texture(toggle,"Interface\\QuestFrame\\UI-QuestTitleHighlight",3,3,70,21,"ARTWORK")
+    toggleHover:SetBlendMode("ADD");toggleHover:SetAlpha(.45);toggleHover:Hide()
+    toggle:SetScript("OnClick",function() V:SetEnabled(not VanityStudioCharacter.enabled) end)
+    toggle:SetScript("OnEnter",function()
+        toggleHover:Show()
+        GameTooltip:SetOwner(this,"ANCHOR_RIGHT")
+        GameTooltip:SetText("Toggle the addon completely on/off.",1,1,1);GameTooltip:Show()
+    end)
+    toggle:SetScript("OnLeave",function() toggleHover:Hide();GameTooltip:Hide() end)
+    toggle:SetScript("OnHide",function() toggleHover:Hide() end)
     -- ToggleDropDownMenu accepts a named owner with an initializer and explicit anchor.
     self.outfitMenu=CreateFrame("Frame","SaureksClosetOutfitMenu",f)
     self.outfitMenu.displayMode="MENU";self.outfitMenu:Hide()
@@ -261,6 +345,7 @@ function V:CreateUI()
         -- Replace the inherited callback that switches Blizzard's CharacterFrame.
         b:SetScript("OnClick",function() V:SetTab(this.tab) end)
         b:SetScript("OnShow",function() fitTab(this) end)
+        if name=="outfits" then self.savedLooksTab=b end
         self.tabButtons[name]=b;previous=b
     end
     self:CreateArmorPage(self.pagesByName.armor)
@@ -278,14 +363,16 @@ function V:CreateUI()
 end
 function V:CreateWardrobeSelector()
     local box=section(self.frame,0,392,106,27,true,nil,.75)
-    -- Position the navigation at the user-adjusted visual center.
-    box:ClearAllPoints();box:SetPoint("TOP",self.frame,"TOP",-9,-392)
+    -- Center the selector and both rotation buttons as one control group.
+    -- The selector sits to the left; the two rotation buttons stay together
+    -- on its right on every wardrobe page.
+    box:ClearAllPoints();box:SetPoint("TOP",self.frame,"TOP",-44,-392)
     box:SetFrameLevel(self.frame:GetFrameLevel()+10)
     self.wardrobeSelectorBox=box
-    -- Flank the navigation with equal gaps and retain the visual vertical alignment.
+    -- Keep the rotation controls vertically aligned with the selector.
     self.rotationControls:ClearAllPoints()
-    self.rotationControls:SetWidth(box:GetWidth()+78)
-    self.rotationControls:SetPoint("CENTER",box,"CENTER",0,-1)
+    self.rotationControls:SetWidth(66)
+    self.rotationControls:SetPoint("LEFT",box,"RIGHT",4,-1)
     self.wardrobeSelectorLabel=label(box,"Outfit",8,5,72,17,true)
     self.wardrobeSelectorLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
     self.wardrobeSelectorLabel:SetJustifyV("MIDDLE")
@@ -296,7 +383,7 @@ function V:CreateWardrobeSelector()
     b:SetScript("OnEnter",function() hover:Show() end)
     b:SetScript("OnLeave",function() hover:Hide() end)
     b:SetScript("OnHide",function() hover:Hide() end)
-    texture(b,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",80,3,22,22,"ARTWORK")
+    texture(b,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",78,1,26,26,"ARTWORK")
     local menu=CreateFrame("Frame","SaureksClosetWardrobeMenu",self.frame)
     self.wardrobeMenu=menu;menu.displayMode="MENU";menu:Hide()
     menu.initialize=function()
@@ -311,8 +398,6 @@ end
 function V:CreateArmorPage(p)
     -- Reuse the original baked background; inset only its right edge by 5px.
     self.wardrobeBackgrounds={texture(p,art.."Main.blp",19,75,323,355)}
-    self.groundShadow=texture(p,"Interface\\Glues\\Models\\UI_Tauren\\groundshadow",113,394,140,32,"BORDER")
-    self.enabledButton=button(p,"Toggle",262,44,76,function() V:SetEnabled(not VanityStudioCharacter.enabled) end)
     local m=CreateFrame("DressUpModel","SaureksClosetModel",p)
     self.model=m;m:SetPoint("TOPLEFT",p,"TOPLEFT",61,-86);m:SetWidth(244);m:SetHeight(340)
     m.rotation=.61
@@ -320,6 +405,41 @@ function V:CreateArmorPage(p)
     buffer:SetPoint("TOPLEFT",p,"TOPLEFT",61,-86);buffer:SetWidth(244);buffer:SetHeight(340);buffer:SetAlpha(0)
     self.previewBuffer=buffer
     m:SetFrameLevel(p:GetFrameLevel()+2);buffer:SetFrameLevel(p:GetFrameLevel()+2)
+    -- This artwork is split across four power-of-two TGA files for the 1.12
+    -- client. Keep it above every embedded menu and window-edge overlay so no
+    -- sidebar can obscure the ornamental frame.
+    local viewBorder=CreateFrame("Frame","SaureksClosetWardrobeViewBorder",p)
+    self.wardrobeViewBorder=viewBorder
+    viewBorder:SetPoint("TOPLEFT",p,"TOPLEFT",19,-75)
+    viewBorder:SetWidth(327);viewBorder:SetHeight(357)
+    viewBorder:SetFrameLevel(self.frame:GetFrameLevel()+50)
+    viewBorder:EnableMouse(false)
+    viewBorder.parts={}
+    -- Use Outfit's exact four-tile geometry, stretch, edge crop and tint.
+    for _,part in ipairs({{"TL",0,0,164},{"TR",164,0,163},
+        {"BL",0,357/2,164},{"BR",164,357/2,163}}) do
+        local border=texture(viewBorder,art.."WardrobeFrameCrop"..part[1]..".tga",part[2],part[3],part[4],357/2,"OVERLAY")
+        if part[2]>0 then
+            border:SetWidth(part[4]-1);border:SetTexCoord(0,(part[4]-1)/part[4],0,1)
+        end
+        border:SetVertexColor(.82,.88,1)
+        table.insert(viewBorder.parts,border)
+    end
+    viewBorder:Hide()
+    -- Match Outfit's separate silhouette shadow exactly: 3px right, 4px down,
+    -- 45% opacity, the same right-edge clip, and beneath both model buffers.
+    local viewShadow=CreateFrame("Frame",nil,p)
+    self.wardrobeViewShadowFrame=viewShadow
+    viewShadow:SetAllPoints(p);viewShadow:SetFrameLevel(p:GetFrameLevel()+1)
+    for _,part in ipairs({{"TL",0,0,164},{"TR",164,0,163},
+        {"BL",0,357/2,164},{"BR",164,357/2,163}}) do
+        local shadow=texture(viewShadow,art.."WardrobeFrameShadowCrop"..part[1]..".tga",22+part[2],79+part[3],part[4],357/2,"BACKGROUND")
+        if part[2]>0 then
+            shadow:SetWidth(part[4]-4);shadow:SetTexCoord(0,(part[4]-4)/part[4],0,1)
+        end
+        shadow:SetAlpha(.45)
+    end
+    viewShadow:Hide()
     local controls=CreateFrame("Frame",nil,p);self.rotationControls=controls;controls:SetFrameLevel(self.frame:GetFrameLevel()+14);controls:SetWidth(66);controls:SetHeight(35)
     -- No keyboard handlers or character/equipment mouse callbacks.
     for i,direction in ipairs({"Left","Right"}) do
@@ -413,11 +533,15 @@ function V:CreateSlotButton(parent,anchor,slot,x,y,iconSize)
     b.hiddenOverlay:Hide()
     b.selected=texture(b,"Interface\\Buttons\\CheckButtonHilight",-3,-3,iconSize+6,iconSize+6,"OVERLAY")
     b.selected:SetBlendMode("ADD")
+    b:RegisterForClicks("LeftButtonUp","RightButtonUp")
     b:SetScript("OnClick",function() V:OpenSlotMenu(this.slot) end)
     b:SetScript("OnEnter",function()
         local id=V:SlotSelection(this.slot)
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText(V.slotNames[this.slot],1,.82,0)
-        GameTooltip:AddLine(V:IsWeaponPosition(this.slot) and not id and "Passthrough" or itemName(id),1,1,1);GameTooltip:Show()
+        GameTooltip:AddLine(V:IsWeaponPosition(this.slot) and not id and "Game Default" or itemName(id),1,1,1)
+        if this.slot==103 then GameTooltip:AddLine("Normal back weapon placement.",1,1,1)
+        elseif this.slot==104 then GameTooltip:AddLine("Alternate back placement for a second weapon.",1,1,1) end
+        GameTooltip:Show()
     end)
     b:SetScript("OnLeave",function() GameTooltip:Hide() end)
     self.slotButtons[slot]=b
@@ -425,60 +549,42 @@ function V:CreateSlotButton(parent,anchor,slot,x,y,iconSize)
 end
 function V:CreateWeaponryPage(p)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
+    local rail=sidebar(p,253);self.weaponSidebar=rail
     local function group(title,y,height)
-        local box=section(p,33,y,124,height,true,nil,.65)
-        local heading=label(box,title,8,7,108,14)
-        heading:SetFont("Fonts\\FRIZQT__.TTF",11)
-        heading:SetJustifyH("CENTER");heading:SetJustifyV("MIDDLE")
-        return box
+        return sidebarGroup(rail,title,y,height)
     end
     local function choice(box,slot,title,column,y)
-        local x=column==1 and 17 or 75
-        self:CreateSlotButton(box,box,slot,x,y,32)
-        local caption=label(box,title,x-9,y+35,50,14,true)
+        local x=column==1 and 25 or 83
+        self:CreateSlotButton(box,box,slot,x,y,28)
+        local caption=label(box,title,x-8,y+30,44,14,true)
         caption:SetFont("Fonts\\FRIZQT__.TTF",10)
         caption:SetTextColor(.82,.82,.82)
         caption:SetJustifyH("CENTER");caption:SetJustifyV("MIDDLE")
     end
     -- Paired positions read left-to-right; all choices stay in a compact rail
     -- beside the model and above the wardrobe selector.
-    local waist=group("Waist",90,83)
-    choice(waist,101,"Left",1,27);choice(waist,102,"Right",2,27)
-    local back=group("Back",181,138)
-    choice(back,103,"Left",1,27);choice(back,104,"Right",2,27)
-    choice(back,105,"Shield",1,82);choice(back,106,"Ranged",2,82)
-    local quiver=section(p,33,327,124,48,true,nil,.65)
-    self:CreateSlotButton(quiver,quiver,107,12,8,32)
-    local quiverTitle=label(quiver,"Quiver",53,16,62,16)
+    local waist=group("Waist",8,72)
+    choice(waist,101,"Left",1,25);choice(waist,102,"Right",2,25)
+    local back=group("Back",84,116)
+    choice(back,103,"Primary",1,25);choice(back,104,"Alt",2,25)
+    choice(back,105,"Shield",1,71);choice(back,106,"Ranged",2,71)
+    local quiver=CreateFrame("Frame",nil,rail)
+    quiver:SetPoint("TOPLEFT",rail,"TOPLEFT",6,-206);quiver:SetWidth(136);quiver:SetHeight(45)
+    self:CreateSlotButton(quiver,quiver,107,25,9,28)
+    local quiverTitle=label(quiver,"Quiver",66,15,55,16)
     quiverTitle:SetFont("Fonts\\FRIZQT__.TTF",11);quiverTitle:SetJustifyV("MIDDLE")
-    self.weaponOptionsButton=settingsButton(p,"Options",0,90,nil,function() V:OpenWeaponOptions() end,.75,26)
+    self.weaponOptionsButton=settingsButton(p,"Settings",0,90,nil,function() V:OpenWeaponOptions() end,.75,26)
     self.weaponOptionsButton:ClearAllPoints()
     self.weaponOptionsButton:SetPoint("TOPLEFT",p,"TOPLEFT",336-self.weaponOptionsButton:GetWidth(),-90)
     self:CreateWeaponOptions()
 end
 function V:CreateWeaponOptions()
-    local f=sheet("SaureksClosetWeaponOptions",self.frame,"Weaponry Options")
+    local f=sheet("SaureksClosetWeaponOptions",self.frame,"Weapon Settings")
     self.weaponOptions=f;f:Hide();f:SetPoint("TOPLEFT",self.frame,"TOPLEFT",384,0)
     f.close:SetScript("OnClick",function() V:CloseWeaponOptions() end)
     f:SetScript("OnHide",function() GameTooltip:Hide();V:ReleaseNeighbor() end)
     table.insert(UISpecialFrames,f:GetName())
-    local quiver=section(f,23,90,318,64,true)
-    label(quiver,"Quiver",12,8,290,18)
-    local horizontal=CreateFrame("CheckButton","SaureksClosetHorizontalQuiver",quiver,"UICheckButtonTemplate")
-    self.horizontalQuiverCheckbox=horizontal
-    horizontal:SetPoint("TOPLEFT",quiver,"TOPLEFT",8,-30);horizontal:SetWidth(24);horizontal:SetHeight(24)
-    horizontal:SetHitRectInsets(0,-278,0,0)
-    self.horizontalQuiverLabel=label(quiver,"Horizontal",38,31,270,22,true)
-    self.horizontalQuiverLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
-    self.horizontalQuiverLabel:SetJustifyV("MIDDLE")
-    horizontal:SetScript("OnClick",function() V:SetQuiverHorizontal(this:GetChecked()) end)
-    horizontal:SetScript("OnEnter",function()
-        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:ClearLines()
-        GameTooltip:AddLine("You may find it useful to rotate the quiver to prevent overlap with 2h weapons.",1,1,1,true)
-        GameTooltip:Show()
-    end)
-    horizontal:SetScript("OnLeave",function() GameTooltip:Hide() end)
-    local stored=section(f,23,166,318,94,true)
+    local stored=section(f,23,90,318,94,true)
     self.weaponStoredOptions=stored
     label(stored,"Stored weapons",12,8,290,18)
     local function storedChoice(kind,field,text,y,tooltip)
@@ -501,7 +607,11 @@ function V:CreateWeaponOptions()
         "Hide your ranged weapon while it is stored. It remains visible while drawn.")
     storedChoice("melee","hideMeleeWhenStored","Hide melee weapons when not in use",60,
         "Hide melee weapons while they are stored. Drawn weapons and shields remain visible.")
-    self.weaponNotice=label(f,"",29,274,306,40,true)
+    local placement=section(f,23,198,318,74,true)
+    label(placement,"Placement",12,8,290,18)
+    local help=label(placement,"Right-click a weapon or quiver slot and choose Placement Tuner to adjust its position.",12,30,290,36,true)
+    help:SetFont("Fonts\\FRIZQT__.TTF",10);help:SetTextColor(.8,.8,.8)
+    self.weaponNotice=label(f,"",29,286,306,40,true)
     self.weaponNotice:SetFont("Fonts\\FRIZQT__.TTF",10)
 end
 function V:OpenWeaponOptions()
@@ -516,19 +626,13 @@ function V:CloseWeaponOptions()
 end
 function V:CreateBagsPage(p)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
-    label(p,"Bags",33,87,124,18)
-    self.bagDescription=label(p,"Bag appearance customization is not available yet.",33,113,128,66,true)
-    self.bagDescription:SetFont("Fonts\\FRIZQT__.TTF",11)
-    self.bagDescription:SetTextColor(1,1,1);self.bagDescription:SetJustifyV("TOP")
-    local back=section(p,33,187,124,136,true,nil,.65)
-    local hips=section(p,33,331,124,58,true,nil,.65)
-    for _,entry in ipairs({{back,"Back"},{hips,"Hips"}}) do
-        local title=label(entry[1],entry[2],8,6,108,14)
-        title:SetFont("Fonts\\FRIZQT__.TTF",11);title:SetJustifyH("CENTER")
-    end
+    local rail=sidebar(p,246);self.bagSidebar=rail
+    local back=sidebarGroup(rail,"Back",8,152)
+    local hips=sidebarGroup(rail,"Hips",168,76)
+    self.bagDescription=nil
     self.bagSlots={}
-    local positions={{"Top Left",back,20,22},{"Center",back,50,58},{"Top Right",back,80,22},
-        {"Bottom Left",back,20,94},{"Bottom Right",back,80,94},{"Left Hip",hips,20,20},{"Right Hip",hips,80,20}}
+    local positions={{"Top Left",back,25,31},{"Center",back,56,70},{"Top Right",back,87,31},
+        {"Bottom Left",back,25,108},{"Bottom Right",back,87,108},{"Left Hip",hips,25,32},{"Right Hip",hips,87,32}}
     for i,entry in ipairs(positions) do
         local b=self:CreateSlotButton(entry[2],entry[2],200+i,entry[3],entry[4],24)
         self.slotButtons[200+i]=nil;self.bagSlots[i]=b;b.selected:Hide()
@@ -550,6 +654,7 @@ function V:CreateBagsPage(p)
         local id=(VanityStudioCharacter.weapons or {}).backBag
         UIDropDownMenu_AddButton({text="None",checked=not id and 1 or nil,func=function() V:SelectBackBag(nil) end})
         UIDropDownMenu_AddButton({text="Runecloth Bag",checked=id==1 and 1 or nil,func=function() V:SelectBackBag(1) end})
+        UIDropDownMenu_AddButton({text="Placement Tuner",notCheckable=1,func=function() CloseDropDownMenus();V:OpenBagTuner() end})
     end
     self.bagSlots[1]:SetScript("OnHide",function() V.bagSlots[1].selected:Hide();CloseDropDownMenus() end)
     self.bagTunerButton=settingsButton(p,"Bag Tuner",0,90,nil,function() V:OpenBagTuner() end,.75,26)
@@ -609,7 +714,10 @@ function V:OpenSlotMenu(slot)
             local selected=V:SlotSelection(selectedSlot)
             if V:IsWeaponPosition(selectedSlot) then
                 UIDropDownMenu_AddButton({text="Custom Item",checked=selected and 1 or nil,func=function() V:OpenBrowser(selectedSlot) end})
-                UIDropDownMenu_AddButton({text="Passthrough",checked=not selected and 1 or nil,func=function() V:CloseBrowser();V:ClearSlot(selectedSlot) end})
+                UIDropDownMenu_AddButton({text="Game Default",checked=not selected and 1 or nil,func=function() V:CloseBrowser();V:ClearSlot(selectedSlot) end})
+                UIDropDownMenu_AddButton({text="Placement Tuner",notCheckable=1,disabled=not selected and 1 or nil,func=function()
+                    V:CloseBrowser();V:OpenPlacementTuner(selectedSlot)
+                end})
                 return
             end
             UIDropDownMenu_AddButton({text="Custom Item",checked=selected~=nil and selected~=0 and 1 or nil,func=function() V:OpenBrowser(selectedSlot) end})
@@ -633,6 +741,8 @@ function V:OpenBrowser(slot)
     self.query="";self.search:SetText("")
     -- Use the stock two-column panel manager to prevent overlap with other menus.
     self:SetPanelArea("doublewide")
+    -- Each opening starts beside the wardrobe. Dragging is session-only.
+    self.browser:ClearAllPoints();self.browser:SetPoint("TOPLEFT",self.frame,"TOPLEFT",384,0)
     self.browser:Show();self:CloseWeaponOptions();self:Refresh()
 end
 function V:CloseBrowser()
@@ -645,6 +755,9 @@ end
 function V:CreateBrowser()
     local f=sheet("SaureksClosetBrowser",self.frame,"Armor Appearance")
     self.browser=f;f:Hide();f:SetPoint("TOPLEFT",self.frame,"TOPLEFT",384,0)
+    f:SetMovable(true);f:SetClampedToScreen(true);f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart",function() this:StartMoving() end)
+    f:SetScript("OnDragStop",function() this:StopMovingOrSizing() end)
     f:SetScript("OnShow",function() V:RefreshPortraits() end)
     f.close:SetScript("OnClick",function() V:CloseBrowser();V:Refresh() end)
     self.commitButton=button(f,"Apply Appearance",206,44,132,function() V:CommitDraft();V:Refresh() end)
@@ -764,25 +877,22 @@ function V:BuildItemFilterMenu(kind)
 end
 function V:CreateBodyPage(p)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
+    local rail=sidebar(p,270);self.bodySidebar=rail
     self.bodyRows={}
     self.bodyMenu=CreateFrame("Frame","SaureksClosetBodyMenu",self.frame)
     self.bodyMenu.displayMode="MENU";self.bodyMenu:Hide()
     self.bodyMenu.initialize=function() V:BuildBodyMenu() end
     local function group(title,y,height)
-        local box=section(p,33,y,132,height,true,nil,.65)
-        local heading=label(box,title,8,7,116,14)
-        heading:SetFont("Fonts\\FRIZQT__.TTF",11)
-        heading:SetJustifyH("CENTER");heading:SetJustifyV("MIDDLE")
-        return box
+        return sidebarGroup(rail,title,y,height)
     end
     local function choice(box,key,index,prefix)
-        local k=key;local y=22+(index-1)*32
+        local k=key;local y=24+(index-1)*27
         local control=CreateFrame("Button","SaureksClosetBody"..key,box)
-        control:SetPoint("TOPLEFT",box,"TOPLEFT",33,-(y+6));control:SetWidth(66);control:SetHeight(20)
-        local value=label(control,"",0,0,66,20,true)
+        control:SetPoint("TOPLEFT",box,"TOPLEFT",34,-(y+3));control:SetWidth(69);control:SetHeight(20)
+        local value=label(control,"",0,0,69,20,true)
         value:SetFont("Fonts\\FRIZQT__.TTF",10)
         value:SetJustifyH("CENTER");value:SetJustifyV("MIDDLE")
-        local highlight=texture(control,"Interface\\QuestFrame\\UI-QuestTitleHighlight",0,0,66,20,"OVERLAY")
+        local highlight=texture(control,"Interface\\QuestFrame\\UI-QuestTitleHighlight",0,0,69,20,"OVERLAY")
         highlight:SetBlendMode("ADD");highlight:SetAlpha(.3);highlight:Hide()
         control:SetScript("OnEnter",function() highlight:Show() end)
         control:SetScript("OnLeave",function() highlight:Hide() end)
@@ -792,25 +902,25 @@ function V:CreateBodyPage(p)
             V.bodyMenuKey=k
             ToggleDropDownMenu(1,nil,V.bodyMenu,this:GetName(),0,0)
         end)
-        local previous=arrow(box,"Prev",5,y+4,function() CloseDropDownMenus();V:CycleBody(k,-1) end)
-        local nextChoice=arrow(box,"Next",103,y+4,function() CloseDropDownMenus();V:CycleBody(k,1) end)
+        local previous=arrow(box,"Prev",7,y+1,function() CloseDropDownMenus();V:CycleBody(k,-1) end)
+        local nextChoice=arrow(box,"Next",106,y+1,function() CloseDropDownMenus();V:CycleBody(k,1) end)
         previous:SetWidth(24);previous:SetHeight(24)
         nextChoice:SetWidth(24);nextChoice:SetHeight(24)
         self.bodyRows[key]={value=value,button=control,previous=previous,next=nextChoice,prefix=prefix}
     end
-    local character=group("Body",90,92)
+    local character=group("Body",8,82)
     choice(character,"race",1);choice(character,"sex",2)
-    local appearance=group("Appearance",190,188)
+    local appearance=group("Appearance",98,170)
     choice(appearance,"skin",1,"Skin");choice(appearance,"face",2,"Face")
     choice(appearance,"hairStyle",3,"Hair");choice(appearance,"hairColor",4,"Color")
     choice(appearance,"facial",5,"Features")
-    local captionWidth=textWidth(p,"Passthrough",11)+30
-    local resetWidth=captionWidth+36
+    local captionWidth=72
+    local resetWidth=104
     local reset=section(p,336-resetWidth,90,resetWidth,26,true,"Button",.75)
     self.realBodyButton=reset
     texture(reset,"Interface\\Buttons\\UI-CheckBox-Up",5,3,20,20,"ARTWORK")
     self.trueModelCheck=texture(reset,"Interface\\Buttons\\UI-CheckBox-Check",5,3,20,20,"OVERLAY")
-    self.trueModelLabel=label(reset,"Passthrough",28,4,captionWidth,18,true)
+    self.trueModelLabel=label(reset,"Disable",28,4,captionWidth,18,true)
     self.trueModelLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
     self.trueModelLabel:SetJustifyV("MIDDLE")
     local hover=texture(reset,"Interface\\QuestFrame\\UI-QuestTitleHighlight",4,4,resetWidth-8,18,"ARTWORK")
@@ -818,7 +928,7 @@ function V:CreateBodyPage(p)
     reset:SetScript("OnEnter",function()
         hover:Show()
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:ClearLines()
-        GameTooltip:AddLine("Enabling this passes through your real character model.",1,1,1,true)
+        GameTooltip:AddLine("Disable all race & body changes",1,1,1,true)
         GameTooltip:Show()
     end)
     reset:SetScript("OnLeave",function() hover:Hide();GameTooltip:Hide() end)
@@ -861,34 +971,75 @@ function V:RefreshBody()
     end
 end
 function V:CreateOutfitPage(p)
-    local countBox=section(p,260,42,84,27,true)
-    self.outfitCountLabel=label(countBox,"",6,5,72,17)
-    self.outfitCountLabel:SetJustifyH("CENTER");self.outfitCountLabel:SetJustifyV("MIDDLE")
     local backdrop=texture(p,"Interface\\PaperDollInfoFrame\\UI-Character-General-TopLeft",20,75,320,352)
     backdrop:SetTexCoord(64/256,244/256,80/256,250/256)
     local list=CreateFrame("Frame",nil,p)
     list:SetPoint("TOPLEFT",p,"TOPLEFT",20,-75);list:SetWidth(320);list:SetHeight(352)
-    self.outfitRows={};self.visibleOutfitRows=7;self.outfitOffset=0
-    local rowHeight=346/self.visibleOutfitRows
-    local tileHeight=rowHeight-2
-    local padding=3
+    self.outfitList=list
     local railX=297
+    local contentWidth=291
+
+    -- Unsaved work is an action panel, not another saved-outfit row.
+    local draft=section(list,3,3,contentWidth,120,false,"Frame")
+    self.unsavedLookPanel=draft
+    draft:SetBackdropBorderColor(.78,.61,.2)
+    self.unsavedLookTitle=label(draft,"Your current configuration is unsaved.",11,8,268,17)
+    self.unsavedLookTitle:SetFont("Fonts\\FRIZQT__.TTF",12)
+    self.unsavedLookHelp=label(draft,"Type a name for your look and hit Save New below, or click the Update Existing button to update an existing look.",11,27,268,32,true)
+    self.unsavedLookHelp:SetFont("Fonts\\FRIZQT__.TTF",9)
+    self.unsavedLookHelp:SetTextColor(.78,.78,.78)
+    self.unsavedOutfitName=edit(draft,"SaureksClosetUnsavedOutfitName",18,62,142,40)
+    self.unsavedOutfitName:SetFont("Fonts\\FRIZQT__.TTF",11)
+    self.unsavedOutfitNameHint=label(self.unsavedOutfitName,"Type name here",0,0,142,22,true)
+    self.unsavedOutfitNameHint:SetFont("Fonts\\FRIZQT__.TTF",11)
+    self.unsavedOutfitNameHint:SetJustifyV("MIDDLE");self.unsavedOutfitNameHint:SetTextColor(1,1,1,.42)
+    self.unsavedOutfitName:SetScript("OnTextChanged",function() V.unsavedLookMessage=nil;V:RefreshUnsavedLookPanel() end)
+    self.unsavedOutfitName:SetScript("OnEditFocusGained",function() V.unsavedNameFocused=true;V:RefreshUnsavedLookPanel() end)
+    self.unsavedOutfitName:SetScript("OnEditFocusLost",function() V.unsavedNameFocused=nil;V:RefreshUnsavedLookPanel() end)
+    self.saveUnsavedAsNewButton=button(draft,"Save New",168,62,112,function()
+        if not V.saveUnsavedAsNewButton.closetEnabled then return end
+        local ok,name=V:SaveOutfit(V.unsavedOutfitName:GetText(),false,V.UNSAVED)
+        if ok then
+            V.unsavedOutfitName:SetText("");V.unsavedOutfitName:ClearFocus()
+            V.unsavedLookMessage="Saved as "..name..".";V:RefreshOutfits()
+        else V.unsavedLookMessage=name;V:RefreshUnsavedLookPanel() end
+    end)
+    self.updateSavedLookButton=button(draft,"Update Existing",168,90,112,function()
+        if V.updateSavedLookButton.closetEnabled then V:ToggleReplaceOutfitMenu(V.updateSavedLookButton) end
+    end)
+
+    self.savedLooksHeading=label(list,"SAVED LOOKS",10,129,180,16,true)
+    self.savedLooksHeading:SetFont("Fonts\\FRIZQT__.TTF",10)
+    self.savedLooksHeading:SetTextColor(.72,.72,.72)
+    self.savedLooksCount=label(list,"(0)",238,129,48,16,true)
+    self.savedLooksCount:SetFont("Fonts\\FRIZQT__.TTF",10)
+    self.savedLooksCount:SetTextColor(.72,.72,.72)
+    self.savedLooksCount:SetJustifyH("RIGHT")
+    self.savedLooksDivider=texture(list,"Interface\\Buttons\\WHITE8X8",10,146,276,1,"ARTWORK")
+    self.savedLooksDivider:SetVertexColor(.55,.49,.38,.55)
+
+    self.outfitRows={};self.visibleOutfitRows=3;self.outfitOffset=0
+    local rowHeight=58
+    local tileHeight=54
+    local padding=3
     -- The stock rail has two transparent columns before its visible left edge.
     local railVisibleInset=2
     local tileWidth=railX+railVisibleInset-2*padding
-    for i=1,self.visibleOutfitRows do
-        local b=section(list,padding,3+(i-1)*rowHeight,tileWidth,tileHeight,false,"Button")
+    for i=1,5 do
+        local b=section(list,padding,152+(i-1)*rowHeight,tileWidth,tileHeight,false,"Button")
         b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
         b.selected=texture(b,"Interface\\QuestFrame\\UI-QuestTitleHighlight",3,3,tileWidth-6,tileHeight-6);b.selected:SetBlendMode("ADD")
-        b.active=texture(b,"Interface\\Buttons\\WHITE8X8",3,3,tileWidth-6,tileHeight-6);b.active:SetVertexColor(.12,.8,.28,.065);b.active:Hide()
-        b.activeEye=texture(b,art.."VisibleSlot.tga",tileWidth-38,(tileHeight-20)/2,20,20,"ARTWORK")
-        b.activeEye:SetVertexColor(.25,1,.35,1);b.activeEye:Hide()
-        b.portraitImage=texture(b,"Interface\\CharacterFrame\\TemporaryPortrait",10,(tileHeight-32)/2,32,32,"ARTWORK")
+        b.active=texture(b,"Interface\\Buttons\\WHITE8X8",3,3,tileWidth-6,tileHeight-6);b.active:SetVertexColor(1,.72,.12,.065);b.active:Hide()
+        b.status=label(b,"ACTIVE",tileWidth-72,18,56,18,true)
+        b.status:SetFont("Fonts\\FRIZQT__.TTF",10);b.status:SetJustifyH("RIGHT")
+        b.status:SetJustifyV("MIDDLE")
+        b.status:SetTextColor(1,.82,0);b.status:Hide()
+        b.portraitImage=texture(b,"Interface\\CharacterFrame\\TemporaryPortrait",10,(tileHeight-38)/2,38,38,"ARTWORK")
         -- Symmetric one-pixel rim sits outside the full portrait image.
-        b.portraitBorder=texture(b,art.."PortraitBorder.tga",6,(tileHeight-40)/2,40,40,"ARTWORK")
-        local textTop=(tileHeight-32)/2
-        b.title=label(b,"",53,textTop,tileWidth-99,16)
-        b.detail=label(b,"",53,textTop+16,tileWidth-99,16,true)
+        b.portraitBorder=texture(b,art.."PortraitBorder.tga",6,(tileHeight-46)/2,46,46,"ARTWORK")
+        local textTop=(tileHeight-34)/2
+        b.title=label(b,"",59,textTop,tileWidth-139,17)
+        b.detail=label(b,"",59,textTop+18,tileWidth-139,16,true)
         b.title:SetJustifyV("MIDDLE");b.detail:SetJustifyV("MIDDLE")
         b:SetScript("OnClick",function() if this.outfit then V:OpenOutfitDetails(this.outfit) end end)
         self.outfitRows[i]=b
@@ -911,14 +1062,22 @@ function V:CreateOutfitPage(p)
     self.outfitScrollUp:SetScript("OnClick",function() V:SetOutfitOffset(V.outfitOffset-1) end)
     self.outfitScrollDown:SetScript("OnClick",function() V:SetOutfitOffset(V.outfitOffset+1) end)
     scroll:SetScript("OnValueChanged",function() if not V.updatingOutfitScroll then V:SetOutfitOffset(this:GetValue()) end end)
-    self.outfitEmpty=label(list,"Customize your armor or race\nto create an (Unsaved Look).",15,20,railX-30,58,true)
+    local empty=CreateFrame("Frame",nil,list);self.outfitEmpty=empty
+    empty:SetPoint("TOPLEFT",list,"TOPLEFT",18,-116);empty:SetWidth(railX-42);empty:SetHeight(88)
+    self.outfitEmptyTitle=label(empty,"No saved looks yet.",12,12,railX-66,20,true)
+    self.outfitEmptyTitle:SetFont("Fonts\\FRIZQT__.TTF",12)
+    self.outfitEmptyTitle:SetJustifyH("CENTER");self.outfitEmptyTitle:SetJustifyV("MIDDLE")
+    self.outfitEmptyHelp=label(empty,"Customize your current look, then save it above.",18,44,railX-78,30,true)
+    self.outfitEmptyHelp:SetFont("Fonts\\FRIZQT__.TTF",10)
+    self.outfitEmptyHelp:SetTextColor(.72,.72,.72)
+    self.outfitEmptyHelp:SetJustifyH("CENTER");self.outfitEmptyHelp:SetJustifyV("TOP")
     p:EnableMouseWheel(true)
     p:SetScript("OnMouseWheel",function()
         V:SetOutfitOffset(V.outfitOffset-arg1*3)
     end)
 end
 function V:SetOutfitOffset(value)
-    self.outfitOffset=math.max(0,math.min(math.max(0,table.getn(self:OutfitKeys())-self.visibleOutfitRows),math.floor(value+.5)))
+    self.outfitOffset=math.max(0,math.min(math.max(0,table.getn(self:OutfitNames())-self.visibleOutfitRows),math.floor(value+.5)))
     self:RefreshOutfits()
 end
 function V:CreateOutfitDetails()
@@ -927,7 +1086,6 @@ function V:CreateOutfitDetails()
     f.close:SetScript("OnClick",function() V:CloseOutfitDetails();V:RefreshOutfits() end)
     local backdrop=texture(f,"Interface\\PaperDollInfoFrame\\UI-Character-General-TopLeft",20,75,320,352)
     backdrop:SetTexCoord(64/256,244/256,80/256,250/256)
-    self.outfitShadow=texture(f,"Interface\\Glues\\Models\\UI_Tauren\\groundshadow",119,295,128,30,"BORDER")
     self.outfitModel=CreateFrame("DressUpModel","SaureksClosetOutfitModel",f)
     self.outfitBuffer=CreateFrame("DressUpModel","SaureksClosetOutfitModelBuffer",f)
     for _,m in ipairs({self.outfitModel,self.outfitBuffer}) do
@@ -1032,7 +1190,6 @@ function V:RefreshOutfitDetails()
     self.outfitActions:ClearAllPoints();self.outfitActions:SetPoint("TOPLEFT",self.outfitDetails,"TOPLEFT",20,-top)
     self.outfitActions:SetHeight(425-top)
     for _,m in ipairs({self.outfitModel,self.outfitBuffer}) do m:SetHeight(top-79) end
-    self.outfitShadow:ClearAllPoints();self.outfitShadow:SetPoint("TOPLEFT",self.outfitDetails,"TOPLEFT",119,30-top)
     self:RefreshOutfitNameHint()
     self.saveOutfitButton:SetText(unsaved and "Save new" or "Rename")
     self.activateOutfitButton:SetText("Activate Outfit")
@@ -1040,20 +1197,21 @@ function V:RefreshOutfitDetails()
     self.deleteOutfitButton:SetText(self.confirmDelete==self.detailKey and "Confirm" or "Delete")
     if self.detailKey==self.UNSAVED then self.replaceOutfitButton:Show() else self.replaceOutfitButton:Hide() end
 end
-function V:ToggleReplaceOutfitMenu()
+function V:ToggleReplaceOutfitMenu(owner)
     self.replaceOutfitPage=1
-    ToggleDropDownMenu(1,nil,self.replaceOutfitMenu,self.replaceOutfitButton:GetName(),0,0)
+    self.replaceOutfitOwner=owner or self.replaceOutfitButton
+    ToggleDropDownMenu(1,nil,self.replaceOutfitMenu,self.replaceOutfitOwner:GetName(),0,0)
 end
 function V:BuildReplaceOutfitMenu()
-    if self.detailKey~=self.UNSAVED or not self:GetOutfit(self.UNSAVED) then return end
+    if not self:GetOutfit(self.UNSAVED) then return end
     local names=self:OutfitNames();local count=table.getn(names)
     local pages=math.max(1,math.ceil(count/10));local page=math.min(self.replaceOutfitPage or 1,pages)
-    UIDropDownMenu_AddButton({text="Save to existing outfit",isTitle=1,notCheckable=1})
+    UIDropDownMenu_AddButton({text="Update a saved look",isTitle=1,notCheckable=1})
     if count==0 then UIDropDownMenu_AddButton({text="No saved outfits",disabled=1,notCheckable=1});return end
     if pages>1 then
         local turn=function(value)
             V.replaceOutfitPage=value;CloseDropDownMenus()
-            ToggleDropDownMenu(1,nil,V.replaceOutfitMenu,V.replaceOutfitButton:GetName(),0,0)
+            ToggleDropDownMenu(1,nil,V.replaceOutfitMenu,V.replaceOutfitOwner:GetName(),0,0)
         end
         UIDropDownMenu_AddButton({text="Previous page",notCheckable=1,disabled=page==1 and 1 or nil,keepShownOnClick=1,func=turn,arg1=page-1})
         UIDropDownMenu_AddButton({text="Next page",notCheckable=1,disabled=page==pages and 1 or nil,keepShownOnClick=1,func=turn,arg1=page+1})
@@ -1063,13 +1221,21 @@ function V:BuildReplaceOutfitMenu()
     end
 end
 function V:ReplaceWithUnsaved(name)
-    if self.detailKey~=self.UNSAVED or not self:GetOutfit(self.UNSAVED) or not VanityStudioDB.outfits[name] then return end
+    if not self:GetOutfit(self.UNSAVED) or not VanityStudioDB.outfits[name] then return end
     local updatingActive=self:IsOutfitActive(name)
     local ok,err=self:SaveOutfit(name,true,self.UNSAVED)
-    if not ok then self.outfitMessage:SetText(err);return end
+    if not ok then
+        if self.outfitDetails:IsShown() then self.outfitMessage:SetText(err)
+        else self.unsavedLookMessage=err;self:RefreshUnsavedLookPanel() end
+        return
+    end
     if updatingActive then self:LoadOutfit(name) end
-    self.detailKey=name;self.selectedOutfit=name;self.outfitName:SetText(name)
-    self.outfitMessage:SetText("Saved changes to "..name..".");self:Refresh();self:StartOutfitPreview()
+    if self.outfitDetails:IsShown() then
+        self.detailKey=name;self.selectedOutfit=name;self.outfitName:SetText(name)
+        self.outfitMessage:SetText("Saved changes to "..name..".");self:Refresh();self:StartOutfitPreview()
+    else
+        self.unsavedLookMessage="Updated "..name..".";self:Refresh()
+    end
 end
 function V:RefreshPortraits()
     for _,frame in ipairs({self.frame,self.browser,self.outfitDetails}) do
@@ -1086,8 +1252,6 @@ function V:CreateSettingsPage(p)
     self.settingsTitle=label(self.settingsTitlePanel,"Saurek's Closet",16,16,208,22)
     self.settingsTitle:SetFont("Fonts\\FRIZQT__.TTF",16)
     self.settingsTagline=label(self.settingsTitlePanel,"A damn fine 1.12 transmog.",16,45,208,17,true)
-    self.settingsVersion=label(p,"Version "..self.VERSION,19,400,323,17,true)
-    self.settingsVersion:SetJustifyH("CENTER")
     self.settingsNavigationButtons={}
     for i,name in ipairs({"privacy","links","updates"}) do
         local x=60+math.mod(i-1,2)*124
@@ -1118,9 +1282,34 @@ function V:CreateSettingsPage(p)
     self.autoUpdatesDescription:SetTextColor(.8,.8,.8)
 
     local updates=self.infoPages.updates
-    self.updatesSummary=label(updates,"",38,84,284,202,true)
-    self.updatesSummary:SetFont("Fonts\\FRIZQT__.TTF",12)
-    self.updatesStatus=label(updates,"",38,297,284,46,true)
+    self.addonVersionsHeading=label(updates,"This PC's Version",30,80,284,18)
+    self.addonVersionsHeading:SetFont("Fonts\\FRIZQT__.TTF",12)
+    self.versionLegendIcon=texture(updates,"Interface\\Buttons\\UI-CheckBox-Check",31,102,15,15,"OVERLAY")
+    self.versionLegendText=label(updates,"indicates version is up to date and no mismatch is detected",49,101,265,31,true)
+    self.versionLegendText:SetFont("Fonts\\FRIZQT__.TTF",9);self.versionLegendText:SetTextColor(.72,.72,.72)
+    self.versionStatusLabels={}
+    self.versionStatusIcons={}
+    for i=1,3 do
+        local row=CreateFrame("Frame",nil,updates)
+        row:SetPoint("TOPLEFT",updates,"TOPLEFT",38,-(136+(i-1)*19));row:SetWidth(190);row:SetHeight(18)
+        local text=label(row,"",0,0,132,18,true);text:SetFont("Fonts\\FRIZQT__.TTF",12);text:SetJustifyV("MIDDLE")
+        local icon=row:CreateTexture(nil,"OVERLAY");icon:SetWidth(16);icon:SetHeight(16);icon:SetPoint("LEFT",row,"LEFT",138,0)
+        icon:Hide();self.versionStatusIcons[i]=icon
+        self.versionStatusLabels[i]=text
+    end
+    self.availableVersionsHeading=label(updates,"Available Version (Github)",30,208,284,18)
+    self.availableVersionsHeading:SetFont("Fonts\\FRIZQT__.TTF",12)
+    self.availableVersionLabels={}
+    for i=1,2 do
+        local line=label(updates,"",38,231+(i-1)*19,276,18,true)
+        line:SetFont("Fonts\\FRIZQT__.TTF",12);line:SetJustifyV("MIDDLE")
+        self.availableVersionLabels[i]=line
+    end
+    self.lastVersionCheckLabel=label(updates,"Last checked: Never",38,274,276,18,true)
+    self.lastVersionCheckLabel:SetFont("Fonts\\FRIZQT__.TTF",10);self.lastVersionCheckLabel:SetTextColor(.72,.72,.72)
+    self.updatesSummary=label(updates,"",38,296,284,25,true)
+    self.updatesSummary:SetFont("Fonts\\FRIZQT__.TTF",10)
+    self.updatesStatus=label(updates,"",38,323,284,20,true)
     self.checkUpdatesButton=settingsButton(updates,"Check for updates",38,352,284,function() V:CheckForUpdates(true) end)
     self.downloadUpdateButton=settingsButton(updates,"Open download page",38,387,284,function() V:OpenWebsite(2) end)
 
@@ -1239,11 +1428,45 @@ function V:BuildOutfitMenu(level)
             func=function(outfitName) V:ActivateSavedOutfit(outfitName);V:CloseOutfitMenu() end})
     end
 end
+function V:RefreshUnsavedLookPanel()
+    if not self.unsavedLookPanel then return end
+    local look=self:GetOutfit(self.UNSAVED)
+    local hasUnsaved=look~=nil and self:IsOutfitActive(self.UNSAVED)
+    local savedCount=table.getn(self:OutfitNames())
+    self.unsavedOutfitName:EnableMouse(hasUnsaved)
+    -- Vanilla 1.12 fires OnEditFocusLost for a programmatic ClearFocus.
+    -- Clear our state first so that callback's refresh cannot recurse here.
+    if not hasUnsaved and self.unsavedNameFocused then
+        self.unsavedNameFocused=nil
+        self.unsavedOutfitName:ClearFocus()
+    end
+    self.unsavedOutfitName:SetAlpha(hasUnsaved and 1 or .4)
+    local name=self.unsavedOutfitName:GetText() or ""
+    if hasUnsaved and name=="" and not self.unsavedNameFocused then self.unsavedOutfitNameHint:Show()
+    else self.unsavedOutfitNameHint:Hide() end
+    enabled(self.saveUnsavedAsNewButton,hasUnsaved and string.find(name,"%S")~=nil)
+    enabled(self.updateSavedLookButton,hasUnsaved and savedCount>0)
+end
 function V:RefreshOutfits()
     if not self.uiReady then return end
     local savedCount=table.getn(self:OutfitNames())
-    self.outfitCountLabel:SetText(savedCount..(savedCount==1 and " Outfit" or " Outfits"))
-    local keys=self:OutfitKeys()
+    local hasUnsaved=self:GetOutfit(self.UNSAVED)~=nil and self:IsOutfitActive(self.UNSAVED)
+    if hasUnsaved then self.unsavedLookPanel:Show() else self.unsavedLookPanel:Hide() end
+    local headingY=hasUnsaved and 129 or 10
+    local dividerY=hasUnsaved and 146 or 27
+    local rowY=hasUnsaved and 152 or 33
+    local emptyY=hasUnsaved and 178 or 116
+    self.visibleOutfitRows=hasUnsaved and 3 or 5
+    self.savedLooksHeading:ClearAllPoints();self.savedLooksHeading:SetPoint("TOPLEFT",self.outfitList,"TOPLEFT",10,-headingY)
+    self.savedLooksCount:ClearAllPoints();self.savedLooksCount:SetPoint("TOPLEFT",self.outfitList,"TOPLEFT",238,-headingY)
+    self.savedLooksCount:SetText("("..savedCount..")")
+    self.savedLooksDivider:ClearAllPoints();self.savedLooksDivider:SetPoint("TOPLEFT",self.outfitList,"TOPLEFT",10,-dividerY)
+    self.outfitEmpty:ClearAllPoints();self.outfitEmpty:SetPoint("TOPLEFT",self.outfitList,"TOPLEFT",18,-emptyY)
+    for i,row in ipairs(self.outfitRows) do
+        row:ClearAllPoints();row:SetPoint("TOPLEFT",self.outfitList,"TOPLEFT",3,-(rowY+(i-1)*58))
+    end
+    self:RefreshUnsavedLookPanel()
+    local keys=self:OutfitNames()
     self.outfitOffset=math.max(0,math.min(self.outfitOffset or 0,math.max(0,table.getn(keys)-self.visibleOutfitRows)))
     local maxOffset=math.max(0,table.getn(keys)-self.visibleOutfitRows)
     self.updatingOutfitScroll=true;self.outfitScroll:SetMinMaxValues(0,maxOffset);self.outfitScroll:SetValue(self.outfitOffset);self.updatingOutfitScroll=nil
@@ -1256,20 +1479,18 @@ function V:RefreshOutfits()
     end
     if table.getn(keys)==0 then self.outfitEmpty:Show() else self.outfitEmpty:Hide() end
     for i,row in ipairs(self.outfitRows) do
-        local key=keys[self.outfitOffset+i];row.outfit=key
+        local key=i<=self.visibleOutfitRows and keys[self.outfitOffset+i] or nil;row.outfit=key
         if key then
             local outfit=self:GetOutfit(key)
-            row:Show();row.title:SetText(self:OutfitLabel(key));self:BindOutfitPortrait(row,outfit)
-            if self:IsOutfitActive(key) then row.active:Show();row.activeEye:Show();row.selected:Hide();row.title:SetTextColor(1,1,1)
-            elseif key==self.selectedOutfit then row.active:Hide();row.activeEye:Hide();row.selected:Show();row.title:SetTextColor(1,1,1)
-            else row.active:Hide();row.activeEye:Hide();row.selected:Hide();row.title:SetTextColor(1,.82,0) end
-            local count=0
-            for _,slot in ipairs(self.slotOrder) do
-                if outfit.slots and outfit.slots[slot]~=nil then count=count+1 end
+            row:Show();row.title:SetText(key);self:BindOutfitPortrait(row,outfit)
+            if self:IsOutfitActive(key) then
+                row.active:Show();row.status:Show();row.selected:Hide();row:SetBackdropBorderColor(1,.75,.16);row.title:SetTextColor(1,1,1)
+            elseif key==self.selectedOutfit then
+                row.active:Hide();row.status:Hide();row.selected:Show();row:SetBackdropBorderColor(.6,.55,.45);row.title:SetTextColor(1,1,1)
+            else
+                row.active:Hide();row.status:Hide();row.selected:Hide();row:SetBackdropBorderColor(.6,.55,.45);row.title:SetTextColor(1,.82,0)
             end
-            for _,slot in ipairs(self.weaponOrder) do if outfit.weapons and outfit.weapons[slot] then count=count+1 end end
-            if outfit.weapons and outfit.weapons.backBag then count=count+1 end
-            row.detail:SetText(count..(count==1 and " slot customized" or " slots customized"))
+            row.detail:SetText(date("%b %d, %Y  %I:%M %p",outfit.updatedAt or 0))
         else row:Hide() end
     end
 end
@@ -1282,14 +1503,7 @@ function V:Refresh()
     if not self.uiReady or not self.frame or not self.frame:IsShown() then return end
     self:RefreshUpdateUI()
     local c=VanityStudioCharacter
-    self.enabledButton:SetText("Toggle")
-    if self.horizontalQuiverCheckbox then
-        local available=self:QuiverRotationAvailable()
-        self.horizontalQuiverCheckbox:SetChecked(c.weapons and c.weapons.quiverHorizontal and 1 or nil)
-        enabled(self.horizontalQuiverCheckbox,available)
-        self.horizontalQuiverCheckbox:SetAlpha(available and 1 or .45)
-        self.horizontalQuiverLabel:SetAlpha(available and 1 or .45)
-    end
+    self.enabledButton.caption:SetText(c.enabled and "Disable" or "Enable")
     local storedAvailable=self:WeaponStoredVisibilityAvailable()
     for _,field in ipairs({"hideRangedWhenStored","hideMeleeWhenStored"}) do
         local checkbox=self[field.."Checkbox"]

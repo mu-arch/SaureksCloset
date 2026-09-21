@@ -32,7 +32,6 @@ for entry in manifest:
             assert lengths[0] == entry['gpu_base_bytes']
 assert not list(folder.glob('ArmorDecorations*'))
 assert not list(folder.glob('GenericTrim*')) and not list(folder.glob('WardrobeBG*'))
-assert not list(folder.glob('WardrobeFrame*'))
 assert not list(folder.glob('Settings*'))
 assert hashlib.sha256((folder / 'Main.blp').read_bytes()).hexdigest() == '1dcd62ccdc06f806bde7be4435f6e2f7f9589d1984ec2ec5075555db51321a3d'
 # Verify original artwork byte-for-byte, separately from the newly generated shadows.
@@ -48,7 +47,15 @@ for prefix in ['ArmorSlots', 'ArmorShadow']:
             assert entry['restored_from'] == 'v3.4.34'
     # Preserve the original TGA's sub-1% alpha noise rather than editing the artwork.
     assert layer.getchannel('A').crop((150,150,350,350)).getextrema()[1] <= 1
+for prefix in ['WardrobeFrameCrop', 'WardrobeFrameShadowCrop']:
+    layer = Image.new('RGBA', (512, 512))
+    for suffix, x, y in [('TL',0,0), ('TR',256,0), ('BL',0,256), ('BR',256,256)]:
+        with Image.open(folder / (prefix + suffix + '.tga')) as part:
+            assert part.size == (256, 256) and part.mode == 'RGBA'
+            layer.paste(part, (x, y))
+    assert layer.getchannel('A').crop((150,150,350,350)).getextrema()[1] <= 1
 ui = (root / 'addon/SaureksCloset/UI.lua').read_text()
 assert 'armorShadowFrame' in ui and 'shadow:SetAlpha(.45)' in ui
+assert 'wardrobeViewShadowFrame' in ui and 'WardrobeFrameShadowCrop' in ui
 assert 'ArmorDecorations.blp' not in ui
 print('PASS: texture inventory, payloads, checksums, restored art and separate shadow layers')

@@ -2,6 +2,7 @@
 #include "WeaponState.h"
 #include "BowPlacement.h"
 #include "BagPlacement.h"
+#include "PlacementTuning.h"
 // Included after the bridge's player reader, registry and Lua result helpers.
 using WeaponCompose=int (__fastcall *)(void*,void*,unsigned,unsigned,unsigned,unsigned,unsigned);
 using SheathPoint=int (__fastcall *)(unsigned,unsigned);
@@ -55,6 +56,7 @@ struct WeaponContext {
     BagMotion bagMotion;
     std::array<int,3> routes{{-1,-1,-1}};
     std::array<void*,7> extra{};
+    std::array<unsigned char,8> rangedInfo{};
 };
 static std::array<WeaponContext,9> weaponContexts{};
 static int scopedSheathPoint=-1;
@@ -124,7 +126,7 @@ static bool bagTuningLuaKey(void* L,unsigned& bag,unsigned& race,unsigned& sex){
     for(int i=0;i<3;++i){
         if(!isNumber(L,i+1))return false;
         const double value=toNumber(L,i+1);
-        if(!std::isfinite(value)||value<0||value>8||value!=static_cast<unsigned>(value))return false;
+        if(!std::isfinite(value)||value<0||value>107||value!=static_cast<unsigned>(value))return false;
         values[i]=static_cast<unsigned>(value);
     }
     bag=values[0];race=values[1];sex=values[2];
@@ -343,6 +345,37 @@ static void __fastcall bowStringDrawHook(void* model,void* renderState,void* uni
     // and the original callback runs again immediately when the bow is drawn.
     if(!hideStoredWeapon(model))bowStringDrawOriginal(model,renderState,unit);
 }
+static bool tuneStoredPlacement(void* child,const BagMatrix& base, std::array<float,16>& out){
+    const auto model=reinterpret_cast<std::uintptr_t>(child);
+    std::uintptr_t parent=0,resource=0,header=0,lookup=0,records=0;
+    unsigned point=0;std::uint16_t index=0;
+    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point))return false;
+    const auto* c=weaponContext(parent);
+    if(!c||c->guid!=getPlayer())return false;
+    int slot=-1;
+    for(unsigned i=0;i<7;++i)if(point==weaponPoints[i]&&c->selection.items[i]){
+        if(c->extra[i]==child)slot=i;
+        else if(!c->token&&findChildOriginal(reinterpret_cast<void*>(parent),point)==child)
+            for(auto route:c->routes)if(route==static_cast<int>(i))slot=i;
+    }
+    if(slot<0)return false;
+    BagMatrix back,torso,local,render;
+    if(!animatedAttachmentMatrix(parent,28,back,&torso)||!read(model+0xBC,local)||
+       !read(parent+0xFC,render)||!read(parent+0x30,resource)||!read(resource+0x130,header)||
+       !read(header+0x110,lookup)||!read(lookup+56,index)||!read(header+0x108,records))return false;
+    std::array<float,3> anchor;
+    if(!read(records+48*index+8,anchor))return false;
+    for(unsigned i=0;i<16;++i){
+        bool matches=true;
+        for(unsigned axis=0;axis<3;++axis)
+            if(!std::isfinite(anchor[axis])||std::fabs(anchor[axis]-bagFits[i].anchor[axis])>.00001f)matches=false;
+        if(!matches)continue;
+        const auto& fit=weaponTuningEntries[slot][i];
+        return fit.enabled&&
+            placementTuning(base,local,torso,render,fit.values,out);
+    }
+    return false;
+}
 static void updateWeaponAttachment(void* model,const float* matrix,const float* color,const float* lighting,float alpha){
     std::array<float,16> adjusted;
     std::uintptr_t parent=0;read(reinterpret_cast<std::uintptr_t>(model)+0x1CC,parent);
@@ -357,10 +390,13 @@ static void updateWeaponAttachment(void* model,const float* matrix,const float* 
     // still runs. No native ownership or visibility state is changed; removing
     // the custom quiver restores the original alpha on the next frame.
     if(hideNativeQuiver(model)||hideStoredWeapon(model))alpha=0;
-    if(positionStoredBackWeapon(model,adjusted)||positionStoredBow(model,matrix,adjusted)||
-       positionStoredQuiver(model,matrix,adjusted))
-        updateAttachedOriginal(model,adjusted.data(),color,lighting,alpha);
-    else updateAttachedOriginal(model,matrix,color,lighting,alpha);
+    const bool positioned=positionStoredBackWeapon(model,adjusted)||positionStoredBow(model,matrix,adjusted)||
+       positionStoredQuiver(model,matrix,adjusted);
+    if(positioned)matrix=adjusted.data();
+    std::array<float,16> tuned,base;
+    if(positioned)base=adjusted;
+    if((positioned||read(reinterpret_cast<std::uintptr_t>(matrix),base))&&tuneStoredPlacement(model,base,tuned))matrix=tuned.data();
+    updateAttachedOriginal(model,matrix,color,lighting,alpha);
 }
 static void __fastcall updateAttachedHook(void* model,void*,const float* matrix,const float* color,const float* lighting,float alpha){
     // Exact recursive child update after the animated attachment is resolved.
@@ -443,6 +479,48 @@ static void* weaponDisplay(const WeaponAsset* asset){
     if(asset&&read(0xC0DC10,table)&&read(0xC0DC14,max)&&asset->display<=max&&
        read(table+4*asset->display,row)&&read(row,id)&&id==asset->display)return reinterpret_cast<void*>(row);
     return nullptr;
+}
+using WeaponInfo=const unsigned char* (__thiscall *)(void*,unsigned,unsigned);
+static WeaponInfo weaponInfoOriginal=nullptr;
+static const unsigned char* weaponInfoAt(void* unit,unsigned role,unsigned raw,std::uintptr_t caller){
+    const auto* original=weaponInfoOriginal(unit,role,raw);
+    // Only audited visual consumers of the player virtual-item getter. Other
+    // callers (item requirements, skills, spell checks, inventory) get real data.
+    const bool visual=caller==0x60B5BB||caller==0x60B797||caller==0x611E24||
+        caller==0x61183B||caller==0x6118DF||caller==0x61199F||caller==0x611A45||
+        caller==0x611BCE||caller==0x60BAA4||caller==0x624B35||caller==0x5DEF00;
+    if(!original||role!=2||raw||!visual)return original;
+    Player p;
+    if(!snapshot(p)||p.unit!=reinterpret_cast<std::uintptr_t>(unit)||p.display!=p.native)return original;
+    auto* c=weaponContext(p.model);
+    if(!c||c->token||c->guid!=p.guid||c->unit!=p.unit||c->routes[2]!=5)return original;
+    const auto* asset=weaponAsset(c->selection.items[5]);
+    if(!asset||asset->kind!=4||!weaponDisplay(asset))return original;
+    // Return a private copy; never alter the unit's cached info/update fields.
+    for(unsigned i=0;i<8;++i)c->rangedInfo[i]=original[i];
+    c->rangedInfo[0]=2;c->rangedInfo[1]=asset->subclass;
+    c->rangedInfo[3]=asset->inventory;c->rangedInfo[4]=asset->sheath;
+    return c->rangedInfo.data();
+}
+static const unsigned char* __fastcall weaponInfoHook(void* unit,void*,unsigned role,unsigned raw){
+    return weaponInfoAt(unit,role,raw,reinterpret_cast<std::uintptr_t>(__builtin_return_address(0)));
+}
+using UnitAnimation=void (__thiscall *)(void*,unsigned);
+static UnitAnimation unitAnimationOriginal=nullptr;
+static unsigned weaponAnimation(void* unit,unsigned animation){
+    Player p;
+    if(!snapshot(p)||p.unit!=reinterpret_cast<std::uintptr_t>(unit)||p.display!=p.native)return animation;
+    auto* c=weaponContext(p.model);
+    if(!c||c->token||c->guid!=p.guid||c->unit!=p.unit||c->routes[2]!=5)return animation;
+    const auto* selected=weaponAsset(c->selection.items[5]);
+    const auto* equipped=weaponAsset(c->selection.equipped[2]);
+    if(!selected||!equipped||selected->kind!=4||equipped->kind!=4||!weaponDisplay(selected))return animation;
+    return rangedAppearanceAnimation(animation,equipped->subclass,selected->subclass);
+}
+static void __fastcall unitAnimationHook(void* unit,void*,unsigned animation){
+    // The stock animation scheduler still owns timing and completion; no
+    // update-field mutation, spell replacement or per-frame model rebuild.
+    unitAnimationOriginal(unit,weaponAnimation(unit,animation));
 }
 static int __fastcall weaponComposeHook(void* parent,void* display,unsigned slot,unsigned sheath,unsigned stored,unsigned shield,unsigned rangedRight){
     auto* c=weaponContext(reinterpret_cast<std::uintptr_t>(parent));

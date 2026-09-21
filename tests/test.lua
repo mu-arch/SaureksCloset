@@ -342,6 +342,7 @@ V:CloseBrowser();V:OpenBrowser(1)
 check(not V.hideHigherLevelCheckbox:GetChecked() and VanityStudioDB.hideHigherLevelItems==false,"Reopening the browser preserves the saved choice")
 V:CloseBrowser()
 check(V.tabButtons.character:GetText()=="Wardrobe" and V.tabButtons.outfits:GetText()=="Saved Looks" and V.tabButtons.settings:GetText()=="Settings","Primary tabs use the new navigation labels")
+check(V.savedLooksCount:GetText()=="("..table.getn(V:OutfitNames())..")","Saved Looks shows its count in the content heading")
 local savedTab=V.tabButtons.outfits
 local initialTabWidth=savedTab:GetWidth()
 for i=1,3 do savedTab:Hide();savedTab:Show() end

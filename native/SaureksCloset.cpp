@@ -324,7 +324,7 @@ static int __fastcall weaponryProbe(void* L){
 #include "WeaponRenderer.h"
 #include "UpdateChecker.h"
 #include "VoiceRenderer.h"
-static int __fastcall version(void* L){return result(L,30607);}
+static int __fastcall version(void* L){return result(L,30608);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
@@ -358,6 +358,8 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     if(!compatible()||MH_Initialize()!=MH_OK)return TRUE;
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
+        {0x5FE2F0,reinterpret_cast<void*>(&unitAnimationHook),reinterpret_cast<void**>(&unitAnimationOriginal)},
+        {0x5EC240,reinterpret_cast<void*>(&weaponInfoHook),reinterpret_cast<void**>(&weaponInfoOriginal)},
         {0x647E60,reinterpret_cast<void*>(&resolveAssetFileHook),reinterpret_cast<void**>(&resolveAssetFileOriginal)},
         {0x611770,reinterpret_cast<void*>(&sheathTransitionHook),reinterpret_cast<void**>(&sheathTransitionOriginal)},
         {0x60C480,reinterpret_cast<void*>(&voiceSoundDataHook),reinterpret_cast<void**>(&voiceSoundDataOriginal)},

@@ -90,6 +90,20 @@ template<typename T> static T weaponFunction(std::uintptr_t a){
 }
 #include "../native/WeaponRenderer.h"
 static unsigned realIDs[3]={35,0,0};
+static std::array<std::array<unsigned char,8>,3> realInfo{};
+static const unsigned char* info(void*,unsigned role,unsigned){
+    const auto* a=role<3?weaponAsset(realIDs[role]):nullptr;
+    if(!a)return nullptr;
+    realInfo[role]={{2,static_cast<unsigned char>(a->subclass),7,static_cast<unsigned char>(a->inventory),static_cast<unsigned char>(a->sheath),9,10,11}};
+    return realInfo[role].data();
+}
+static const WeaponAsset* visualWeapon(unsigned role,std::uintptr_t caller){
+    if(!weaponInfoOriginal)return weaponAsset(realIDs[role]);
+    const auto* result=weaponInfoAt(pointer(player.unit),role,0,caller);
+    const auto* c=weaponContext(player.model);
+    if(c&&result==c->rangedInfo.data())return weaponAsset(c->selection.items[5]);
+    return weaponAsset(realIDs[role]);
+}
 static int sheath(unsigned type,unsigned side){
     switch(type){case 1:return side?26:27;case 2:return side?30:31;case 3:return side?32:33;case 4:return 28;}return -1;
 }
@@ -122,14 +136,14 @@ static void melee(void* unit,unsigned role){
 static void ranged(void* unit,unsigned stored){
     ++rangedRefreshes;
     if(rangeHolder){unref(pointer(rangeHolder));rangeHolder=0;}
-    auto* a=weaponAsset(realIDs[2]);if(!a)return;
+    auto* a=visualWeapon(2,0x611E24);if(!a)return;
     auto* parent=pointer(memory[address(unit)+0xD8]);
     if(!stored){clearChildrenHook(parent,nullptr,0);clearChildrenHook(parent,nullptr,1);clearChildrenHook(parent,nullptr,2);}
     const int point=weaponComposeHook(parent,weaponDisplay(a),17,a->sheath,stored,0,a->inventory==25||a->inventory==26);
     if(point>=0){auto p=findChildHook(parent,nullptr,point);if(p){rangeHolder=address(p);ref(p);}}
 }
 static void move(void* unit,unsigned role,unsigned stored){
-    auto* a=weaponAsset(realIDs[role]);if(!a)return;
+    auto* a=visualWeapon(role,0x60B5BB);if(!a)return;
     auto* parent=pointer(memory[address(unit)+0xD8]);
     const bool right=role==0||(role==2&&(a->inventory==25||a->inventory==26));
     const unsigned hand=right?1:(a->kind==3?0:2);
@@ -144,7 +158,7 @@ static void move(void* unit,unsigned role,unsigned stored){
 }
 static int effectHomes[3]={-1,-1,-1};
 static void rebuild(void* unit,unsigned role){
-    const auto* a=weaponAsset(realIDs[role]);if(!a)return;
+    const auto* a=visualWeapon(role,0x60B797);if(!a)return;
     const bool right=role==0||(role==2&&(a->inventory==25||a->inventory==26));
     effectHomes[role]=sheathPointHook(a->sheath,right);
     const unsigned mode=memory[address(unit)+0xD40];
@@ -178,7 +192,7 @@ static void sheathTransition(void* unit){
         // The child's D24 reference survives; no move, rebuild or ranged
         // refresh occurs, even for a bow with no stock sheath point.
         clearChildrenHook(parent,nullptr,35);
-        const auto* a=weaponAsset(realIDs[2]);
+        const auto* a=visualWeapon(2,0x61183B);
         if(a)clearChildrenHook(parent,nullptr,a->inventory==25||a->inventory==26?1:2);
     }
 }
@@ -1229,5 +1243,60 @@ int main(){
         player.display=player.native;assert(setWeapons(&bag)==1);
         assert(setWeapons(&off)==1&&!weaponContext(player.model));
     }
-    std::cout<<"PASS: native hook simulation (weapons, bags, all race/sex anchors, loading, ownership, previews, destruction, idempotence, input validation)\n";
+    // Cross-family ranged appearances use the selected mesh AND its hand and
+    // bow callback metadata, retaining ordinary native transition ownership.
+    weaponInfoOriginal=&info;
+    unsigned rangedKinds[4]{};
+    for(const auto& a:weaponAssets){
+        if(a.kind==4){
+            const int i=a.subclass==2?0:a.subclass==3?1:a.subclass==18?2:a.subclass==19?3:-1;
+            if(i>=0)rangedKinds[i]=a.item;
+        }
+    }
+    for(auto actual:rangedKinds)for(auto cosmetic:rangedKinds){
+        assert(actual&&cosmetic);realIDs[0]=realIDs[1]=0;realIDs[2]=actual;
+        WeaponSelection selection;selection.equipped[2]=actual;selection.items[5]=cosmetic;
+        memory[player.unit+0xD40]=0;
+        auto on=request(0,selection);assert(setWeapons(&on)==1);
+        auto* context=weaponContext(player.model);assert(context&&context->routes[2]==5&&!context->extra[5]);
+        const auto* a=weaponAsset(cosmetic);
+        for(unsigned animation=0;animation<160;++animation){
+            assert(weaponAnimation(pointer(player.unit),animation)==rangedAppearanceAnimation(animation,weaponAsset(actual)->subclass,a->subclass));
+            assert(weaponAnimation(pointer(0xDEAD),animation)==animation);
+        }
+        context->token=1;assert(weaponAnimation(pointer(player.unit),107)==107);context->token=0;
+        player.display=999;assert(weaponAnimation(pointer(player.unit),107)==107);player.display=player.native;
+        for(auto caller:{0x611E24u,0x60B5BBu,0x60B797u,0x61183Bu,0x624B35u}){
+            auto* metadata=weaponInfoAt(pointer(player.unit),2,0,caller);
+            assert(metadata==context->rangedInfo.data()&&metadata[1]==a->subclass&&metadata[3]==a->inventory&&metadata[4]==a->sheath);
+            assert(metadata[2]==7&&metadata[5]==9&&metadata[6]==10&&metadata[7]==11);
+            assert(realInfo[2][1]==weaponAsset(actual)->subclass);
+        }
+        assert(weaponInfoAt(pointer(player.unit),2,0,0x12345)==realInfo[2].data());
+        assert(weaponInfoAt(pointer(player.unit),2,1,0x611E24)==realInfo[2].data());
+        assert(weaponInfoAt(pointer(0xDEAD),2,0,0x611E24)==realInfo[2].data());
+        const unsigned hand=a->inventory==25||a->inventory==26?1:2;
+        memory[player.unit+0xD3C]=0;memory[player.unit+0xD40]=2;sheathTransitionHook(pointer(player.unit),nullptr);
+        auto* drawn=findChildOriginal(pointer(player.model),hand);assert(drawn&&weaponModelMatches(drawn,a->model));
+        assert(rangeHolder==address(drawn));
+        memory[player.unit+0xD3C]=2;memory[player.unit+0xD40]=0;sheathTransitionHook(pointer(player.unit),nullptr);
+        auto* stored=findChildOriginal(pointer(player.model),27);assert(stored&&weaponModelMatches(stored,a->model));
+        assert(!findChildOriginal(pointer(player.model),hand));
+        const auto before=loads;assert(setWeapons(&on)==1&&loads==before);
+        // Every race/sex uses its own fit, and drawn models are never tuned.
+        for(const auto& fixture:bowFixtures){
+            setBack(context,fixture);
+            BagTuningValues values;values.scale=100;values.left=.1f;
+            assert(bagTuningSet(106,fixture.race,fixture.sex,true,values));
+            BagMatrix tuned;assert(tuneStoredPlacement(stored,identity,tuned));
+            assert(std::fabs(tuned[13]-.1f)<.00001f);
+            memory[address(stored)+0x1D0]=hand;assert(!tuneStoredPlacement(stored,identity,tuned));
+            memory[address(stored)+0x1D0]=27;
+            assert(bagTuningSet(106,fixture.race,fixture.sex,false));
+        }
+        WeaponSelection empty;empty.equipped[2]=actual;auto off=request(0,empty);
+        assert(setWeapons(&off)==1&&!weaponContext(player.model));
+        for(unsigned animation=0;animation<160;++animation)assert(weaponAnimation(pointer(player.unit),animation)==animation);
+    }
+    std::cout<<"PASS: native hook simulation, cross-family ranged drawing/sheathing, real metadata isolation and placement tuning\n";
 }

@@ -6,3 +6,7 @@ See ../ASSETS-LICENSE for the applicable proprietary asset terms.
 Third-party material, including Blizzard Entertainment material, remains
 subject to its owners' rights and applicable license terms. Prior license
 grants are not revoked by this notice.
+
+The WardrobeFrameCrop*.tga and WardrobeFrameShadowCrop*.tga files are derived
+from artwork supplied by the project owner on September 20, 2026. The original
+PNG is retained at assets/wardrobe-view-border-source.png.

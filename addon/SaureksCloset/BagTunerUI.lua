@@ -50,7 +50,7 @@ function V:RefreshBagTunerUI()
     f.live:SetChecked(state.enabled)
     f.pause:SetChecked(state.paused)
     f.enableControl(f.live,available)
-    f.enableControl(f.pause,available and state.enabled)
+    f.enableControl(f.pause,available and state.enabled and state.bag==1)
     for _,row in ipairs(f.rows) do
         local e=row.editor
         if targetChanged and e.editing then
@@ -70,7 +70,7 @@ function V:RefreshBagTunerUI()
 end
 function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled)
     if self.bagTunerWindow then return end
-    local f=sheet("SaureksClosetBagTuner",UIParent,"Bag Tuner")
+    local f=sheet("SaureksClosetBagTuner",UIParent,"Placement Tuner")
     self.bagTunerWindow=f;f.enableControl=enabled;f.rows={}
     f:Hide();f:SetFrameStrata("DIALOG");f:SetClampedToScreen(true)
     f:SetPoint("TOPLEFT",self.frame,"TOPRIGHT",-30,0)
@@ -165,7 +165,7 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled)
         local resetText=label(reset,"Reset",0,1,53,20,true)
         resetText:SetFont("Fonts\\FRIZQT__.TTF",10);resetText:SetJustifyH("CENTER");resetText:SetJustifyV("MIDDLE")
         reset.editor=e;reset:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
-        tooltip(reset,"Restore only this field to the built-in fit for the current bag, race and gender. Other fields and saved fits are unchanged.")
+        tooltip(reset,"Restore only this field to the built-in fit for the current placement, race and gender. Other fields and saved fits are unchanged.")
         local enter,leave=reset:GetScript("OnEnter"),reset:GetScript("OnLeave")
         reset:SetScript("OnEnter",function()
             if this.closetEnabled then V.bagTunerWindow.resetHover=this end
@@ -210,12 +210,12 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled)
         end,.75)
         f[name]=b
     end
-    action("save","Save Fit",31,353,"SaveBagTunerFit","Fit saved for this bag, race and gender.")
+    action("save","Save Fit",31,353,"SaveBagTunerFit","Fit saved for this placement, race and gender.")
     action("load","Load Saved",186,353,"LoadBagTunerFit","Saved fit loaded.")
     action("reset","Reset",31,385,"ResetBagTunerFit","Draft restored to the program's default fit.")
     f.export=settingsButton(f,"Export",186,385,145,function() V:OpenBagTunerExport() end,.75)
-    tooltip(f.save,"Save this fit for the current bag, race and gender. Saved fits remain available after restarting the game.")
-    tooltip(f.load,"Replace the current draft with the last fit saved for this bag, race and gender.")
+    tooltip(f.save,"Save this fit for the current placement, race and gender. Saved fits remain available after restarting the game.")
+    tooltip(f.load,"Replace the current draft with the last fit saved for this placement, race and gender.")
     tooltip(f.reset,"Restore the current draft to the program's default fit. Your previously saved fit remains available.")
     tooltip(f.export,"Open a copyable report containing the current draft and all your saved fits, ready to send for implementation.")
     f.savedState=label(f,"",31,417,300,14,true)
@@ -225,7 +225,18 @@ end
 function V:OpenBagTuner()
     if not self.frame then self:Toggle(true) end
     if not self.bagTunerWindow then return end
-    if not (VanityStudioCharacter.weapons or {}).backBag then self:SelectBackBag(1) end
+    if self.bagTunerWindow:IsShown() then self.bagTunerWindow:Hide() end
+    self.placementTunerSlot=nil
+    self.bagTunerWindow.message=nil;self.bagTunerWindow.messageTime=nil
+    self.bagTunerWindow:Show();self:RefreshBagTunerUI()
+end
+function V:OpenPlacementTuner(slot)
+    if not self:IsWeaponPosition(slot) then return end
+    if not self.frame then self:Toggle(true) end
+    if not self.bagTunerWindow then return end
+    if self.bagTunerWindow:IsShown() then self.bagTunerWindow:Hide() end
+    self.placementTunerSlot=slot
+    self.bagTunerWindow.message=nil;self.bagTunerWindow.messageTime=nil
     self.bagTunerWindow:Show();self:RefreshBagTunerUI()
 end
 function V:OpenBagTunerExport()
@@ -239,7 +250,7 @@ function V:OpenBagTunerExport()
     if self.bagTunerWindow.invalidInput then self.bagTunerWindow.invalidInput=nil;return end
     local export=self:ExportBagTunerFits()
     if type(export)~="string" then
-        showMessage("The current bag fit is not available for export.");self:RefreshBagTunerUI();return
+        showMessage("The current placement fit is not available for export.");self:RefreshBagTunerUI();return
     end
     if not self.bagTunerExportWindow then
         local f=CreateFrame("Frame","SaureksClosetBagTunerExport",UIParent)
@@ -252,7 +263,7 @@ function V:OpenBagTunerExport()
         f:SetScript("OnDragStart",function() this:StartMoving() end)
         f:SetScript("OnDragStop",function() this:StopMovingOrSizing() end)
         local title=f:CreateFontString(nil,"OVERLAY","GameFontNormal")
-        title:SetPoint("TOP",f,"TOP",0,-19);title:SetText("Bag Fit Export")
+        title:SetPoint("TOP",f,"TOP",0,-19);title:SetText("Placement Fit Export")
         local close=CreateFrame("Button","SaureksClosetBagTunerExportClose",f,"UIPanelCloseButton")
         close:SetPoint("TOPRIGHT",f,"TOPRIGHT",-6,-6)
         close:SetScript("OnClick",function() V.bagTunerExportWindow:Hide() end)

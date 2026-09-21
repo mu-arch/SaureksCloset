@@ -2,6 +2,16 @@
 #include <iostream>
 #include "../native/WeaponState.h"
 int main(){
+    const unsigned classes[]={2,3,18,19};
+    const unsigned phases[4][4]={{29,46,105,109},{48,49,106,110},{48,49,106,110},{108,107,112,111}};
+    for(unsigned from=0;from<4;++from)for(unsigned to=0;to<4;++to){
+        for(unsigned i=0;i<4;++i)assert(rangedAppearanceAnimation(phases[from][i],classes[from],classes[to])==phases[to][i]);
+        for(unsigned animation:{0u,4u,5u,16u,17u,30u,51u,69u,70u,133u})
+            assert(rangedAppearanceAnimation(animation,classes[from],classes[to])==animation);
+    }
+    assert(rangedAppearanceAnimation(47,2,3)==49);
+    assert(rangedAppearanceAnimation(47,2,2)==47);
+    assert(rangedAppearanceAnimation(107,0,3)==107);
     unsigned kinds[6]{};unsigned guns=0,bows=0,swords=0,daggers=0;
     for(const auto& a:weaponAssets){
         assert(weaponAsset(a.item)==&a);kinds[a.kind]++;
@@ -25,7 +35,7 @@ int main(){
     assert((s.routes()==std::array<int,3>{{1,-1,-1}}));
     s.equipped={{35,0,guns}};
     assert((s.routes()==std::array<int,3>{{2,-1,5}}));
-    s.equipped[2]=bows;assert(s.routes()[2]==-1);
+    s.equipped[2]=bows;assert(s.routes()[2]==5);
     s.items[0]=guns;assert(!s.valid());
     // One-handed weapons can be stored on the back; selected location wins.
     s={};s.items[2]=daggers;s.equipped[0]=daggers;assert(s.routes()[0]==2);

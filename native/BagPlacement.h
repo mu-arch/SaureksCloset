@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include "BagFits.h"
 #include "BagMounts.h"
 #include "BagMotion.h"

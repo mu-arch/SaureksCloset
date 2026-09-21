@@ -11,5 +11,8 @@ def at(va):
  for name,vsz,vaddr,rsz,ptr,*rest in sections:
   if vaddr<=rva<vaddr+rsz:return b[ptr+rva-vaddr:ptr+rva-vaddr+12]
  raise ValueError(hex(va))
+# Preserve verified entries introduced outside this generator's original list.
+import re
+addresses=list(dict.fromkeys(addresses+[int(value,16) for value in re.findall(r'\{(0x[0-9a-f]+),', (r/'native/BuildSignatures.h').read_text())]))
 (r/'native/BuildSignatures.h').write_text('// Verified executable prefixes. Incompatible clients leave the bridge inactive.\n#pragma once\nstruct BuildSignature { unsigned address; unsigned char bytes[12]; };\nstatic const BuildSignature signatures[] = {\n'+''.join('{0x%x,{%s}},\n'%(a,','.join('0x%02x'%x for x in at(a))) for a in addresses)+'};\n')
 (r/'native/CLIENT-BUILD.json').write_text(json.dumps({'build':5875,'sha256':hashlib.sha256(b).hexdigest(),'image_base':base,'functions':[hex(a) for a in addresses]},indent=2))

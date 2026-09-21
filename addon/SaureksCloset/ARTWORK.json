@@ -223,5 +223,101 @@
     "generated": true,
     "source_sha256": "d9c962f1abdc5ca3ec90d81adce7424a234f69c46a6f187506aee7256a75e220",
     "layout": "Separate contact and soft shadow of unmodified v3.4.34 armor art"
+  },
+  {
+    "source": "assets/wardrobe-view-border-source.png",
+    "source_sha256": "fdf7978d175ba14e4db74fc753ff2c33b1a45de8896bbcb0081e70fc7908c92f",
+    "generator": "tools/build_wardrobe_view_border.sh",
+    "generator_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
+    "texture": "WardrobeFrameCropTL.tga",
+    "layout": "Top-left quadrant after cropping the 512x566 source to 512x512 from the top",
+    "crop": [0, 0, 256, 256],
+    "size": [256, 256],
+    "bytes": 262162,
+    "sha256": "c34962eaa696bd4f7649ddb8ac6b04d02df93e676adfa9a28b70dffbb07d5f11",
+    "generated": true
+  },
+  {
+    "source": "assets/wardrobe-view-border-source.png",
+    "source_sha256": "fdf7978d175ba14e4db74fc753ff2c33b1a45de8896bbcb0081e70fc7908c92f",
+    "generator": "tools/build_wardrobe_view_border.sh",
+    "generator_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
+    "texture": "WardrobeFrameCropTR.tga",
+    "layout": "Top-right quadrant after cropping the 512x566 source to 512x512 from the top",
+    "crop": [256, 0, 512, 256],
+    "size": [256, 256],
+    "bytes": 262162,
+    "sha256": "a76186426d516bf011d7c7cb52ef9f303287c5af8aafbe78edb22292758403b4",
+    "generated": true
+  },
+  {
+    "source": "assets/wardrobe-view-border-source.png",
+    "source_sha256": "fdf7978d175ba14e4db74fc753ff2c33b1a45de8896bbcb0081e70fc7908c92f",
+    "generator": "tools/build_wardrobe_view_border.sh",
+    "generator_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
+    "texture": "WardrobeFrameCropBL.tga",
+    "layout": "Bottom-left quadrant after cropping the 512x566 source to 512x512 from the top",
+    "crop": [0, 256, 256, 512],
+    "size": [256, 256],
+    "bytes": 262162,
+    "sha256": "85a68edc589cd423782f07959f9c3ddd7d31dcce43f400dfdc4e6818202a97d4",
+    "generated": true
+  },
+  {
+    "source": "assets/wardrobe-view-border-source.png",
+    "source_sha256": "fdf7978d175ba14e4db74fc753ff2c33b1a45de8896bbcb0081e70fc7908c92f",
+    "generator": "tools/build_wardrobe_view_border.sh",
+    "generator_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
+    "texture": "WardrobeFrameCropBR.tga",
+    "layout": "Bottom-right quadrant after cropping the 512x566 source to 512x512 from the top",
+    "crop": [256, 256, 512, 512],
+    "size": [256, 256],
+    "bytes": 262162,
+    "sha256": "32db5bed9d9a5c2f8082866b6a11937a01016a218c2fe1c220e5470a042604ef",
+    "generated": true
+  },
+  {
+    "source": "tools/build_wardrobe_view_border.sh",
+    "source_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
+    "texture": "WardrobeFrameShadowCropTL.tga",
+    "layout": "Top-left contact and ambient silhouette shadow of WardrobeFrameCrop",
+    "crop": [0, 0, 256, 256],
+    "size": [256, 256],
+    "bytes": 262162,
+    "sha256": "180f53a26f66fbbfb79287fc1fa2672620503a9b04692f9626b9ab6223d63e0b",
+    "generated": true
+  },
+  {
+    "source": "tools/build_wardrobe_view_border.sh",
+    "source_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
+    "texture": "WardrobeFrameShadowCropTR.tga",
+    "layout": "Top-right contact and ambient silhouette shadow of WardrobeFrameCrop",
+    "crop": [256, 0, 512, 256],
+    "size": [256, 256],
+    "bytes": 262162,
+    "sha256": "edade252cf1098c3e75a2786c95502311016d53774fc2e4456f3c06c20d27bec",
+    "generated": true
+  },
+  {
+    "source": "tools/build_wardrobe_view_border.sh",
+    "source_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
+    "texture": "WardrobeFrameShadowCropBL.tga",
+    "layout": "Bottom-left contact and ambient silhouette shadow of WardrobeFrameCrop",
+    "crop": [0, 256, 256, 512],
+    "size": [256, 256],
+    "bytes": 262162,
+    "sha256": "fa08bb28007cafb778de909a2d3d3543c755ad0702d9b4391bab425feac394e6",
+    "generated": true
+  },
+  {
+    "source": "tools/build_wardrobe_view_border.sh",
+    "source_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
+    "texture": "WardrobeFrameShadowCropBR.tga",
+    "layout": "Bottom-right contact and ambient silhouette shadow of WardrobeFrameCrop",
+    "crop": [256, 256, 512, 512],
+    "size": [256, 256],
+    "bytes": 262162,
+    "sha256": "8526082939afc4b02c60daab9422bb225bd2dd208d5f961f623aa1ff62a9fb7b",
+    "generated": true
   }
 ]

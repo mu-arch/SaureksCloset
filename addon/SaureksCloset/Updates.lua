@@ -1,10 +1,14 @@
 local V=VanityStudio
-V.REQUIRED_RENDERER=30607
+V.REQUIRED_RENDERER=30608
+local goldenVersionCheck="Interface\\Buttons\\UI-CheckBox-Check"
+local negativeVersionMark="Interface\\Buttons\\UI-GroupLoot-Pass-Up"
+local function rememberVersionCheck()
+    local checked=type(time)=="function" and time() or nil
+    if type(checked)=="number" and checked>0 then VanityStudioDB.lastVersionCheck=checked end
+end
 V.websiteURLs={"https://github.com/mu-arch/SaureksCloset","https://github.com/mu-arch/SaureksCloset/releases","https://discord.gg/6mfxCdNbM6"}
 function V:VersionParts(version)
-    -- The development prefix does not reset release ordering from legacy 3.x releases.
-    version=string.gsub(version or "","^0%.(%d+%.%d+%.%d+)$","%1")
-    local _,_,major,minor,patch=string.find(version,"^(%d+)%.(%d+)%.(%d+)$")
+    local _,_,major,minor,patch=string.find(version or "","^(%d+)%.(%d+)%.(%d+)$")
     major=tonumber(major);minor=tonumber(minor);patch=tonumber(patch)
     if not major or major<1 or major>65535 or minor>65535 or patch>65535 then return nil end
     return {major,minor,patch}
@@ -17,22 +21,44 @@ function V:VersionIsNewer(candidate,current)
 end
 function V:RendererVersionText(version)
     if type(version)~="number" or version<1 or version>999999 or version~=math.floor(version) then return "Not loaded" end
-    return (version>=30607 and "0." or "")..string.format("%d.%d.%d",math.floor(version/10000),math.mod(math.floor(version/100),100),math.mod(version,100))
+    return string.format("%d.%d.%d",math.floor(version/10000),math.mod(math.floor(version/100),100),math.mod(version,100))
 end
 function V:RefreshUpdateUI()
     local alert=self.updateMismatch or self.remoteUpdateAvailable
     if self.frame then
-        self.frame.title:SetText(alert and "Saurek's Closet (Update Available)" or "Saurek's Closet")
+        self.frame.title:SetText(alert and "Saurek's Closet (Outdated)" or "Saurek's Closet")
         self.frame.title:SetFont("Fonts\\FRIZQT__.TTF",alert and 11 or 12)
     end
+    if self.addonVersionsHeading then self.addonVersionsHeading:SetText(alert and "This PC's Version (Out of date)" or "This PC's Version") end
     if self.autoUpdatesCheckbox then self.autoUpdatesCheckbox:SetChecked(VanityStudioDB.autoCheckUpdates and 1 or nil) end
     if self.updatesSummary then
-        local text="Addon: "..self.VERSION.."\nLoaded DLL: "..self:RendererVersionText(self.loadedRenderer).."\nRequired DLL: "..self:RendererVersionText(self.REQUIRED_RENDERER)
-        if self.updateMismatch then text=text.."\n\nThe addon and loaded DLL do not match. Install both from the same release, then fully restart WoW through VanillaFixes." end
         local remote=VanityStudioDB.autoCheckUpdates and self.remoteRelease
-        text=text.."\n\nGitHub current version addon: "..(remote and remote.addon or "Unknown")
-            .."\nGitHub current version DLL: "..(remote and self:RendererVersionText(remote.dll) or "Unknown")
-        self.updatesSummary:SetText(text)
+        local addonOutdated=remote and self:VersionIsNewer(remote.addon,self.VERSION)
+        local rendererOutdated=remote and remote.dll>self.REQUIRED_RENDERER
+        local problems={addonOutdated and true or false,(self.loadedRenderer~=self.REQUIRED_RENDERER or rendererOutdated) and true or false,rendererOutdated and true or false}
+        if self.versionStatusIcons then
+            for i,icon in ipairs(self.versionStatusIcons) do
+                icon:SetTexture(problems[i] and negativeVersionMark or goldenVersionCheck);icon:Show()
+            end
+        end
+        if self.versionStatusLabels then
+            self.versionStatusLabels[1]:SetText("Addon: "..self.VERSION)
+            self.versionStatusLabels[2]:SetText("Loaded DLL: "..self:RendererVersionText(self.loadedRenderer))
+            self.versionStatusLabels[3]:SetText("Required DLL: "..self:RendererVersionText(self.REQUIRED_RENDERER))
+        end
+        if self.availableVersionLabels then
+            self.availableVersionLabels[1]:SetText("Addon: "..(remote and remote.addon or "Unknown"))
+            self.availableVersionLabels[2]:SetText("DLL: "..(remote and self:RendererVersionText(remote.dll) or "Unknown"))
+        end
+        self.updatesSummary:SetText(self.updateMismatch and "The addon and loaded DLL do not match. Install both from the same release, then fully restart WoW through VanillaFixes." or "")
+        if self.lastVersionCheckLabel then
+            local checked=VanityStudioDB.lastVersionCheck;local text="Never"
+            if type(checked)=="number" and checked>0 and type(date)=="function" then
+                local ok,value=pcall(date,"%b %d, %Y  %I:%M %p",checked)
+                if ok and value then text=value end
+            end
+            self.lastVersionCheckLabel:SetText("Last checked: "..text)
+        end
         self.updatesStatus:SetText(self.updateStatus or "Not checked yet.")
     end
     if self.checkUpdatesButton then
@@ -97,7 +123,7 @@ function V:UpdateUpdates()
     if now>self.updateDeadline then
         -- Discard the in-flight generation; the DLL worker closes its own handles.
         if type(SaureksClosetSetUpdateChecks)=="function" then pcall(SaureksClosetSetUpdateChecks,0);pcall(SaureksClosetSetUpdateChecks,1) end
-        self.updatePolling=nil;self.updateStatus="The update check timed out. Try again later.";self:RefreshUpdateUI();return
+        self.updatePolling=nil;rememberVersionCheck();self.updateStatus="The update check timed out. Try again later.";self:RefreshUpdateUI();return
     end
     if self.updateWaitingStart then
         local ok,status=pcall(SaureksClosetStartUpdateCheck)
@@ -110,17 +136,17 @@ function V:UpdateUpdates()
     local values={pcall(SaureksClosetPollUpdateCheck)}
     local status=values[1] and values[2]
     if status==1 then return end
-    self.updatePolling=nil
+    self.updatePolling=nil;rememberVersionCheck()
     local valid=status==2
     for i=3,6 do
         local value=values[i]
         if type(value)~="number" or value~=math.floor(value) or value<0 or value>(i==6 and 999999 or 65535) then valid=false end
     end
     if valid and values[3]>0 and values[6]>0 then
-        local addon=(values[6]>=30607 and "0." or "")..string.format("%d.%d.%d",values[3],values[4],values[5])
+        local addon=string.format("%d.%d.%d",values[3],values[4],values[5])
         self.remoteRelease={addon=addon,dll=values[6]}
         self.remoteUpdateAvailable=self:VersionIsNewer(addon,self.VERSION) or values[6]>self.REQUIRED_RENDERER
-        self.updateStatus=self.remoteUpdateAvailable and "Update available on GitHub." or "You have the latest published version or newer."
+        self.updateStatus=self.remoteUpdateAvailable and "Update available on GitHub." or ""
         local key=addon..":"..values[6]
         if self.remoteUpdateAvailable and self.lastUpdateAlert~=key then
             self.lastUpdateAlert=key;self:Message("Update Available: Saurek's Closet "..addon..". Open Settings > Version Details for the download page.")

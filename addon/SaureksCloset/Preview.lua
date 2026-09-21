@@ -1,18 +1,50 @@
--- Preview transactions never call the world-appearance helper.
+-- Item-browser drafts are temporary transactions on both preview models.
 local V=VanityStudio
+function V:ApplyWorldDraft()
+    local draft=self.draft
+    if not draft then return false end
+    if self:IsWeaponPosition(draft.slot) then
+        local ok,status=self:ApplyWeaponRenderer(0,self:PreviewWeapons())
+        self.worldDraftActive=ok and draft.slot or nil
+        return ok,status
+    end
+    if not self:Available() then return false end
+    local ok,err=pcall(SetUnitVisibleItemID,"player",draft.slot,draft.id)
+    if ok then
+        -- Mark the temporary override as managed so cancellation can release it
+        -- when the committed selection for this slot is passthrough.
+        VanityStudioCharacter.managed[draft.slot]=true
+        self.applied[draft.slot]=nil
+        self.worldDraftActive=draft.slot
+    end
+    return ok,err
+end
+function V:RestoreWorldDraft(draft)
+    if not draft or not self.worldDraftActive then return end
+    self.worldDraftActive=nil
+    if self:IsWeaponPosition(draft.slot) then self:SyncWeapons();return end
+    self.applied[draft.slot]=nil
+    self:Sync()
+end
 function V:DraftSlot(slot,id)
     if not self.slotNames[slot] or (id~=nil and not self:Compatible(id,slot)) then return false end
     self.draft={slot=slot,id=id}
+    self:ApplyWorldDraft()
     self:Refresh()
     return true
 end
 function V:CancelDraft()
+    local draft=self.draft
     self.draft=nil;self.previewWaiting=nil
+    self:RestoreWorldDraft(draft)
 end
 function V:CommitDraft()
     local draft=self.draft
     if not draft then return false end
-    self:CancelDraft()
+    -- Keep the temporary world appearance in place while the same selection is
+    -- committed. Select/Clear will synchronize and assume ownership of it.
+    self.draft=nil;self.previewWaiting=nil;self.worldDraftActive=nil
+    if not self:IsWeaponPosition(draft.slot) then self.applied[draft.slot]=nil end
     if draft.id==nil then self:ClearSlot(draft.slot) else self:Select(draft.slot,draft.id) end
     return true
 end

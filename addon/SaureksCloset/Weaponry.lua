@@ -1,7 +1,7 @@
 -- Physical weapon placements are separate from the real equipment-slot overrides.
 local V=VanityStudio
 V.weaponOrder={101,102,103,104,105,106,107}
-V.weaponNames={"Left waist","Right waist","Back left","Back right","Shield","Ranged back","Quiver"}
+V.weaponNames={"Left waist","Right waist","Primary","Alt","Shield","Ranged","Quiver"}
 V.weaponIcons={"SecondaryHand","MainHand","MainHand","MainHand","SecondaryHand","Ranged","Ammo"}
 for i,slot in ipairs(V.weaponOrder) do V.slotNames[slot]=V.weaponNames[i] end
 function V:IsWeaponPosition(slot) return type(slot)=="number" and slot>=101 and slot<=107 end
@@ -134,29 +134,10 @@ function V:RealQuiverItem()
     end
     return 0
 end
--- Vanilla bows have no native sheath, and the two-handed sword home (26)
--- collides with quivers. Reserve separate homes for real equipped weapons too.
--- These fallbacks are renderer inputs only; saved choices remain untouched.
+-- Empty placements belong entirely to the game. Do not implicitly create
+-- custom homes for real equipment (especially wands with no stock back slot).
 function V:EffectiveWeapons(weapons,overrides)
-    local effective=self:Copy(weapons or {})
-    local c=VanityStudioCharacter
-    if not overrides then overrides=c.enabled and c.selected or {} end
-    local real=self:RealWeaponItems();local routes=self:RawPreviewWeaponRoutes(effective)
-    for role=1,3 do
-        local asset=SaureksClosetWeaponAssets[real[role]]
-        -- Preserve legacy inventory overrides, including explicitly hidden slots.
-        if asset and not routes[role+15] and overrides[role+15]==nil then
-            local choices
-            if role==3 and asset[1]==4 then choices={106}
-            elseif asset[1]==3 then choices={105}
-            elseif asset[1]==2 then choices=role==1 and {103,104} or {104,103}
-            elseif asset[1]==1 then choices=role==1 and {102,101,103,104} or {101,102,104,103} end
-            for _,slot in ipairs(choices or {}) do
-                if not effective[slot] then effective[slot]=real[role];break end
-            end
-        end
-    end
-    return effective
+    return self:Copy(weapons or {})
 end
 function V:ApplyWeaponRenderer(token,weapons)
     if not self:WeaponRendererAvailable() then return false end
@@ -205,7 +186,7 @@ function V:RawPreviewWeaponRoutes(weapons)
                 if not routes[role+15] then
                     for _,slot in ipairs(order[role]) do
                         local a=SaureksClosetWeaponAssets[(weapons or {})[slot]]
-                        if a and not used[slot] and a[1]==actual[1] and (pass==2 or a[2]==actual[2]) and (role~=3 or a[2]==actual[2]) then
+                        if a and not used[slot] and a[1]==actual[1] and (pass==2 or a[2]==actual[2]) then
                             routes[role+15]=slot;used[slot]=true;break
                         end
                     end
