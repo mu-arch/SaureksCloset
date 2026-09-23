@@ -3,6 +3,9 @@
 #include "BowPlacement.h"
 #include "BagPlacement.h"
 #include "PlacementTuning.h"
+#include "StaffPlacement.h"
+#include "StaffFits.h"
+#include "StaffShafts.h"
 // Included after the bridge's player reader, registry and Lua result helpers.
 using WeaponCompose=int (__fastcall *)(void*,void*,unsigned,unsigned,unsigned,unsigned,unsigned);
 using SheathPoint=int (__fastcall *)(unsigned,unsigned);
@@ -55,15 +58,37 @@ struct WeaponContext {
     void* backpack=nullptr;
     BagMotion bagMotion;
     std::array<int,3> routes{{-1,-1,-1}};
-    std::array<void*,7> extra{};
+    std::array<void*,10> extra{};
+    // Observed native composition results, never owned or retained by Closet.
+    // The model destruction hook clears these before an address can be reused.
+    std::array<void*,3> nativeChildren{};
+    unsigned previewMode=0;
     std::array<unsigned char,8> rangedInfo{};
 };
 static std::array<WeaponContext,9> weaponContexts{};
 static int scopedSheathPoint=-1;
+static bool scopedProjectileAppearance=false;
 static std::uintptr_t loadingExtraParent=0;
 static WeaponContext* weaponContext(std::uintptr_t model){
     for(auto& c:weaponContexts)if(model&&c.parent==model)return &c;
     return nullptr;
+}
+// Stock CharacterModelFrame/DressUpModel clones do not use addon preview tokens.
+// Remember only copies originating from our player's bag-bearing model. These
+// are weak identities: the client owns every cloned model and child reference.
+struct ClonedBagPreview { std::uintptr_t model=0;std::uint64_t guid=0; };
+static std::array<ClonedBagPreview,32> clonedBagPreviews{};
+static std::uint64_t clonedBagOwner(std::uintptr_t model){
+    for(const auto& entry:clonedBagPreviews)if(model&&entry.model==model)return entry.guid;
+    return 0;
+}
+static void rememberClonedBagPreview(std::uintptr_t source,std::uintptr_t model){
+    if(!source||!model||source==model)return;
+    const auto* context=weaponContext(source);
+    const auto guid=context&&context->backBag==1?context->guid:clonedBagOwner(source);
+    if(!guid||guid!=getPlayer())return;
+    for(auto& entry:clonedBagPreviews)if(entry.model==model){entry.guid=guid;return;}
+    for(auto& entry:clonedBagPreviews)if(!entry.model){entry={model,guid};return;}
 }
 static bool ownedExtra(const WeaponContext& c,void* child){
     if(child&&c.backpack==child)return true;
@@ -175,6 +200,11 @@ static bool positionBackpack(void* child,std::array<float,16>& adjusted,bool smo
     unsigned point=0;std::uint16_t index=0;
     if(!read(model+0x1CC,parent)||!read(model+0x1D0,point)||point!=28)return false;
     auto* context=weaponContext(parent);
+    WeaponContext cloned;
+    if(!context&&clonedBagOwner(parent)&&weaponModelMatches(child,"Interface\\AddOns\\SaureksCloset\\Models\\DarkSchoolbag.mdx")){
+        cloned.parent=parent;cloned.guid=clonedBagOwner(parent);cloned.backBag=1;cloned.backpack=child;
+        context=&cloned;smooth=false; // Fit the preview's own bones/view; never inherit world motion.
+    }
     if(!context||context->guid!=getPlayer()||context->backpack!=child||context->backBag!=1)return false;
     bagTuningUseOwner(context->guid);
     std::array<float,16> back,torso,local,modelToRender;std::array<float,3> position;
@@ -212,6 +242,44 @@ static bool positionStoredBow(void* child,const float* attachment,std::array<flo
     // of shields at 28, preserving ownership and native draw/sheath callbacks.
     for(unsigned axis=0;axis<3;++axis)adjusted[12+axis]=back[axis];
     return true;
+}
+static bool positionStoredStaff(void* child,std::array<float,16>& adjusted){
+    std::uintptr_t parent=0;
+    unsigned point=0;
+    const auto model=reinterpret_cast<std::uintptr_t>(child);
+    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point)||(point!=30&&point!=31))return false;
+    const auto* context=weaponContext(parent);
+    if(!context||context->guid!=getPlayer())return false;
+    const WeaponAsset* asset=nullptr;
+    // Only an explicitly selected appearance gets a closer fit. Native
+    // passthrough weapons and every hand attachment retain their stock pose.
+    for(unsigned i=0;i<context->extra.size();++i)
+        if(context->extra[i]==child)asset=weaponAsset(context->selection.items[i]);
+    if(!asset&&!context->token&&!ownedExtra(*context,child)){
+        for(unsigned role=0;role<3;++role){
+            const int route=context->routes[role];
+            if(route<0||route>=static_cast<int>(context->selection.items.size()))continue;
+            const auto* candidate=weaponAsset(context->selection.items[route]);
+            if(candidate&&weaponModelMatches(child,candidate->model)&&
+               (context->nativeChildren[role]==child||findChildOriginal(reinterpret_cast<void*>(parent),point)==child))asset=candidate;
+        }
+    }
+    if(!asset||asset->kind!=2||asset->subclass!=10||asset->sheath!=2)return false;
+    const auto* shaft=staffShaftFor(asset->model);
+    if(!shaft)return false;
+    BagMatrix attachment,torso,local,render;
+    std::array<float,3> anchor;
+    if(!animatedAttachmentMatrix(parent,point,attachment,&torso,&anchor)||
+       !read(model+0xBC,local)||!read(parent+0xFC,render))return false;
+    for(const auto& fit:staffFits){
+        if(fit.point!=point)continue;
+        bool matches=true;
+        for(unsigned axis=0;axis<3;++axis)
+            if(std::fabs(anchor[axis]-fit.anchor[axis])>.00001f)matches=false;
+        if(matches)return staffContactPlacement(attachment,local,torso,render,fit.inward,
+            {{shaft->minY,shaft->maxY,shaft->minZ,shaft->maxZ}},adjusted);
+    }
+    return false;
 }
 static bool positionStoredBackWeapon(void* child,std::array<float,16>& adjusted){
     std::uintptr_t parent=0;unsigned point=0;
@@ -299,6 +367,8 @@ static bool hideNativeQuiver(void* child){
     if(!read(model+0x1CC,parent)||!read(model+0x1D0,point)||point!=weaponPoints[6])return false;
     const auto* c=weaponContext(parent);
     if(!c||c->guid!=getPlayer()||ownedExtra(*c,child))return false;
+    if(c->selection.carriedMode==1)return nativeQuiverModel(child);
+    if(c->selection.carriedMode==0)return false;
     const auto replacement=c->extra[6]?c->extra[6]:c->passthroughQuiver;
     if(!replacement)return false;
     const auto* asset=weaponAsset(c->extra[6]?c->selection.items[6]:c->actualQuiver);
@@ -313,12 +383,62 @@ static bool hideNativeQuiver(void* child){
         read(custom+0x10,customLoaded)&&customLoaded&&
         read(custom+0x30,customResource)&&customResource==resource;
 }
+static bool replacesStoredWeapon(const WeaponContext& c,const WeaponAsset& asset,unsigned point){
+    if(!c.selection.independent)return false;
+    int position=-1;
+    if(asset.kind==4)position=5;
+    else if(asset.kind==3&&point==28)position=4;
+    else if(asset.kind==1||asset.kind==2){
+        // Native swords use 26/27, while our independent back slots keep
+        // ownership at 30/31 and borrow those sword poses when necessary.
+        if(point==26||point==30)position=2;
+        else if(point==27||point==31)position=3;
+        else if(point==32)position=0;
+        else if(point==33)position=1;
+    }
+    if(position<0||!c.selection.items[position]||!c.extra[position])return false;
+    const auto replacement=reinterpret_cast<std::uintptr_t>(c.extra[position]);
+    std::uintptr_t parent=0;unsigned home=0,loaded=0;
+    // Keep the original visible until its replacement is actually attached
+    // and loaded. Clearing/detaching a carried choice restores it immediately.
+    return read(replacement+0x1CC,parent)&&parent==c.parent&&
+        read(replacement+0x1D0,home)&&home==weaponPoints[position]&&
+        read(replacement+0x10,loaded)&&loaded;
+}
+static int selectedWeaponHome(const WeaponSelection& selection,unsigned role,int route){
+    if(route<0||route>=static_cast<int>(weaponPoints.size()))return -1;
+    if(selection.carriedMode!=0||route<7)return static_cast<int>(weaponPoints[route]);
+    const auto* asset=weaponAsset(selection.items[route]);
+    if(!asset)return -1;
+    const unsigned side=role==0||(role==2&&(asset->inventory==25||asset->inventory==26));
+    return sheathPointOriginal(asset->sheath,side);
+}
 static bool hideStoredWeapon(void* child){
     const auto model=reinterpret_cast<std::uintptr_t>(child);
     std::uintptr_t parent=0;unsigned point=0;
     if(!read(model+0x1CC,parent)||!read(model+0x1D0,point)||point<26||point>33)return false;
     const auto* c=weaponContext(parent);
     if(!c||c->guid!=getPlayer())return false;
+    if(c->selection.carriedMode==0)return false;
+    if(c->selection.carriedMode==1){
+        if(ownedExtra(*c,child))return false;
+        for(auto native:c->nativeChildren)if(native==child)return true;
+        // TryOn-created preview children can use the appearance's native home,
+        // rather than the world's routed home. Match both actual and selected
+        // meshes at their audited sheath points, never every child on a bone.
+        for(unsigned role=0;role<3;++role){
+            const int route=c->routes[role];
+            const unsigned selected=route>=0?c->selection.items[route]:0;
+            for(unsigned item:{selected,c->selection.equipped[role]}){
+                const auto* asset=weaponAsset(item);if(!asset)continue;
+                const unsigned side=role==0||(role==2&&(asset->inventory==25||asset->inventory==26));
+                if((sheathPointOriginal(asset->sheath,side)==static_cast<int>(point)||
+                    (item==selected&&selectedWeaponHome(c->selection,role,route)==static_cast<int>(point)))&&
+                    weaponModelMatches(child,asset->model))return true;
+            }
+        }
+        return false;
+    }
     const auto hidden=[c](const WeaponAsset* asset){
         return asset&&((asset->kind==4&&c->hideRangedWhenStored)||
             ((asset->kind==1||asset->kind==2)&&c->hideMeleeWhenStored));
@@ -327,13 +447,14 @@ static bool hideStoredWeapon(void* child){
         return point==weaponPoints[i]&&hidden(weaponAsset(c->selection.items[i]));
     if(c->passthroughQuiver==child)return false;
     // A native child's point alone is ambiguous. Match its selected/equipped
-    // model as well, and leave hands (0/1/2), shields, quivers and unknown props.
+    // model as well, leaving hands, quivers and unrelated props untouched.
+    // Carried choices also replace real equipment when no hand override exists.
     for(unsigned role=0;role<3;++role){
         const int route=c->routes[role];
         const auto* asset=weaponAsset(route>=0?c->selection.items[route]:c->selection.equipped[role]);
-        if(!hidden(asset))continue;
+        if(!asset||(route<7&&!hidden(asset)&&!replacesStoredWeapon(*c,*asset,point)))continue;
         const unsigned side=role==0||(role==2&&(asset->inventory==25||asset->inventory==26));
-        const int home=route>=0?static_cast<int>(weaponPoints[route]):sheathPointOriginal(asset->sheath,side);
+        const int home=route>=0?selectedWeaponHome(c->selection,role,route):sheathPointOriginal(asset->sheath,side);
         if(home==static_cast<int>(point)&&weaponModelMatches(child,asset->model))return true;
     }
     return false;
@@ -380,7 +501,9 @@ static void updateWeaponAttachment(void* model,const float* matrix,const float* 
     std::array<float,16> adjusted;
     std::uintptr_t parent=0;read(reinterpret_cast<std::uintptr_t>(model)+0x1CC,parent);
     const auto* context=weaponContext(parent);
-    if(context&&context->backpack==model){
+    const bool clonedBag=!context&&clonedBagOwner(parent)&&
+        weaponModelMatches(model,"Interface\\AddOns\\SaureksCloset\\Models\\DarkSchoolbag.mdx");
+    if((context&&context->backpack==model)||clonedBag){
         // Wait for valid animated bones instead of briefly drawing a shield pose.
         if(positionBackpack(model,adjusted,true))updateAttachedOriginal(model,adjusted.data(),color,lighting,alpha);
         else updateAttachedOriginal(model,matrix,color,lighting,0);
@@ -390,7 +513,7 @@ static void updateWeaponAttachment(void* model,const float* matrix,const float* 
     // still runs. No native ownership or visibility state is changed; removing
     // the custom quiver restores the original alpha on the next frame.
     if(hideNativeQuiver(model)||hideStoredWeapon(model))alpha=0;
-    const bool positioned=positionStoredBackWeapon(model,adjusted)||positionStoredBow(model,matrix,adjusted)||
+    const bool positioned=positionStoredStaff(model,adjusted)||positionStoredBackWeapon(model,adjusted)||positionStoredBow(model,matrix,adjusted)||
        positionStoredQuiver(model,matrix,adjusted);
     if(positioned)matrix=adjusted.data();
     std::array<float,16> tuned,base;
@@ -427,6 +550,9 @@ static void releaseBackpack(WeaponContext& c){
     releaseModel(child);
 }
 static void forgetWeapons(std::uintptr_t model){
+    for(auto& entry:clonedBagPreviews)if(entry.model==model)entry={};
+    for(auto& c:weaponContexts)for(auto& child:c.nativeChildren)
+        if(reinterpret_cast<std::uintptr_t>(child)==model)child=nullptr;
     if(auto* c=weaponContext(model)){releaseExtras(*c);releasePassthroughQuiver(*c);releaseBackpack(*c);*c={};}
 }
 static void discardInheritedPreviewWeapons(std::uintptr_t parent){
@@ -488,13 +614,14 @@ static const unsigned char* weaponInfoAt(void* unit,unsigned role,unsigned raw,s
     // callers (item requirements, skills, spell checks, inventory) get real data.
     const bool visual=caller==0x60B5BB||caller==0x60B797||caller==0x611E24||
         caller==0x61183B||caller==0x6118DF||caller==0x61199F||caller==0x611A45||
-        caller==0x611BCE||caller==0x60BAA4||caller==0x624B35||caller==0x5DEF00;
+        caller==0x611BCE||caller==0x60BAA4||caller==0x624B35||caller==0x5DEF00||
+        caller==0x5FD4A5||caller==0x5FE019||(caller==0x60A4FE&&scopedProjectileAppearance);
     if(!original||role!=2||raw||!visual)return original;
     Player p;
     if(!snapshot(p)||p.unit!=reinterpret_cast<std::uintptr_t>(unit)||p.display!=p.native)return original;
     auto* c=weaponContext(p.model);
-    if(!c||c->token||c->guid!=p.guid||c->unit!=p.unit||c->routes[2]!=5)return original;
-    const auto* asset=weaponAsset(c->selection.items[5]);
+    if(!c||c->token||c->guid!=p.guid||c->unit!=p.unit||c->routes[2]<0)return original;
+    const auto* asset=weaponAsset(c->selection.items[c->routes[2]]);
     if(!asset||asset->kind!=4||!weaponDisplay(asset))return original;
     // Return a private copy; never alter the unit's cached info/update fields.
     for(unsigned i=0;i<8;++i)c->rangedInfo[i]=original[i];
@@ -511,11 +638,13 @@ static unsigned weaponAnimation(void* unit,unsigned animation){
     Player p;
     if(!snapshot(p)||p.unit!=reinterpret_cast<std::uintptr_t>(unit)||p.display!=p.native)return animation;
     auto* c=weaponContext(p.model);
-    if(!c||c->token||c->guid!=p.guid||c->unit!=p.unit||c->routes[2]!=5)return animation;
-    const auto* selected=weaponAsset(c->selection.items[5]);
+    if(!c||c->token||c->guid!=p.guid||c->unit!=p.unit||c->routes[2]<0)return animation;
+    const auto* selected=weaponAsset(c->selection.items[c->routes[2]]);
     const auto* equipped=weaponAsset(c->selection.equipped[2]);
-    if(!selected||!equipped||selected->kind!=4||equipped->kind!=4||!weaponDisplay(selected))return animation;
-    return rangedAppearanceAnimation(animation,equipped->subclass,selected->subclass);
+    if(!selected||selected->kind!=4||!weaponDisplay(selected))return animation;
+    const auto* info=weaponInfoOriginal?weaponInfoOriginal(unit,2,0):nullptr;
+    const unsigned subclass=info&&info[0]==2?info[1]:(equipped?equipped->subclass:255);
+    return rangedAppearanceAnimation(animation,subclass,selected->subclass);
 }
 static void __fastcall unitAnimationHook(void* unit,void*,unsigned animation){
     // The stock animation scheduler still owns timing and completion; no
@@ -530,10 +659,19 @@ static int __fastcall weaponComposeHook(void* parent,void* display,unsigned slot
         const int route=c->routes[slot-15];
         if(route>=0){
             const auto* a=weaponAsset(c->selection.items[route]);
-            if(void* row=weaponDisplay(a)){display=row;scopedSheathPoint=weaponPoints[route];sheath=a->sheath;}
+            if(void* row=weaponDisplay(a)){
+                display=row;scopedSheathPoint=selectedWeaponHome(c->selection,slot-15,route);sheath=a->sheath;
+                shield=a->kind==3;
+                if(slot==17)rangedRight=a->inventory==25||a->inventory==26;
+            }
         }
     }
     const int result=weaponComposeOriginal(parent,display,slot,sheath,stored,shield,rangedRight);
+    // 47A218 returns the composed attachment; all rejected inputs return -1 at
+    // 47A223. Success clears that attachment before loading, so an unrelated
+    // preexisting prop cannot become a tracked weapon when composition fails.
+    if(c&&!c->token&&c->guid==getPlayer()&&slot>=15&&slot<=17)
+        c->nativeChildren[slot-15]=result>=0&&result<=33?findChildHook(parent,nullptr,static_cast<unsigned>(result)):nullptr;
     scopedSheathPoint=old;return result;
 }
 static void __fastcall moveWeaponHook(void* unit,void*,unsigned role,unsigned stored){
@@ -543,7 +681,7 @@ static void __fastcall moveWeaponHook(void* unit,void*,unsigned role,unsigned st
     // choose its own home instead of inheriting the outer ranged override.
     scopedSheathPoint=-1;
     if(c&&!c->token&&c->unit==reinterpret_cast<std::uintptr_t>(unit)&&c->guid==getPlayer()&&role<3&&c->routes[role]>=0)
-        scopedSheathPoint=weaponPoints[c->routes[role]];
+        scopedSheathPoint=selectedWeaponHome(c->selection,role,c->routes[role]);
     moveWeaponOriginal(unit,role,stored);scopedSheathPoint=old;
 }
 static void __fastcall rebuildWeaponHook(void* unit,void*,unsigned role){
@@ -551,7 +689,7 @@ static void __fastcall rebuildWeaponHook(void* unit,void*,unsigned role){
     auto* c=weaponContext(parent);const int old=scopedSheathPoint;
     scopedSheathPoint=-1;
     if(c&&!c->token&&c->unit==reinterpret_cast<std::uintptr_t>(unit)&&c->guid==getPlayer()&&role<3&&c->routes[role]>=0)
-        scopedSheathPoint=weaponPoints[c->routes[role]];
+        scopedSheathPoint=selectedWeaponHome(c->selection,role,c->routes[role]);
     // The client's missing-child fallback also computes the sheath point for
     // weapon effects before composing. Scope that entire role's rebuild.
     rebuildWeaponOriginal(unit,role);scopedSheathPoint=old;
@@ -571,35 +709,45 @@ static void __fastcall sheathTransitionHook(void* unit,void*){
     const int route=c->routes[2];
     if(route<0||route>=static_cast<int>(weaponPoints.size()))return;
     const auto* asset=weaponAsset(c->selection.items[route]);
+    const int home=selectedWeaponHome(c->selection,2,route);
     unsigned loaded=0;
-    if(!asset||asset->kind!=4||!read(p.model+0x10,loaded)||!loaded||
-       !hasPoint(reinterpret_cast<void*>(p.model),weaponPoints[route])||
-       findChildHook(reinterpret_cast<void*>(p.model),nullptr,weaponPoints[route]))return;
+    if(!asset||asset->kind!=4||home<0||!read(p.model+0x10,loaded)||!loaded||
+       !hasPoint(reinterpret_cast<void*>(p.model),static_cast<unsigned>(home))||
+       findChildHook(reinterpret_cast<void*>(p.model),nullptr,static_cast<unsigned>(home)))return;
     // The ranged refresh releases its old held-model reference and retains the
     // new stored child. The generic role-2 rebuild does nothing while unarmed.
     refreshRanged(unit,1);
 }
 static bool ensureExtras(WeaponContext& c){
     bool complete=true;
-    for(unsigned i=0;i<7;++i){
+    for(unsigned i=0;i<c.extra.size();++i){
         const auto* a=weaponAsset(c.selection.items[i]);if(!a)continue;
-        if(!hasPoint(reinterpret_cast<void*>(c.parent),weaponPoints[i])){complete=false;continue;}
+        if(i<7&&c.selection.carriedMode==0)continue;
+        if(i>=7&&(!c.token||!c.selection.independent||c.routes[i-7]!=static_cast<int>(i)))continue;
+        unsigned point=i<7?weaponPoints[i]:i==7?1:i==8?(a->kind==3?0:2):(a->inventory==25||a->inventory==26?1:2);
+        if(i>=7&&(i==9?c.previewMode!=2:c.previewMode!=1)){
+            if(c.selection.carriedMode!=0)continue;
+            const int home=selectedWeaponHome(c.selection,i-7,static_cast<int>(i));
+            if(home<0)continue;
+            point=static_cast<unsigned>(home);
+        }
+        if(!hasPoint(reinterpret_cast<void*>(c.parent),point)){complete=false;continue;}
         bool routed=false;for(auto route:c.routes)if(route==static_cast<int>(i))routed=true;
         if(!c.token&&routed)continue;
         if(c.extra[i]){
             std::uintptr_t parent=0;
             if(read(reinterpret_cast<std::uintptr_t>(c.extra[i])+0x1CC,parent)&&!parent)
-                attachChild(c.extra[i],reinterpret_cast<void*>(c.parent),weaponPoints[i]);
+                attachChild(c.extra[i],reinterpret_cast<void*>(c.parent),point);
             continue;
         }
         // Keep preexisting children, then identify the factory's newly attached
         // child by its parent-list head. Our own reference survives stock clears.
         std::uintptr_t before=0,after=0;read(c.parent+0x1DC,before);
         loadingExtraParent=c.parent;
-        loadChild(reinterpret_cast<void*>(c.parent),weaponPoints[i],a->model,a->texture,0);
+        loadChild(reinterpret_cast<void*>(c.parent),point,a->model,a->texture,0);
         loadingExtraParent=0;read(c.parent+0x1DC,after);
-        unsigned point=0;std::uintptr_t parent=0;
-        if(after&&after!=before&&read(after+0x1D0,point)&&point==weaponPoints[i]&&read(after+0x1CC,parent)&&parent==c.parent){
+        unsigned actualPoint=0;std::uintptr_t parent=0;
+        if(after&&after!=before&&read(after+0x1D0,actualPoint)&&actualPoint==point&&read(after+0x1CC,parent)&&parent==c.parent){
             c.extra[i]=reinterpret_cast<void*>(after);retainChild(c.extra[i]);
         }else complete=false;
     }
@@ -607,7 +755,7 @@ static bool ensureExtras(WeaponContext& c){
 }
 static bool ensurePassthroughQuiver(WeaponContext& c){
     const auto* asset=weaponAsset(c.actualQuiver);
-    if(!c.token||c.selection.items[6]||!asset){releasePassthroughQuiver(c);return true;}
+    if(!c.token||c.selection.carriedMode==1||(c.selection.items[6]&&c.selection.carriedMode!=0)||!asset){releasePassthroughQuiver(c);return true;}
     if(!hasPoint(reinterpret_cast<void*>(c.parent),weaponPoints[6]))return false;
     if(c.passthroughQuiver){
         std::uintptr_t parent=0;unsigned loaded=0;
@@ -683,7 +831,32 @@ static int __fastcall setWeapons(void* L){
     WeaponSelection selection;
     for(unsigned i=0;i<7;++i)selection.items[i]=values[i+1];
     for(unsigned i=0;i<3;++i)selection.equipped[i]=values[i+8];
+    if(isNumber(L,20)){
+        const double mode=toNumber(L,20);
+        if(mode!=0&&mode!=1)return result(L,-2);
+        selection.independent=mode==1;
+        for(int i=0;i<3;++i){
+            if(!isNumber(L,17+i))return result(L,-2);
+            const double value=toNumber(L,17+i);
+            if(!std::isfinite(value)||value<0||value>2147483647||value!=static_cast<unsigned>(value))return result(L,-2);
+            selection.items[7+i]=static_cast<unsigned>(value);
+        }
+    }
+    if(isNumber(L,22)){
+        const double mode=toNumber(L,22);
+        if(mode!=0&&mode!=1)return result(L,-2);
+        selection.carriedMode=static_cast<int>(mode);
+        selection.independent=true;
+    }
     if(!selection.valid())return result(L,-2);
+    // Explicitly disabled decoration never routes into a hand or loads extras.
+    if(selection.carriedMode==0)for(unsigned i=0;i<7;++i)selection.items[i]=0;
+    unsigned previewMode=0;
+    if(isNumber(L,21)){
+        const double mode=toNumber(L,21);
+        if(mode!=0&&mode!=1&&mode!=2)return result(L,-2);
+        previewMode=static_cast<unsigned>(mode);
+    }
     Player p;if(!snapshot(p))return result(L,-1);
     std::uintptr_t parent=p.model;const unsigned token=values[0];
     if(token){
@@ -696,7 +869,8 @@ static int __fastcall setWeapons(void* L){
     }
     unsigned loaded=0;if(!parent||!read(parent+0x10,loaded)||!loaded)return result(L,0);
     auto* c=weaponContext(parent);
-    const bool keepContext=!selection.empty()||options[0]||options[1]||options[2]||(token&&actualQuiver)||backBag;
+    const bool keepContext=!selection.empty()||selection.carriedMode==1||options[0]||
+        (selection.carriedMode<0&&(options[1]||options[2]))||(token&&actualQuiver)||backBag;
     if(!c&&!keepContext)return result(L,1);
     if(!c){
         for(auto& entry:weaponContexts)if(!entry.parent){c=&entry;break;}
@@ -704,17 +878,31 @@ static int __fastcall setWeapons(void* L){
         c->parent=parent;c->unit=token?0:p.unit;c->guid=p.guid;c->token=token;
     }
     if(c->guid!=p.guid||c->token!=token)return result(L,-1);
+    if(token&&c->previewMode!=previewMode){releaseExtras(*c);c->previewMode=previewMode;}
     if(c->backBag!=backBag){releaseBackpack(*c);c->backBag=backBag;}
     // Visual options alone must not destroy or rebuild any weapon children.
-    c->quiverHorizontal=options[0];c->hideRangedWhenStored=options[1];c->hideMeleeWhenStored=options[2];
+    c->quiverHorizontal=options[0];c->hideRangedWhenStored=selection.carriedMode<0&&options[1];
+    c->hideMeleeWhenStored=selection.carriedMode<0&&options[2];
     if(c->actualQuiver!=actualQuiver){releasePassthroughQuiver(*c);c->actualQuiver=actualQuiver;}
     // An option-only context still records actual equipment for mesh matching,
     // without rebuilding stock weapons just because those IDs were first read.
-    if(c->selection.empty()&&selection.empty())c->selection=selection;
+    if(c->selection.empty()&&selection.empty()&&c->selection.carriedMode==selection.carriedMode)c->selection=selection;
     if(!(c->selection==selection)){
         releaseExtras(*c);
+        // The catalog may not know a server item's sheath/model. Remove only
+        // its observed native stored child before an appearance changes homes.
+        if(!token&&(c->selection.carriedMode>=0||selection.carriedMode>=0))
+            for(auto child:c->nativeChildren)if(child){
+                std::uintptr_t owner=0;unsigned point=0;
+                const auto model=reinterpret_cast<std::uintptr_t>(child);
+                if(read(model+0x1CC,owner)&&owner==parent&&read(model+0x1D0,point)&&
+                    point>=26&&point<=33&&!ownedExtra(*c,child))detachChild(child);
+            }
         // Remove the old routed weapons at their old homes before rerouting.
-        if(!token)for(auto route:c->routes)if(route>=0)clearChildrenHook(reinterpret_cast<void*>(parent),nullptr,weaponPoints[route]);
+        if(!token)for(unsigned role=0;role<3;++role){
+            const int home=selectedWeaponHome(c->selection,role,c->routes[role]);
+            if(home>=0)clearChildrenHook(reinterpret_cast<void*>(parent),nullptr,static_cast<unsigned>(home));
+        }
         if(!token){
             // A first override may use a different home than the stock weapon.
             // Clear both generations before rebuilding, or its old child remains.
@@ -726,7 +914,14 @@ static int __fastcall setWeapons(void* L){
             }
         }
         c->selection=selection;c->routes=selection.routes();
-        for(auto& route:c->routes)if(route>=0&&(!weaponDisplay(weaponAsset(selection.items[route]))||!hasPoint(reinterpret_cast<void*>(parent),weaponPoints[route])))route=-1;
+        for(unsigned role=0;role<3;++role){
+            auto& route=c->routes[role];
+            const int home=selectedWeaponHome(selection,role,route);
+            // Native sheath 0 deliberately has no stored child (bows/wands).
+            // It still supports an explicit appearance while held.
+            if(route>=0&&(!weaponDisplay(weaponAsset(selection.items[route]))||
+                (home>=0&&!hasPoint(reinterpret_cast<void*>(parent),static_cast<unsigned>(home)))))route=-1;
+        }
         if(!token){
             unsigned mode=0;read(p.unit+0xD40,mode);
             refreshMelee(reinterpret_cast<void*>(p.unit),0);refreshMelee(reinterpret_cast<void*>(p.unit),1);

@@ -12,24 +12,23 @@
     "sha256": "37c363ba4b3d18154195592fb224451610806142b279d07853b50eee088fd14f"
   },
   {
-    "source": "logo.png",
-    "source_sha256": "6b49a1e397e7164966aa9fc938eda5ee73a27ece8cf6c405c2153efdf76fc174",
+    "source": "assets/window-icon-source.png",
+    "source_sha256": "c24652418de6cbbe9bfe818495a7e448a446ec63001b93fed9074ea86ecfdb90",
     "texture": "Logo.tga",
     "crop": [
       102,
-      88,
-      1152,
-      1138
+      89,
+      1146,
+      1133
     ],
     "size": [
-      128,
-      128
+      64,
+      64
     ],
-    "bytes": 65580,
-    "encoding": "RGBA8 lossless",
-    "gpu_base_bytes": 65536,
-    "worst_background_psnr_db": null,
-    "sha256": "8c6595ba3078a854c7b3ec996f0ddb492451154182244d444605577e3f2d48f2"
+    "bytes": 16428,
+    "encoding": "RGBA8 (lossless)",
+    "gpu_base_bytes": 16384,
+    "sha256": "422e2a8f2948b2a3ca0ce1fe5a62db928deda5f449e34ef703e22799ea17e72e"
   },
   {
     "source": "tools/build_hidden_slot_icon.py",
@@ -231,8 +230,16 @@
     "generator_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
     "texture": "WardrobeFrameCropTL.tga",
     "layout": "Top-left quadrant after cropping the 512x566 source to 512x512 from the top",
-    "crop": [0, 0, 256, 256],
-    "size": [256, 256],
+    "crop": [
+      0,
+      0,
+      256,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
     "bytes": 262162,
     "sha256": "c34962eaa696bd4f7649ddb8ac6b04d02df93e676adfa9a28b70dffbb07d5f11",
     "generated": true
@@ -244,8 +251,16 @@
     "generator_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
     "texture": "WardrobeFrameCropTR.tga",
     "layout": "Top-right quadrant after cropping the 512x566 source to 512x512 from the top",
-    "crop": [256, 0, 512, 256],
-    "size": [256, 256],
+    "crop": [
+      256,
+      0,
+      512,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
     "bytes": 262162,
     "sha256": "a76186426d516bf011d7c7cb52ef9f303287c5af8aafbe78edb22292758403b4",
     "generated": true
@@ -257,8 +272,16 @@
     "generator_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
     "texture": "WardrobeFrameCropBL.tga",
     "layout": "Bottom-left quadrant after cropping the 512x566 source to 512x512 from the top",
-    "crop": [0, 256, 256, 512],
-    "size": [256, 256],
+    "crop": [
+      0,
+      256,
+      256,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
     "bytes": 262162,
     "sha256": "85a68edc589cd423782f07959f9c3ddd7d31dcce43f400dfdc4e6818202a97d4",
     "generated": true
@@ -270,8 +293,16 @@
     "generator_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
     "texture": "WardrobeFrameCropBR.tga",
     "layout": "Bottom-right quadrant after cropping the 512x566 source to 512x512 from the top",
-    "crop": [256, 256, 512, 512],
-    "size": [256, 256],
+    "crop": [
+      256,
+      256,
+      512,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
     "bytes": 262162,
     "sha256": "32db5bed9d9a5c2f8082866b6a11937a01016a218c2fe1c220e5470a042604ef",
     "generated": true
@@ -281,8 +312,16 @@
     "source_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
     "texture": "WardrobeFrameShadowCropTL.tga",
     "layout": "Top-left contact and ambient silhouette shadow of WardrobeFrameCrop",
-    "crop": [0, 0, 256, 256],
-    "size": [256, 256],
+    "crop": [
+      0,
+      0,
+      256,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
     "bytes": 262162,
     "sha256": "180f53a26f66fbbfb79287fc1fa2672620503a9b04692f9626b9ab6223d63e0b",
     "generated": true
@@ -292,8 +331,16 @@
     "source_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
     "texture": "WardrobeFrameShadowCropTR.tga",
     "layout": "Top-right contact and ambient silhouette shadow of WardrobeFrameCrop",
-    "crop": [256, 0, 512, 256],
-    "size": [256, 256],
+    "crop": [
+      256,
+      0,
+      512,
+      256
+    ],
+    "size": [
+      256,
+      256
+    ],
     "bytes": 262162,
     "sha256": "edade252cf1098c3e75a2786c95502311016d53774fc2e4456f3c06c20d27bec",
     "generated": true
@@ -303,8 +350,16 @@
     "source_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
     "texture": "WardrobeFrameShadowCropBL.tga",
     "layout": "Bottom-left contact and ambient silhouette shadow of WardrobeFrameCrop",
-    "crop": [0, 256, 256, 512],
-    "size": [256, 256],
+    "crop": [
+      0,
+      256,
+      256,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
     "bytes": 262162,
     "sha256": "fa08bb28007cafb778de909a2d3d3543c755ad0702d9b4391bab425feac394e6",
     "generated": true
@@ -314,10 +369,30 @@
     "source_sha256": "2c5919aa1b813a94fe67736734e43ed0c630dd699b975a88e71855c9b4f467ac",
     "texture": "WardrobeFrameShadowCropBR.tga",
     "layout": "Bottom-right contact and ambient silhouette shadow of WardrobeFrameCrop",
-    "crop": [256, 256, 512, 512],
-    "size": [256, 256],
+    "crop": [
+      256,
+      256,
+      512,
+      512
+    ],
+    "size": [
+      256,
+      256
+    ],
     "bytes": 262162,
     "sha256": "8526082939afc4b02c60daab9422bb225bd2dd208d5f961f623aa1ff62a9fb7b",
     "generated": true
+  },
+  {
+    "texture": "PlacementCog.tga",
+    "size": [
+      32,
+      32
+    ],
+    "encoding": "RGBA8 lossless",
+    "gpu_base_bytes": 4096,
+    "bytes": 4140,
+    "sha256": "5bf89a1c9cc2fc8eccdaf9c96c57da2a39ce74c271abe408cdd8dc05ffcaabb6",
+    "source": "Original procedural gear icon"
   }
 ]

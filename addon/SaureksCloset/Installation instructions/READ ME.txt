@@ -1,27 +1,36 @@
-SAUREK'S CLOSET - DLL INSTALLATION
+SAUREK'S CLOSET - INSTALLATION
 
-Version 3.6.9 uses the included DLL (renderer 30608), including
-background update checks and loaded-version compatibility reporting.
-For a fresh install, copy BOTH the addon folder and the DLL. The DLL is
-unchanged from 3.6.8, so existing 3.6.8 users only need the addon folder.
+Version 3.7.9 requires renderer 30709 (DLL 3.7.9).
+Simple mode changes your equipped main hand, off hand and ranged slots.
+Check Advanced mode to choose separate carried items and tune placement.
+Both modes preserve your saved choices. See WEAPON-MENU.md.
+
+INSTALLING OR UPDATING
+
+This update includes a new native renderer. Fully quit and restart WoW after
+installing it. /reload cannot replace a loaded DLL. Character-screen bag
+previews now use the same fitted size and placement as the world bag.
 
 1. Fully close World of Warcraft.
-2. Open your main WoW folder: the folder containing WoW.exe.
-3. Copy or drag SaureksCloset.dll from this folder into that WoW folder.
+2. Copy the SaureksCloset addon folder into Interface/AddOns.
+3. Open your main WoW folder: the folder containing WoW.exe.
+4. Copy SaureksCloset.dll from this instructions folder into that WoW folder.
    Replace the existing SaureksCloset.dll if asked.
    It belongs beside WoW.exe, NOT inside Interface or AddOns.
-4. Open dlls.txt in the WoW folder. Add this line after VanillaHelpers.dll
+5. Open dlls.txt in the WoW folder. Add this line after VanillaHelpers.dll
    if it is not already there:
 
    SaureksCloset.dll
 
    Keep your other DLL entries. Do not add duplicate entries.
-5. Start WoW through VanillaFixes and enable Saurek's Closet in AddOns.
+6. Start WoW through VanillaFixes and enable Saurek's Closet in AddOns.
 
 VanillaFixes and VanillaHelpers must already be installed.
 This is for the supported Windows 1.12.1 client, build 5875.
 
-The addon folder stays in Interface/AddOns/SaureksCloset.
 The DLL copy in this instructions folder is only for installation;
-WoW will not load it from here. Reloading the UI is not enough after
-replacing a DLL - fully restart the game.
+WoW will not load it from here. After replacing a DLL, fully restart the
+game. The /reload command only reloads the addon.
+
+Version Details should show addon 3.7.9, loaded DLL 3.7.9, and required
+DLL 3.7.9. These are the compatible versions for this update.

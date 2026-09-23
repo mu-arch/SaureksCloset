@@ -133,6 +133,7 @@ static void __fastcall matrixHook(void* model,void*,const float* matrix){
     matrixOriginal(model,matrix);
 }
 static void discardInheritedPreviewWeapons(std::uintptr_t model);
+static void rememberClonedBagPreview(std::uintptr_t source,std::uintptr_t model);
 // Only the explicit, bracketed addon SetUnit call can substitute a preview model.
 static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned flags){
     if(previewArmed&&previewThread==GetCurrentThreadId()&&
@@ -154,7 +155,9 @@ static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned f
         }
         return model;
     }
-    return cloneModelOriginal(scene,source,flags);
+    void* model=cloneModelOriginal(scene,source,flags);
+    if(model)rememberClonedBagPreview(reinterpret_cast<std::uintptr_t>(source),reinterpret_cast<std::uintptr_t>(model));
+    return model;
 }
 static bool __fastcall cloneComponentHook(void* component,void*,void* model,void* source){
     auto* entry=previews.find(reinterpret_cast<std::uintptr_t>(model));
@@ -322,9 +325,10 @@ static int __fastcall weaponryProbe(void* L){
     return sizeof(values)/sizeof(values[0]);
 }
 #include "WeaponRenderer.h"
+#include "ProjectileRenderer.h"
 #include "UpdateChecker.h"
 #include "VoiceRenderer.h"
-static int __fastcall version(void* L){return result(L,30608);}
+static int __fastcall version(void* L){return result(L,30709);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
@@ -358,6 +362,8 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     if(!compatible()||MH_Initialize()!=MH_OK)return TRUE;
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
+        {0x60D450,reinterpret_cast<void*>(&unitSpellVisualHook),reinterpret_cast<void**>(&unitSpellVisualOriginal)},
+        {0x60A3D0,reinterpret_cast<void*>(&unitMissileHook),reinterpret_cast<void**>(&unitMissileOriginal)},
         {0x5FE2F0,reinterpret_cast<void*>(&unitAnimationHook),reinterpret_cast<void**>(&unitAnimationOriginal)},
         {0x5EC240,reinterpret_cast<void*>(&weaponInfoHook),reinterpret_cast<void**>(&weaponInfoOriginal)},
         {0x647E60,reinterpret_cast<void*>(&resolveAssetFileHook),reinterpret_cast<void**>(&resolveAssetFileOriginal)},

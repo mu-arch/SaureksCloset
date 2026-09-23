@@ -151,3 +151,49 @@ Weapon routing tests, 37,803 Lua 5.0.3 assertions, real-body regression, install
 executable signatures and Windows x86 DLL build all pass. This establishes the
 new anchor selection and transforms; live clipping/visual fit still needs an
 in-game check and is not claimed from the simulations.
+
+## 3.7.8 — bags inherited by stock character previews
+
+The existing CM2 clone hook records weak model/GUID identities for unbracketed
+clones originating from the local player's bag-bearing model, including clones
+of those previews. At recursive attachment draw, only the allowlisted backpack
+mesh on attachment 28 receives the existing bag fit. The fit reads the copied
+actor's bones, local child matrix and model/view transform; no world animation
+history is reused. Missing bones hide the copied bag until a valid fit is ready.
+The existing destruction hook removes these weak entries without retaining or
+releasing cloned children. Explicit addon preview ownership remains unchanged.
+
+The native simulation checks all 16 race/sex fits, camera rotation/translation
+and zoom, nonidentity child transforms, saved tuning, repeated opens/destruction,
+copy-of-copy provenance, unrelated models and shields, GUID changes, and pending
+bones. Address/undefined-behavior sanitizer checks pass (leak detection disabled
+because the execution sandbox uses ptrace). Actual visual confirmation remains
+an in-game check after restarting with the rebuilt DLL.
+
+
+## 3.7.9 — closer selected-staff back fit
+
+Explicitly selected staffs at native back attachments 30/31 receive a bounded
+inward translation after normal bone evaluation. Simple mode's main-hand route
+and Advanced carried-back extras share this fit; held points, unselected native
+weapons and other players are excluded. No mesh reload, bone ownership, route,
+orientation, scale or metadata changes are needed. Existing placement tuning
+applies after this base fit.
+
+`tools/audit_staff_fits.py` measures neutral rear-body clearance along each
+stock staff attachment's authored shaft path, through the torso, for all 16
+playable bodies. It validates the helper-bone pose and exports numeric values
+plus source hashes to `StaffFits.h`. Runtime matching uses the active model's
+attachment coordinates. `tools/audit_staff_shafts.py` measures transverse bounds
+within a torso-contact band (weapon-local X -1.0..0.15) for all 44 staff meshes.
+The union includes triangle intersections at band boundaries; decorative heads
+outside that band do not force an unnecessary gap. No client meshes are bundled.
+
+The runtime subtracts transformed shaft thickness and a 0.012-unit air gap,
+clamps the inward movement to 0.12 actor units, and never shifts an already-tight
+staff outward. Fitting occurs in actor space along the animated torso's inward
+axis, then returns to render space, keeping preview zoom and world transforms
+independent. Unknown geometry or invalid matrices retain native placement.
+These measurements establish a conservative neutral fit, not collision
+avoidance in every animated pose. Live visual confirmation needs a full game
+restart with this DLL.

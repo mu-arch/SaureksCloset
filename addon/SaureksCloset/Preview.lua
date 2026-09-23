@@ -14,7 +14,7 @@ function V:ApplyWorldDraft()
         -- Mark the temporary override as managed so cancellation can release it
         -- when the committed selection for this slot is passthrough.
         VanityStudioCharacter.managed[draft.slot]=true
-        self.applied[draft.slot]=nil
+        self.applied[draft.slot]=draft.id
         self.worldDraftActive=draft.slot
     end
     return ok,err
@@ -28,6 +28,7 @@ function V:RestoreWorldDraft(draft)
 end
 function V:DraftSlot(slot,id)
     if not self.slotNames[slot] or (id~=nil and not self:Compatible(id,slot)) then return false end
+    if slot>=108 and slot<=110 and id and id>0 and not self:WeaponChoiceCompatible(id,slot) then return false end
     self.draft={slot=slot,id=id}
     self:ApplyWorldDraft()
     self:Refresh()
@@ -41,12 +42,18 @@ end
 function V:CommitDraft()
     local draft=self.draft
     if not draft then return false end
+    if draft.slot>=108 and draft.slot<=110 and draft.id and draft.id>0 and
+        not self:WeaponChoiceCompatible(draft.id,draft.slot) then
+        self:Message("Your equipment changed. Choose an appearance for the item now in this slot.")
+        return false
+    end
     -- Keep the temporary world appearance in place while the same selection is
     -- committed. Select/Clear will synchronize and assume ownership of it.
     self.draft=nil;self.previewWaiting=nil;self.worldDraftActive=nil
     if not self:IsWeaponPosition(draft.slot) then self.applied[draft.slot]=nil end
-    if draft.id==nil then self:ClearSlot(draft.slot) else self:Select(draft.slot,draft.id) end
-    return true
+    local selected
+    if draft.id==nil then selected=self:ClearSlot(draft.slot) else selected=self:Select(draft.slot,draft.id) end
+    return selected~=false
 end
 function V:PreviewItems()
     local items={}
@@ -141,7 +148,7 @@ function V:RefreshPreview()
     if self.previewDressAt and now<self.previewDressAt then return end
     local items=self:PreviewItems();local weapons=self:PreviewWeapons()
     local routes=self:PreviewWeaponRoutes(weapons)
-    local dressSignature=key..self:WeaponSignature(weapons,nil,true)
+    local dressSignature=key..self:WeaponSignature(weapons,nil,true)..":pose"..self:WeaponPreviewMode()
     for _,slot in ipairs(self.slotOrder) do dressSignature=dressSignature..":"..items[slot] end
     local signature=dressSignature..self:WeaponDisplaySignature(weapons)
     if self.previewReveal and self.previewReveal.dressSignature==dressSignature then

@@ -91,8 +91,10 @@ template<typename T> static T weaponFunction(std::uintptr_t a){
 #include "../native/WeaponRenderer.h"
 static unsigned realIDs[3]={35,0,0};
 static std::array<std::array<unsigned char,8>,3> realInfo{};
+static unsigned serverRangedAppearance=0;
 static const unsigned char* info(void*,unsigned role,unsigned){
     const auto* a=role<3?weaponAsset(realIDs[role]):nullptr;
+    if(!a&&role==2&&serverRangedAppearance)a=weaponAsset(serverRangedAppearance);
     if(!a)return nullptr;
     realInfo[role]={{2,static_cast<unsigned char>(a->subclass),7,static_cast<unsigned char>(a->inventory),static_cast<unsigned char>(a->sheath),9,10,11}};
     return realInfo[role].data();
@@ -101,7 +103,7 @@ static const WeaponAsset* visualWeapon(unsigned role,std::uintptr_t caller){
     if(!weaponInfoOriginal)return weaponAsset(realIDs[role]);
     const auto* result=weaponInfoAt(pointer(player.unit),role,0,caller);
     const auto* c=weaponContext(player.model);
-    if(c&&result==c->rangedInfo.data())return weaponAsset(c->selection.items[5]);
+    if(c&&result==c->rangedInfo.data())return weaponAsset(c->selection.items[c->routes[2]]);
     return weaponAsset(realIDs[role]);
 }
 static int sheath(unsigned type,unsigned side){
@@ -121,6 +123,7 @@ static void factory(void* parent,unsigned point,const char* filename,const char*
     matrices[child+0xBC]={{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};
 }
 static int compose(void* parent,void* display,unsigned slot,unsigned type,unsigned stored,unsigned shield,unsigned right){
+    if(!parent||!display)return -1;
     auto home=sheathPointHook(type,slot==15||(slot==17&&right));
     unsigned hand=slot==15||right?1:(shield?0:2);
     clearChildrenHook(parent,nullptr,hand);if(home>=0)clearChildrenHook(parent,nullptr,home);
@@ -201,8 +204,11 @@ struct AttachmentUpdate {
     float alpha=0;unsigned calls=0;
 };
 static AttachmentUpdate attachmentUpdate;
+static bool captureAttachmentMatrix=false;
+static std::array<float,16> capturedAttachmentMatrix;
 static void observeAttachment(void* model,const float* matrix,const float* color,const float* lighting,float alpha){
     attachmentUpdate={model,matrix,color,lighting,alpha,attachmentUpdate.calls+1};
+    if(captureAttachmentMatrix)for(unsigned i=0;i<16;++i)capturedAttachmentMatrix[i]=matrix[i];
 }
 struct BowStringSubmission {void* model=nullptr;void* renderState=nullptr;void* unit=nullptr;unsigned calls=0;};
 static BowStringSubmission bowStringSubmission;
@@ -210,11 +216,22 @@ static void observeBowString(void* model,void* renderState,void* unit){
     bowStringSubmission={model,renderState,unit,bowStringSubmission.calls+1};
 }
 static Lua request(unsigned token,const WeaponSelection& s,int quiverHorizontal=-1,int hideRanged=-1,int hideMelee=-1,int actualQuiver=-1,int backBag=-1){
-    Lua L;L.values.push_back(token);for(auto v:s.items)L.values.push_back(v);for(auto v:s.equipped)L.values.push_back(v);
+    Lua L;L.values.push_back(token);for(unsigned i=0;i<7;++i)L.values.push_back(s.items[i]);for(auto v:s.equipped)L.values.push_back(v);
     const int optional[]={quiverHorizontal,hideRanged,hideMelee,actualQuiver,backBag};
     for(unsigned i=0;i<5;++i){
         bool later=false;for(unsigned j=i;j<5;++j)if(optional[j]>=0)later=true;
         if(later)L.values.push_back(optional[i]<0?0:optional[i]);
+    }
+    if(s.independent){
+        L.values.resize(16,0);
+        for(unsigned i=7;i<10;++i)L.values.push_back(s.items[i]);
+        L.values.push_back(1);
+    }
+    if(s.carriedMode>=0){
+        L.values.resize(21,0);
+        for(unsigned i=7;i<10;++i)L.values[9+i]=s.items[i];
+        L.values[19]=s.independent?1:0;
+        L.values.push_back(s.carriedMode);
     }
     return L;
 }
@@ -1074,6 +1091,85 @@ int main(){
             local[0]=local[1]=0;matrices[address(pack)+0xBC]=local;
             assert(!positionBackpack(pack,compensated));
         }
+        const auto beforeStockCloneLoads=loads;
+        // The ordinary character sheet is an unregistered stock clone, not
+        // an addon preview token. Its inherited pack needs our fit at draw time.
+        {
+            constexpr std::uintptr_t stockModel=0x9000,nestedModel=0xA000;
+            WeaponContext stock;stock.parent=stockModel;
+            factory(pointer(stockModel),28,"Interface\\AddOns\\SaureksCloset\\Models\\DarkSchoolbag.mdx","",0);
+            auto* stockPack=find(pointer(stockModel),28);
+            const auto references=refs;
+            const auto previewEntries=previews.entries;
+            assert(!weaponContext(stockModel)&&!previews.find(stockModel));
+            BagMatrix placed;
+            assert(!positionBackpack(stockPack,placed)); // Unrecognized clone used the raw shield pose.
+            rememberClonedBagPreview(player.model,stockModel);
+            assert(clonedBagOwner(stockModel)==player.guid);
+            rememberClonedBagPreview(stockModel,nestedModel);
+            assert(clonedBagOwner(nestedModel)==player.guid);
+            rememberClonedBagPreview(0xDEAD,0xB000);
+            assert(!clonedBagOwner(0xB000));
+            captureAttachmentMatrix=true;
+            for(const auto& fixture:bowFixtures){
+                setBack(bc,fixture);matrices[address(pack)+0xBC]=identity;
+                BagMatrix worldPose;assert(positionBackpack(pack,worldPose));
+                const auto bone=setBack(&stock,fixture);
+                const auto torso=0x3000000+0x5000+64*quiverBackParents[2*(fixture.race-1)+fixture.sex];
+                for(float zoom:{.4f,1.f,3.f}){
+                    auto view=identity;
+                    view[0]=0;view[1]=zoom;view[4]=-zoom;view[5]=0;view[10]=zoom;
+                    view[12]=7;view[13]=-9;view[14]=4;
+                    matrices[stockModel+0xFC]=view;matrices[bone]=view;matrices[torso]=view;
+                    auto local=identity;local[0]=2;local[5]=.8f;local[10]=1.3f;local[12]=.4f;local[14]=-.3f;
+                    matrices[address(stockPack)+0xBC]=local;
+                    const auto expected=bagMatrixProduct(view,worldPose);
+                    assert(positionBackpack(stockPack,placed,true));
+                    auto actual=bagMatrixProduct(placed,local);
+                    for(unsigned i=0;i<16;++i)assert(std::fabs(actual[i]-expected[i])<.00005f);
+                    memory[player.unit+0x9E8]=0x2001; // World running/jumping must not animate the sheet bag.
+                    for(unsigned frame=0;frame<5;++frame){
+                        bagTestTime+=16;updateWeaponAttachment(stockPack,identity.data(),nullptr,nullptr,.8f);
+                        assert(attachmentUpdate.alpha==.8f);
+                        actual=bagMatrixProduct(capturedAttachmentMatrix,local);
+                        for(unsigned i=0;i<16;++i)assert(std::fabs(actual[i]-expected[i])<.00005f);
+                    }
+                }
+            }
+            // Current saved placement values apply to the stock clone as well.
+            setBack(bc,bowFixtures[2]);setBack(&stock,bowFixtures[2]);
+            matrices[address(stockPack)+0xBC]=identity;
+            BagTuningValues fit;assert(bagTuningDefaults(1,2,0,fit));fit.scale=60;fit.inset=.08f;
+            assert(bagTuningSet(1,2,0,true,fit));
+            BagMatrix worldPose;assert(positionBackpack(pack,worldPose));
+            assert(positionBackpack(stockPack,placed));
+            for(unsigned i=0;i<16;++i)assert(std::fabs(placed[i]-worldPose[i])<.00005f);
+            assert(bagTuningSet(1,2,0,false));
+            const auto savedGuid=player.guid;++player.guid;
+            updateWeaponAttachment(stockPack,identity.data(),nullptr,nullptr,1);assert(attachmentUpdate.alpha==0);
+            player.guid=savedGuid;
+            memory[stockModel+0x94]=0;
+            updateWeaponAttachment(stockPack,identity.data(),nullptr,nullptr,1);assert(attachmentUpdate.alpha==0);
+            setBack(&stock,bowFixtures[2]);
+            updateWeaponAttachment(stockPack,identity.data(),nullptr,nullptr,1);assert(attachmentUpdate.alpha==1);
+            assert(refs==references); // No retention, detach, reload or world-child mutation.
+            for(unsigned i=0;i<previews.entries.size();++i)assert(previews.entries[i].model==previewEntries[i].model);
+            captureAttachmentMatrix=false;memory[player.unit+0x9E8]=0;
+            // A shield on the same attachment remains completely native.
+            modelName(stockPack,"Item\\ObjectComponents\\Shield\\Shield_Test.mdx");
+            updateWeaponAttachment(stockPack,identity.data(),nullptr,nullptr,.6f);
+            assert(attachmentUpdate.matrix==identity.data()&&attachmentUpdate.alpha==.6f);
+            forgetWeapons(stockModel);forgetWeapons(nestedModel);
+            assert(!clonedBagOwner(stockModel)&&!clonedBagOwner(nestedModel));
+            assert(refs==references);detach(stockPack);
+            // Repeated character-sheet opens release weak entries for reuse.
+            for(unsigned i=0;i<100;++i){
+                rememberClonedBagPreview(player.model,stockModel);assert(clonedBagOwner(stockModel)==player.guid);
+                forgetWeapons(stockModel);assert(!clonedBagOwner(stockModel));
+            }
+            std::cout<<"PASS: stock character-screen bags use fitted size/position across all bodies and zooms; world motion, native shields and ownership stay isolated\n";
+        }
+        const auto stockCloneLoads=loads-beforeStockCloneLoads;
         unsigned tuningLoads=0;
         {
             const auto beforeTuningLoads=loads;
@@ -1217,7 +1313,7 @@ int main(){
         assert(!bc->bagMotion.ready&&attachmentUpdate.alpha==0);
         matrices[address(pack)+0xBC]=identity;memory[bc->unit+0x9E8]=0;
         detach(pack);assert(refs[address(pack)]==1);
-        assert(setWeapons(&bag)==1&&memory[address(pack)+0x1CC]==player.model&&loads==beforeLoads+1+tuningLoads);
+        assert(setWeapons(&bag)==1&&memory[address(pack)+0x1CC]==player.model&&loads==beforeLoads+1+tuningLoads+stockCloneLoads);
         for(double invalidValue:{-1.,2.,.5,std::numeric_limits<double>::quiet_NaN()}){
             auto invalid=bag;invalid.values[15]=invalidValue;
             assert(setWeapons(&invalid)==-2&&bc->backpack==pack);
@@ -1266,13 +1362,24 @@ int main(){
         }
         context->token=1;assert(weaponAnimation(pointer(player.unit),107)==107);context->token=0;
         player.display=999;assert(weaponAnimation(pointer(player.unit),107)==107);player.display=player.native;
-        for(auto caller:{0x611E24u,0x60B5BBu,0x60B797u,0x61183Bu,0x624B35u}){
+        for(auto caller:{0x611E24u,0x60B5BBu,0x60B797u,0x61183Bu,0x624B35u,0x5FD4A5u,0x5FE019u}){
             auto* metadata=weaponInfoAt(pointer(player.unit),2,0,caller);
             assert(metadata==context->rangedInfo.data()&&metadata[1]==a->subclass&&metadata[3]==a->inventory&&metadata[4]==a->sheath);
             assert(metadata[2]==7&&metadata[5]==9&&metadata[6]==10&&metadata[7]==11);
             assert(realInfo[2][1]==weaponAsset(actual)->subclass);
         }
         assert(weaponInfoAt(pointer(player.unit),2,0,0x12345)==realInfo[2].data());
+        assert(!scopedProjectileAppearance);
+        assert(weaponInfoAt(pointer(player.unit),2,0,0x60A4FE)==realInfo[2].data());
+        scopedProjectileAppearance=true;
+        const auto* projectileInfo=weaponInfoAt(pointer(player.unit),2,0,0x60A4FE);
+        assert(projectileInfo==context->rangedInfo.data()&&projectileInfo[1]==a->subclass);
+        assert(projectileInfo[3]==a->inventory&&projectileInfo[4]==a->sheath);
+        assert(weaponInfoAt(pointer(player.unit),2,0,0x12345)==realInfo[2].data());
+        assert(weaponInfoAt(pointer(0xDEAD),2,0,0x60A4FE)==realInfo[2].data());
+        assert(weaponInfoAt(pointer(player.unit),2,1,0x60A4FE)==realInfo[2].data());
+        scopedProjectileAppearance=false;
+        assert(weaponInfoAt(pointer(player.unit),2,0,0x60A4FE)==realInfo[2].data());
         assert(weaponInfoAt(pointer(player.unit),2,1,0x611E24)==realInfo[2].data());
         assert(weaponInfoAt(pointer(0xDEAD),2,0,0x611E24)==realInfo[2].data());
         const unsigned hand=a->inventory==25||a->inventory==26?1:2;
@@ -1298,5 +1405,411 @@ int main(){
         assert(setWeapons(&off)==1&&!weaponContext(player.model));
         for(unsigned animation=0;animation<160;++animation)assert(weaponAnimation(pointer(player.unit),animation)==animation);
     }
-    std::cout<<"PASS: native hook simulation, cross-family ranged drawing/sheathing, real metadata isolation and placement tuning\n";
+    // A carried choice replaces the matching stock stowed weapon even with no
+    // explicit in-hand appearance. The stock child still owns draw/sheath.
+    struct CarriedReplacementCase {unsigned actual,role,position,home;};
+    for(const auto& test:std::array<CarriedReplacementCase,9>{{
+        {25,0,0,32},{25,1,1,33},{35,0,2,30},{1117,1,3,31},
+        {778,0,2,26},{778,1,3,27},{143,1,4,28},
+        {1046,2,5,26},{5259,2,5,28}}}){
+        realIDs[0]=realIDs[1]=realIDs[2]=0;realIDs[test.role]=test.actual;
+        WeaponSelection selection;selection.independent=true;
+        selection.equipped[test.role]=test.actual;
+        selection.items={{25,25,35,35,143,rangedKinds[0],quiver}};
+        memory[player.unit+0xD3C]=0;memory[player.unit+0xD40]=0;
+        auto on=request(0,selection);assert(setWeapons(&on)==1);
+        auto* context=weaponContext(player.model);assert(context&&context->routes[test.role]==-1);
+        const auto* actual=weaponAsset(test.actual);
+        auto* native=findChildHook(pointer(player.model),nullptr,test.home);
+        auto* carried=context->extra[test.position];assert(native&&carried&&native!=carried);
+        assert(weaponModelMatches(native,actual->model)&&hideStoredWeapon(native)&&!hideStoredWeapon(carried));
+        const auto beforeRefs=refs;const auto beforeLoads=loads;
+        updateWeaponAttachment(native,attachment,nullptr,nullptr,.8f);assert(attachmentUpdate.alpha==0);
+        updateWeaponAttachment(carried,attachment,nullptr,nullptr,.8f);assert(attachmentUpdate.alpha==.8f);
+        if(actual->kind==4&&actual->subclass==2){
+            const auto calls=bowStringSubmission.calls;
+            bowStringDrawHook(native,nullptr,pointer(player.unit));assert(bowStringSubmission.calls==calls);
+        }
+        assert(refs==beforeRefs&&loads==beforeLoads);
+        // A shared attachment point is not enough to hide quivers or props.
+        modelName(native,"Item\\ObjectComponents\\Quiver\\Quiver_A.mdx");
+        assert(!hideStoredWeapon(native));modelName(native,actual->model);
+        for(unsigned point:{0u,1u,2u,29u}){
+            memory[address(native)+0x1D0]=point;assert(!hideStoredWeapon(native));
+        }
+        memory[address(native)+0x1D0]=test.home;
+        memory[address(carried)+0x10]=0;assert(!hideStoredWeapon(native));
+        memory[address(carried)+0x10]=1;assert(hideStoredWeapon(native));
+        detach(carried);assert(!hideStoredWeapon(native));
+        assert(setWeapons(&on)==1&&context->extra[test.position]==carried&&hideStoredWeapon(native));
+        // Every carried child stays in place as real equipment is drawn.
+        const auto carriedChildren=context->extra;
+        memory[player.unit+0xD40]=test.role==2?2:1;
+        sheathTransitionHook(pointer(player.unit),nullptr);
+        const unsigned hand=test.role==0||(test.role==2&&(actual->inventory==25||actual->inventory==26))?1:actual->kind==3?0:2;
+        auto* held=findChildHook(pointer(player.model),nullptr,hand);
+        assert(held&&weaponModelMatches(held,actual->model)&&!hideStoredWeapon(held));
+        if(actual->kind==4&&actual->subclass==2){
+            const auto calls=bowStringSubmission.calls;
+            bowStringDrawHook(held,nullptr,pointer(player.unit));assert(bowStringSubmission.calls==calls+1);
+        }
+        assert(context->extra==carriedChildren);
+        for(unsigned position=0;position<7;++position)
+            assert(memory[address(context->extra[position])+0x1D0]==weaponPoints[position]);
+        memory[player.unit+0xD3C]=test.role==2?2:1;
+        memory[player.unit+0xD40]=test.role==2?1:0;
+        sheathTransitionHook(pointer(player.unit),nullptr);
+        native=findChildHook(pointer(player.model),nullptr,test.home);
+        assert(native&&weaponModelMatches(native,actual->model)&&hideStoredWeapon(native));
+        assert(context->extra==carriedChildren);
+        // Clearing only this location restores the real stowed appearance;
+        // custom appearances at all other locations must not suppress it.
+        selection.items[test.position]=0;on=request(0,selection);
+        memory[player.unit+0xD40]=0;assert(setWeapons(&on)==1);
+        native=findChildHook(pointer(player.model),nullptr,test.home);
+        assert(native&&weaponModelMatches(native,actual->model)&&!hideStoredWeapon(native));
+        updateWeaponAttachment(native,attachment,nullptr,nullptr,.8f);assert(attachmentUpdate.alpha==.8f);
+        WeaponSelection empty;empty.equipped=selection.equipped;auto off=request(0,empty);
+        assert(setWeapons(&off)==1&&!weaponContext(player.model));
+    }
+    // Explicit in-use appearances and carried decorations are separate children.
+    for(auto actual:rangedKinds)for(auto cosmetic:rangedKinds){
+        realIDs[0]=realIDs[1]=0;realIDs[2]=actual;
+        WeaponSelection selection;selection.independent=true;selection.equipped[2]=actual;
+        selection.items[5]=rangedKinds[0];selection.items[9]=cosmetic;
+        memory[player.unit+0xD40]=0;
+        auto on=request(0,selection);assert(setWeapons(&on)==1);
+        auto* c=weaponContext(player.model);assert(c&&c->routes[2]==9&&c->extra[5]);
+        auto* carried=c->extra[5];const auto* chosen=weaponAsset(cosmetic);
+        assert(!hideStoredWeapon(carried));
+        auto* stowed=findChildHook(pointer(player.model),nullptr,27);
+        assert(stowed&&weaponModelMatches(stowed,chosen->model)&&hideStoredWeapon(stowed));
+        memory[player.unit+0xD3C]=0;memory[player.unit+0xD40]=2;
+        sheathTransitionHook(pointer(player.unit),nullptr);
+        const unsigned hand=chosen->inventory==25||chosen->inventory==26?1:2;
+        auto* held=findChildHook(pointer(player.model),nullptr,hand);
+        assert(held&&weaponModelMatches(held,chosen->model)&&!hideStoredWeapon(held));
+        assert(c->extra[5]==carried&&memory[address(carried)+0x1D0]==27&&rangeHolder==address(held));
+        auto before=loads;assert(setWeapons(&on)==1&&loads==before);
+        memory[player.unit+0xD3C]=2;memory[player.unit+0xD40]=0;
+        sheathTransitionHook(pointer(player.unit),nullptr);
+        assert(c->extra[5]==carried&&refs[address(carried)]==2);
+        // Clearing the in-use choice restores real equipment; back decoration remains.
+        selection.items[9]=0;on=request(0,selection);assert(setWeapons(&on)==1);
+        assert(c->routes[2]==-1&&c->extra[5]);
+        WeaponSelection empty;empty.equipped[2]=actual;auto off=request(0,empty);
+        assert(setWeapons(&off)==1&&!weaponContext(player.model));
+    }
+    // A server-provided real wand is valid equipment even without a catalog ID.
+    {
+        realIDs[2]=999999;serverRangedAppearance=rangedKinds[3];
+        WeaponSelection s;s.independent=true;s.equipped[2]=999999;s.items[9]=rangedKinds[1];
+        auto on=request(0,s);assert(setWeapons(&on)==1);
+        auto* c=weaponContext(player.model);assert(c&&c->routes[2]==9);
+        assert(weaponInfoAt(pointer(player.unit),2,0,0x5FE019)[1]==3);
+        assert(weaponAnimation(pointer(player.unit),107)==49);
+        memory[player.unit+0xD3C]=0;memory[player.unit+0xD40]=2;
+        sheathTransitionHook(pointer(player.unit),nullptr);
+        auto* held=findChildHook(pointer(player.model),nullptr,1);
+        assert(held&&weaponModelMatches(held,weaponAsset(rangedKinds[1])->model));
+        memory[player.unit+0xD3C]=2;memory[player.unit+0xD40]=0;
+        sheathTransitionHook(pointer(player.unit),nullptr);
+        WeaponSelection empty;auto off=request(0,empty);assert(setWeapons(&off)==1);
+        serverRangedAppearance=0;realIDs[2]=rangedKinds[3];
+    }
+    // Independent preview poses own their children and do not leak into the world.
+    {
+        memory[0x6000+0x10]=1;previews.entries[0]={};
+        previews.entries[0].model=0x6000;previews.entries[0].guid=player.guid;
+        previews.entries[0].token=77;previews.entries[0].status=1;
+        WeaponSelection s;s.independent=true;s.items[5]=rangedKinds[0];s.items[9]=rangedKinds[1];s.equipped[2]=rangedKinds[3];
+        auto on=request(77,s);on.values.push_back(2);assert(setWeapons(&on)==1);
+        auto* c=weaponContext(0x6000);assert(c&&c->extra[5]&&c->extra[9]);
+        assert(memory[address(c->extra[9])+0x1D0]==1);
+        on.values[20]=0;assert(setWeapons(&on)==1&&c->extra[5]&&!c->extra[9]);
+        auto invalid=on;invalid.values[16]=-1;assert(setWeapons(&invalid)==-2);
+        invalid=on;invalid.values[20]=3;assert(setWeapons(&invalid)==-2);
+        forgetWeapons(0x6000);previews.entries[0]={};
+    }
+    // Explicit carried mode controls the entire stored loadout. An empty
+    // carried section deliberately means an empty back, not native fallback.
+    for(const auto& test:std::array<CarriedReplacementCase,9>{{
+        {25,0,0,32},{25,1,1,33},{35,0,2,30},{1117,1,3,31},
+        {778,0,2,26},{778,1,3,27},{143,1,4,28},
+        {1046,2,5,26},{5259,2,5,28}}}){
+        realIDs[0]=realIDs[1]=realIDs[2]=0;realIDs[test.role]=test.actual;
+        WeaponSelection selection;selection.independent=true;selection.carriedMode=1;
+        selection.equipped[test.role]=test.actual;
+        memory[player.unit+0xD3C]=0;memory[player.unit+0xD40]=0;
+        auto on=request(0,selection,0,1,1);assert(setWeapons(&on)==1);
+        auto* context=weaponContext(player.model);assert(context&&context->selection.empty());
+        const auto* actual=weaponAsset(test.actual);
+        auto* native=findChildHook(pointer(player.model),nullptr,test.home);
+        assert(native&&hideStoredWeapon(native)&&!context->hideRangedWhenStored&&!context->hideMeleeWhenStored);
+        assert(context->nativeChildren[test.role]==native);
+        const auto idleLoads=loads,idleMelee=meleeRefreshes,idleRange=rangedRefreshes;
+        for(unsigned repeat=0;repeat<3;++repeat)assert(setWeapons(&on)==1);
+        assert(loads==idleLoads&&meleeRefreshes==idleMelee&&rangedRefreshes==idleRange);
+        const auto guid=context->guid;context->guid=0;assert(!hideStoredWeapon(native));context->guid=guid;
+        selection.items={{25,25,35,35,143,rangedKinds[0],quiver}};
+        on=request(0,selection,0,1,1);assert(setWeapons(&on)==1);
+        auto carried=context->extra;
+        for(unsigned i=0;i<7;++i)assert(carried[i]&&!hideStoredWeapon(carried[i]));
+        memory[player.unit+0xD3C]=0;memory[player.unit+0xD40]=test.role==2?2:1;
+        sheathTransitionHook(pointer(player.unit),nullptr);
+        const unsigned hand=test.role==0||(test.role==2&&(actual->inventory==25||actual->inventory==26))?1:actual->kind==3?0:2;
+        auto* held=findChildHook(pointer(player.model),nullptr,hand);
+        assert(held&&!hideStoredWeapon(held)&&weaponModelMatches(held,actual->model));
+        assert(context->extra==carried);
+        for(unsigned i=0;i<7;++i)assert(memory[address(carried[i])+0x1D0]==weaponPoints[i]);
+        memory[player.unit+0xD3C]=test.role==2?2:1;memory[player.unit+0xD40]=test.role==2?1:0;
+        sheathTransitionHook(pointer(player.unit),nullptr);
+        native=findChildHook(pointer(player.model),nullptr,test.home);
+        assert(native&&hideStoredWeapon(native)&&context->extra==carried);
+        selection.carriedMode=0;
+        auto off=request(0,selection,0,1,1);memory[player.unit+0xD40]=0;
+        assert(setWeapons(&off)==1&&!weaponContext(player.model));
+        native=findChildHook(pointer(player.model),nullptr,test.home);
+        assert(native&&!hideStoredWeapon(native));
+        for(auto extra:carried)assert(!refs[address(extra)]);
+    }
+    // An appearance with carrying disabled sheathes at the chosen weapon's
+    // natural home. Native sheath-zero bows/wands stay valid in the hand.
+    for(auto actual:rangedKinds)for(auto cosmetic:rangedKinds){
+        realIDs[0]=realIDs[1]=0;realIDs[2]=actual;
+        WeaponSelection selection;selection.independent=true;selection.carriedMode=0;
+        selection.equipped[2]=actual;selection.items[9]=cosmetic;
+        selection.items[5]=rangedKinds[0]; // Defensive suppression, even for callers retaining IDs.
+        memory[player.unit+0xD3C]=0;memory[player.unit+0xD40]=0;
+        auto off=request(0,selection,0,1,1);assert(setWeapons(&off)==1);
+        auto* context=weaponContext(player.model);assert(context&&context->routes[2]==9&&!context->extra[5]);
+        const auto* chosen=weaponAsset(cosmetic);
+        const unsigned hand=chosen->inventory==25||chosen->inventory==26?1:2;
+        const int home=sheath(chosen->sheath,hand==1);
+        assert(selectedWeaponHome(context->selection,2,9)==home);
+        if(home>=0){
+            auto* stored=findChildHook(pointer(player.model),nullptr,home);
+            assert(stored&&weaponModelMatches(stored,chosen->model)&&!hideStoredWeapon(stored));
+        }
+        memory[player.unit+0xD40]=2;sheathTransitionHook(pointer(player.unit),nullptr);
+        auto* held=findChildHook(pointer(player.model),nullptr,hand);
+        assert(held&&weaponModelMatches(held,chosen->model)&&!hideStoredWeapon(held));
+        selection.carriedMode=1;auto on=request(0,selection);
+        assert(setWeapons(&on)==1&&context->extra[5]);
+        held=findChildHook(pointer(player.model),nullptr,hand);assert(held&&!hideStoredWeapon(held));
+        auto* carried=context->extra[5];assert(!hideStoredWeapon(carried));
+        memory[player.unit+0xD3C]=2;memory[player.unit+0xD40]=0;sheathTransitionHook(pointer(player.unit),nullptr);
+        auto* stored=findChildHook(pointer(player.model),nullptr,27);
+        assert(stored&&hideStoredWeapon(stored)&&!hideStoredWeapon(carried));
+        assert(setWeapons(&off)==1&&!context->extra[5]&&!refs[address(carried)]);
+        if(home>=0){
+            stored=findChildHook(pointer(player.model),nullptr,home);
+            assert(stored&&weaponModelMatches(stored,chosen->model)&&!hideStoredWeapon(stored));
+        }
+        WeaponSelection empty;empty.carriedMode=0;empty.equipped[2]=actual;
+        auto clearRequest=request(0,empty);assert(setWeapons(&clearRequest)==1&&!weaponContext(player.model));
+    }
+    // Catalog-independent composition ownership hides a server-only weapon,
+    // while an unrelated prop at the same point and every in-hand point stay visible.
+    {
+        realIDs[0]=realIDs[1]=realIDs[2]=0;
+        WeaponSelection selection;selection.independent=true;selection.carriedMode=1;
+        selection.equipped[0]=999999;
+        auto on=request(0,selection);assert(setWeapons(&on)==1);
+        auto* context=weaponContext(player.model);assert(context);
+        const auto* sample=weaponAsset(35);
+        weaponComposeHook(pointer(player.model),weaponDisplay(sample),15,sample->sheath,1,0,0);
+        auto* unknown=findChildHook(pointer(player.model),nullptr,30);
+        assert(unknown&&context->nativeChildren[0]==unknown&&hideStoredWeapon(unknown));
+        for(unsigned hand:{0u,1u,2u}){memory[address(unknown)+0x1D0]=hand;assert(!hideStoredWeapon(unknown));}
+        memory[address(unknown)+0x1D0]=30;
+        selection.items[7]=35;on=request(0,selection);assert(setWeapons(&on)==1);
+        assert(!refs[address(unknown)]&&!findChildHook(pointer(player.model),nullptr,30));
+        weaponComposeHook(pointer(player.model),weaponDisplay(sample),15,sample->sheath,1,0,0);
+        auto* replacement=findChildHook(pointer(player.model),nullptr,33);
+        assert(replacement&&hideStoredWeapon(replacement));
+        selection.items[7]=0;on=request(0,selection);assert(setWeapons(&on)==1&&!refs[address(replacement)]);
+        factory(pointer(player.model),30,"Unrelated\\Prop.mdx","",0);
+        assert(!refs[address(unknown)]&&!context->nativeChildren[0]);
+        auto* prop=findChildHook(pointer(player.model),nullptr,30);assert(prop&&!hideStoredWeapon(prop));
+        assert(weaponComposeHook(pointer(player.model),nullptr,15,sample->sheath,1,0,0)==-1);
+        assert(!context->nativeChildren[0]&&!hideStoredWeapon(prop)&&refs[address(prop)]==1);
+        factory(pointer(player.model),26,weaponAsset(quiver)->model,"",0);
+        auto* nativeQuiver=findChildHook(pointer(player.model),nullptr,26);
+        assert(nativeQuiver&&hideNativeQuiver(nativeQuiver)&&!hideStoredWeapon(nativeQuiver));
+        context->guid=0;assert(!hideNativeQuiver(nativeQuiver));context->guid=player.guid;
+        selection.carriedMode=0;auto off=request(0,selection);assert(setWeapons(&off)==1&&!weaponContext(player.model));
+        assert(!hideNativeQuiver(nativeQuiver));
+    }
+    // Preview carrying has the same all-or-nothing semantics, with held
+    // appearance poses separate and actual quivers restored when switched off.
+    {
+        memory[0x6000+0x10]=1;previews.entries[0]={};
+        previews.entries[0].model=0x6000;previews.entries[0].guid=player.guid;
+        previews.entries[0].token=88;previews.entries[0].status=1;
+        WeaponSelection selection;selection.independent=true;selection.carriedMode=1;
+        selection.equipped[2]=rangedKinds[3];selection.items[9]=1046;
+        selection.items[5]=rangedKinds[0];selection.items[6]=quiver;
+        auto on=request(88,selection,0,1,1,quiver,1);on.values[20]=2;
+        assert(setWeapons(&on)==1);auto* context=weaponContext(0x6000);
+        assert(context&&context->extra[5]&&context->extra[6]&&context->extra[9]&&context->backpack&&!context->passthroughQuiver);
+        const auto* chosen=weaponAsset(selection.items[9]);
+        const int naturalHome=sheath(chosen->sheath,chosen->inventory==25||chosen->inventory==26);
+        assert(naturalHome>=0&&naturalHome!=static_cast<int>(weaponPoints[9]));
+        factory(pointer(context->parent),naturalHome,chosen->model,"",0);
+        auto* nativePreview=findChildHook(pointer(context->parent),nullptr,naturalHome);
+        assert(nativePreview&&hideStoredWeapon(nativePreview)&&!hideStoredWeapon(context->extra[9]));
+        auto* bag=context->backpack;auto* ownedQuiver=context->extra[6];
+        assert(!hideNativeQuiver(ownedQuiver)&&!hideStoredWeapon(ownedQuiver));
+        selection.items[5]=selection.items[6]=0;
+        auto empty=request(88,selection,0,1,1,quiver,1);empty.values[20]=2;
+        assert(setWeapons(&empty)==1&&!context->extra[5]&&!context->extra[6]&&!context->passthroughQuiver);
+        assert(context->backpack==bag&&context->extra[9]&&!hideStoredWeapon(context->extra[9]));
+        for(double flag:{-1.,.5,2.,std::numeric_limits<double>::infinity(),std::numeric_limits<double>::quiet_NaN()}){
+            auto invalid=empty;invalid.values[21]=flag;
+            const auto beforeRefs=refs;assert(setWeapons(&invalid)==-2&&refs==beforeRefs&&context->selection.carriedMode==1);
+        }
+        selection.carriedMode=0;selection.independent=false;
+        auto off=request(88,selection,0,1,1,quiver,1);off.values[20]=2;
+        assert(setWeapons(&off)==1&&context->passthroughQuiver&&context->extra[9]&&context->backpack==bag);
+        assert(!hideNativeQuiver(context->passthroughQuiver));
+        off.values[20]=0;assert(setWeapons(&off)==1&&context->extra[9]);
+        assert(memory[address(context->extra[9])+0x1D0]==static_cast<unsigned>(naturalHome));
+        assert(!hideStoredWeapon(context->extra[9])&&context->backpack==bag);
+        forgetWeapons(0x6000);previews.entries[0]={};
+    }
+    // Selected staves fit the body's actual authored staff mount in Simple
+    // mode, while passthrough equipment and all held weapons remain native.
+    {
+        const StaffFit* fit=nullptr;
+        for(const auto& candidate:staffFits)
+            if(candidate.race==4&&candidate.sex==1&&candidate.point==30)fit=&candidate;
+        assert(fit&&fit->inward>0);
+        const auto* asset=weaponAsset(6215);assert(asset&&asset->subclass==10);
+        const auto* shaft=staffShaftFor(asset->model);assert(shaft);
+        const auto close=[](const BagMatrix& actual,const BagMatrix& expected){
+            for(unsigned i=0;i<16;++i)assert(std::fabs(actual[i]-expected[i])<.00008f);
+        };
+        // A staff's long X axis lies along the torso's Z axis. Rotate about
+        // the authored grip pivot, retaining its original position exactly.
+        BagMatrix staffBone{{0,0,-1,0,0,1,0,0,1,0,0,0,0,0,0,1}};
+        for(unsigned row=0;row<3;++row){
+            staffBone[12+row]=fit->anchor[row];
+            for(unsigned axis=0;axis<3;++axis)
+                staffBone[12+row]-=staffBone[axis*4+row]*fit->anchor[axis];
+        }
+        auto authored=staffBone;
+        for(unsigned row=0;row<3;++row)authored[12+row]=fit->anchor[row];
+        auto local=identity;local[0]=1.1f;local[5]=.95f;local[10]=.9f;local[14]=.004f;
+        const float inward=fit->inward-shaft->maxZ*.9f-.004f-.012f;
+        assert(inward>.005f&&inward<.12f);
+        auto expected=authored;expected[12]+=inward;
+        const auto skeleton=[&](WeaponContext* context,std::uintptr_t base,const BagMatrix& view){
+            memory[context->parent+0x30]=base;memory[base+0x130]=base+0x1000;
+            memory[base+0x1000+0x10C]=37;memory[base+0x1000+0x110]=base+0x2000;
+            memory[base+0x1000+0x104]=34;memory[base+0x1000+0x108]=base+0x3000;
+            memory[base+0x1000+0x34]=128;memory[base+0x1000+0x38]=base+0x7000;
+            memory[context->parent+0x94]=base+0x5000;
+            for(unsigned point:{28u,30u}){
+                const unsigned bone=point==30?63:62;
+                memory[base+0x2000+2*point]=point;
+                const auto record=base+0x3000+48*point;
+                memory[record]=point;memory[record+4]=bone;
+                positions[record+8]=point==30?fit->anchor:bagFits[7].anchor;
+                memory[base+0x7000+108*bone+8]=18;
+                matrices[base+0x5000+64*bone]=bagMatrixProduct(view,point==30?staffBone:identity);
+            }
+            matrices[base+0x5000+64*18]=view;
+            matrices[context->parent+0xFC]=view;
+        };
+
+        realIDs[0]=35;realIDs[1]=realIDs[2]=0;
+        WeaponSelection selection;selection.carriedMode=0;selection.equipped[0]=35;selection.items[7]=6215;
+        memory[player.unit+0xD3C]=0;memory[player.unit+0xD40]=0;
+        auto on=request(0,selection);assert(setWeapons(&on)==1);
+        auto* context=weaponContext(player.model);assert(context&&context->routes[0]==7);
+        auto* child=findChildHook(pointer(player.model),nullptr,30);
+        assert(child&&context->nativeChildren[0]==child&&weaponModelMatches(child,asset->model));
+        const std::uintptr_t worldData=0xA100000;
+        skeleton(context,worldData,identity);matrices[address(child)+0xBC]=local;
+        BagMatrix fitted;assert(positionStoredStaff(child,fitted));close(fitted,expected);
+        const auto originalBones=matrices[worldData+0x5000+64*63];
+        const auto originalLocal=matrices[address(child)+0xBC];
+        const auto originalRefs=refs;const auto originalLoads=loads;
+        const float color[]={.3f,.5f,.7f,1},lighting[]={1,1,1,1};
+        captureAttachmentMatrix=true;
+        for(unsigned frame=0;frame<20;++frame){
+            const auto updates=attachmentUpdate.calls;
+            updateWeaponAttachment(child,authored.data(),color,lighting,.75f);
+            assert(attachmentUpdate.calls==updates+1&&attachmentUpdate.model==child&&attachmentUpdate.alpha==.75f);
+            assert(attachmentUpdate.color==color&&attachmentUpdate.lighting==lighting);
+            close(capturedAttachmentMatrix,expected);
+            assert(memory[address(child)+0x1D0]==30&&memory[address(child)+0x1CC]==player.model);
+        }
+        assert(refs==originalRefs&&loads==originalLoads&&matrices[worldData+0x5000+64*63]==originalBones);
+        assert(matrices[address(child)+0xBC]==originalLocal);
+
+        // The update receives a model/view matrix already present in bones.
+        // A reflected, zoomed and translated preview must transform once.
+        auto view=identity;view[0]=0;view[1]=1.6f;view[4]=.8f;view[5]=0;view[10]=1.3f;
+        view[12]=8;view[13]=-6;view[14]=3;
+        skeleton(context,worldData,view);
+        assert(positionStoredStaff(child,fitted));close(fitted,bagMatrixProduct(view,expected));
+        skeleton(context,worldData,identity);
+
+        for(unsigned hand:{0u,1u,2u}){
+            memory[address(child)+0x1D0]=hand;assert(!positionStoredStaff(child,fitted));
+            updateWeaponAttachment(child,authored.data(),color,lighting,.75f);
+            close(capturedAttachmentMatrix,authored);assert(attachmentUpdate.alpha==.75f);
+        }
+        memory[address(child)+0x1D0]=30;
+        const auto owner=context->guid;context->guid=owner+1;
+        assert(!positionStoredStaff(child,fitted));context->guid=owner;
+        context->routes[0]=-1;assert(!positionStoredStaff(child,fitted));context->routes[0]=7;
+        modelName(child,"Unrelated\\UnknownStaff.mdx");assert(!positionStoredStaff(child,fitted));
+        modelName(child,asset->model);
+        const auto staffRecord=worldData+0x3000+48*30;
+        positions[staffRecord+8][0]+=.025f;assert(!positionStoredStaff(child,fitted));
+        updateWeaponAttachment(child,authored.data(),color,lighting,.75f);
+        close(capturedAttachmentMatrix,authored);assert(attachmentUpdate.alpha==.75f);
+        positions[staffRecord+8]=fit->anchor;
+        memory[worldData+0x2000+2*30]=0xFFFF;assert(!positionStoredStaff(child,fitted));
+        memory[worldData+0x2000+2*30]=30;
+        matrices[player.model+0xFC][0]=0;assert(!positionStoredStaff(child,fitted));
+        matrices[player.model+0xFC]=identity;
+        assert(positionStoredStaff(child,fitted));close(fitted,expected);
+        captureAttachmentMatrix=false;
+        WeaponSelection empty;empty.carriedMode=0;empty.equipped[0]=35;
+        auto off=request(0,empty);assert(setWeapons(&off)==1&&!weaponContext(player.model));
+
+        // Addon previews own independent staff children. Advanced placement
+        // tuning is additive to the contact fit and cannot accumulate per frame.
+        memory[0x6000+0x10]=1;previews.entries[0]={};
+        previews.entries[0].model=0x6000;previews.entries[0].guid=player.guid;
+        previews.entries[0].token=89;previews.entries[0].status=1;
+        selection={};selection.independent=true;selection.carriedMode=1;selection.items[2]=6215;
+        on=request(89,selection);assert(setWeapons(&on)==1);
+        context=weaponContext(0x6000);assert(context&&context->extra[2]);child=context->extra[2];
+        skeleton(context,0xA200000,identity);matrices[address(child)+0xBC]=local;
+        assert(positionStoredStaff(child,fitted));close(fitted,expected);
+        const auto previewRefs=refs;const auto previewLoads=loads;
+        BagTuningValues adjustment;adjustment.scale=100;adjustment.inset=.01f;adjustment.left=.03f;adjustment.up=.02f;
+        assert(bagTuningSet(103,4,1,true,adjustment));
+        auto tunedExpected=expected;tunedExpected[12]+=.01f;tunedExpected[13]+=.03f;tunedExpected[14]+=.02f;
+        captureAttachmentMatrix=true;
+        for(unsigned frame=0;frame<20;++frame){
+            updateWeaponAttachment(child,authored.data(),color,lighting,.8f);
+            close(capturedAttachmentMatrix,tunedExpected);assert(attachmentUpdate.alpha==.8f);
+        }
+        assert(refs==previewRefs&&loads==previewLoads&&context->extra[2]==child);
+        assert(bagTuningSet(103,4,1,false));
+        updateWeaponAttachment(child,authored.data(),color,lighting,.8f);
+        close(capturedAttachmentMatrix,expected);
+        memory[address(child)+0x1D0]=1;assert(!positionStoredStaff(child,fitted));
+        memory[address(child)+0x1D0]=30;
+        context->selection.items[2]=999999;assert(!positionStoredStaff(child,fitted));
+        context->selection.items[2]=6215;
+        captureAttachmentMatrix=false;forgetWeapons(0x6000);previews.entries[0]={};
+    }
+    std::cout<<"PASS: native hook simulation, cross-family ranged drawing/sheathing, real metadata isolation, staff body contact and placement tuning\n";
 }

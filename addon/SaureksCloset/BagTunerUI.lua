@@ -231,7 +231,7 @@ function V:OpenBagTuner()
     self.bagTunerWindow:Show();self:RefreshBagTunerUI()
 end
 function V:OpenPlacementTuner(slot)
-    if not self:IsWeaponPosition(slot) then return end
+    if not self:IsCarriedWeapon(slot) then return end
     if not self.frame then self:Toggle(true) end
     if not self.bagTunerWindow then return end
     if self.bagTunerWindow:IsShown() then self.bagTunerWindow:Hide() end

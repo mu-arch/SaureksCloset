@@ -227,11 +227,12 @@ function V:SetTab(tab)
     self:CloseOutfitMenu();self:CloseOutfitDetails();self:CloseBrowser();self.tab=tab
     self.selectedOutfit=nil;self.confirmDelete=nil
     local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="exposure"
-    local sideControls=tab=="body" or tab=="weaponry" or tab=="bags" or tab=="exposure"
-    local leftPane=tab=="body" or tab=="weaponry" or tab=="bags"
+    local modelPage=tab=="armor" or tab=="body" or tab=="bags" or tab=="exposure"
+    local sideControls=tab=="body" or tab=="bags" or tab=="exposure"
+    local leftPane=tab=="body" or tab=="bags"
     if character then self.wardrobePage=tab end
     for name,p in pairs(self.pagesByName) do
-        if name==tab or (name=="armor" and character) then p:Show() else p:Hide() end
+        if name==tab or (name=="armor" and modelPage) then p:Show() else p:Hide() end
     end
     local primary=character and "character" or tab
     for name,b in pairs(self.tabButtons) do
@@ -239,6 +240,16 @@ function V:SetTab(tab)
     end
     if character then
         self.wardrobeSelectorBox:Show()
+        -- Weaponry uses the space normally occupied by the swivel buttons.
+        local wide=tab=="weaponry"
+        self.wardrobeSelectorBox:ClearAllPoints()
+        self.wardrobeSelectorBox:SetPoint("TOP",self.frame,"TOP",wide and -12 or -44,-392)
+        self.wardrobeSelectorBox:SetWidth(wide and 176 or 106)
+        self.wardrobeSelectorLabel:SetWidth(wide and 142 or 72)
+        self.wardrobeSelectorHover:SetWidth(wide and 168 or 98)
+        for _,tile in ipairs(self.weaponSelectorFill) do
+            if wide then tile:Show() else tile:Hide() end
+        end
         self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags",exposure="Exposure"})[tab])
     else self.wardrobeSelectorBox:Hide() end
     if self.leftPaneFrameOverlay then
@@ -262,7 +273,8 @@ function V:SetTab(tab)
         model:ClearAllPoints();model:SetPoint("TOPLEFT",self.pagesByName.armor,"TOPLEFT",modelX,-86)
         model:SetWidth(244);model:SetHeight(340)
     end
-    if character and not wasCharacter then self:HidePreviewUntilReady();self:InvalidatePreviewModel(0,true) end
+    if modelPage then self.rotationControls:Show() else self.rotationControls:Hide() end
+    if modelPage and not wasCharacter then self:HidePreviewUntilReady();self:InvalidatePreviewModel(0,true) end
     self:Refresh()
 end
 function V:CreateUI()
@@ -302,17 +314,21 @@ function V:CreateUI()
         GameTooltip:AddLine("Click to switch saved outfits.",1,.82,0);GameTooltip:Show()
     end)
     selector:SetScript("OnLeave",function() GameTooltip:Hide() end)
-    -- Restore the original master-toggle position with the same dark inset
-    -- treatment previously used by the outfit count.
-    local toggle=section(f,262,42,76,27,true,"Button")
+    -- Keep the master toggle's geometry while using the native red panel button.
+    local toggle=button(f,"",262,42,76,function() V:SetEnabled(not VanityStudioCharacter.enabled) end)
+    toggle:SetHeight(25)
+    -- Keep the top edge fixed; extend the native red artwork down by 2px.
+    for _,part in ipairs({"Left","Middle","Right"}) do
+        getglobal(toggle:GetName()..part):SetHeight(25)
+    end
     self.enabledButton=toggle
-    toggle.caption=label(toggle,"",6,5,64,17)
+    toggle.caption=getglobal(toggle:GetName().."Text")
+    toggle.caption:SetHeight(17)
     toggle.caption:ClearAllPoints();toggle.caption:SetPoint("CENTER",toggle,"CENTER",0,0)
     toggle.caption:SetFont("Fonts\\FRIZQT__.TTF",11)
     toggle.caption:SetJustifyH("CENTER");toggle.caption:SetJustifyV("MIDDLE")
-    local toggleHover=texture(toggle,"Interface\\QuestFrame\\UI-QuestTitleHighlight",3,3,70,21,"ARTWORK")
+    local toggleHover=texture(toggle,"Interface\\QuestFrame\\UI-QuestTitleHighlight",3,3,70,19,"ARTWORK")
     toggleHover:SetBlendMode("ADD");toggleHover:SetAlpha(.45);toggleHover:Hide()
-    toggle:SetScript("OnClick",function() V:SetEnabled(not VanityStudioCharacter.enabled) end)
     toggle:SetScript("OnEnter",function()
         toggleHover:Show()
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT")
@@ -369,6 +385,13 @@ function V:CreateWardrobeSelector()
     box:ClearAllPoints();box:SetPoint("TOP",self.frame,"TOP",-44,-392)
     box:SetFrameLevel(self.frame:GetFrameLevel()+10)
     self.wardrobeSelectorBox=box
+    -- Continue the existing native stone tiles across Weaponry's wider selector.
+    self.weaponSelectorFill={}
+    for _,part in ipairs({{102,26,166,192},{128,44,192,148}}) do
+        local tile=texture(box,"Interface\\PaperDoll\\UI-PaperDoll-SlotBackground",part[1],4,part[2],19)
+        tile:SetTexCoord(part[3]/256,part[4]/256,32/256,51/256)
+        tile:SetAlpha(.75);tile:Hide();table.insert(self.weaponSelectorFill,tile)
+    end
     -- Keep the rotation controls vertically aligned with the selector.
     self.rotationControls:ClearAllPoints()
     self.rotationControls:SetWidth(66)
@@ -379,11 +402,13 @@ function V:CreateWardrobeSelector()
     local b=CreateFrame("Button","SaureksClosetWardrobeSelector",box)
     self.wardrobeSelector=b;b:SetAllPoints(box)
     local hover=texture(b,"Interface\\QuestFrame\\UI-QuestTitleHighlight",4,4,98,19,"OVERLAY")
+    self.wardrobeSelectorHover=hover
     hover:SetBlendMode("ADD");hover:SetAlpha(.45);hover:Hide()
     b:SetScript("OnEnter",function() hover:Show() end)
     b:SetScript("OnLeave",function() hover:Hide() end)
     b:SetScript("OnHide",function() hover:Hide() end)
-    texture(b,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",78,1,26,26,"ARTWORK")
+    local dropdownArrow=texture(b,"Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up",78,1,26,26,"ARTWORK")
+    dropdownArrow:ClearAllPoints();dropdownArrow:SetPoint("TOPRIGHT",b,"TOPRIGHT",-2,-1)
     local menu=CreateFrame("Frame","SaureksClosetWardrobeMenu",self.frame)
     self.wardrobeMenu=menu;menu.displayMode="MENU";menu:Hide()
     menu.initialize=function()
@@ -543,90 +568,167 @@ function V:CreateSlotButton(parent,anchor,slot,x,y,iconSize)
     b:SetScript("OnEnter",function()
         local id=V:SlotSelection(this.slot)
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText(V.slotNames[this.slot],1,.82,0)
-        GameTooltip:AddLine(V:IsWeaponPosition(this.slot) and not id and "Game Default" or itemName(id),1,1,1)
-        if this.slot==103 then GameTooltip:AddLine("Normal back weapon placement.",1,1,1)
-        elseif this.slot==104 then GameTooltip:AddLine("Alternate back placement for a second weapon.",1,1,1) end
+        GameTooltip:AddLine(V:IsWeaponPosition(this.slot) and not id and (this.slot>=108 and "Passthrough" or "Nothing carried") or itemName(id),1,1,1)
+        if V:IsWeaponPosition(this.slot) then
+            GameTooltip:AddLine(this.slot>=108 and "Appearance for this equipped slot. Main hand and off hand are separate." or "Carried decoration. Use the cog to edit placement.",1,1,1,true)
+            if this.slot>=108 then
+                local usable,reason=V:WeaponSlotState(this.slot)
+                if not usable then GameTooltip:AddLine(reason,1,.5,.3,true) end
+            end
+            if this.slot>=108 and not id then
+                GameTooltip:AddLine("Uses your equipped weapon's appearance.",.75,.75,.75,true)
+            end
+            GameTooltip:AddLine("Left-click to choose. Right-click for options.",.65,.65,.65)
+        end
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave",function() GameTooltip:Hide() end)
     self.slotButtons[slot]=b
     return b
 end
+function V:WeaponChoiceAvailable(slot)
+    if not self:CarriedWeaponsAvailable() then return false end
+    if self:IsCarriedWeapon(slot) then return self:WeaponAdvancedMode(VanityStudioCharacter.weapons) end
+    return self:WeaponSlotState(slot)
+end
+function V:LayoutWeaponCards(advanced)
+    local group=self.weaponActiveGroup
+    group:ClearAllPoints();group:SetPoint("TOPLEFT",self.pagesByName.weaponry,"TOPLEFT",23,advanced and -132 or -140)
+    group:SetHeight(advanced and 102 or 238)
+    group.heading:SetText(advanced and "In your hands" or "Equipped weapon slots")
+    self.weaponSlotDescription:SetText(advanced and "Choose the weapons shown while attacking." or "Change the slots you have equipped.\nMain hand and off hand are separate choices.")
+    self.weaponSlotDescription:SetHeight(advanced and 14 or 28)
+    if advanced then self.weaponCarriedGroup:Show() else self.weaponCarriedGroup:Hide() end
+    for i,slot in ipairs({108,109,110}) do
+        local card=self.weaponCards[slot];local b=self.slotButtons[slot]
+        local x=advanced and slot==109 and 160 or 0
+        local y=advanced and (slot==110 and 72 or 40) or (58+(i-1)*60)
+        local width=advanced and slot~=110 and 158 or 318
+        local height=advanced and 30 or 52
+        local size=advanced and 24 or 36
+        card:ClearAllPoints();card:SetPoint("TOPLEFT",group,"TOPLEFT",x,-y)
+        card:SetWidth(width);card:SetHeight(height)
+        b:ClearAllPoints();b:SetPoint("TOPLEFT",card,"TOPLEFT",8,-(height-size)/2)
+        b:SetWidth(size);b:SetHeight(size);b.icon:SetWidth(size);b.icon:SetHeight(size)
+        b.border:SetWidth(size*64/37);b.border:SetHeight(size*64/37)
+        b.border:ClearAllPoints();b.border:SetPoint("CENTER",b,"CENTER",0,-size/37)
+        b.hiddenOverlay:SetWidth(size+2);b.hiddenOverlay:SetHeight(size+2)
+        b.selected:SetWidth(size+6);b.selected:SetHeight(size+6)
+        local usable,reason=self:WeaponSlotState(slot)
+        local left=advanced and 43 or 57
+        card.title:ClearAllPoints();card.title:SetPoint("TOPLEFT",card,"TOPLEFT",left,advanced and -8 or (usable and -18 or -9))
+        card.title:SetWidth(width-left-4);card.title:SetFont("Fonts\\FRIZQT__.TTF",advanced and 11 or 13)
+        card.note:ClearAllPoints();card.note:SetPoint("TOPLEFT",card,"TOPLEFT",left,-29)
+        card.note:SetWidth(width-left-4);card.note:SetText(reason or "")
+        if not advanced and not usable then card.note:Show() else card.note:Hide() end
+    end
+end
+function V:RefreshWeaponCards()
+    if not self.weaponCards then return end
+    local weapons=VanityStudioCharacter.weapons or {}
+    local advanced=self:WeaponAdvancedMode(weapons)
+    local available=self:CarriedWeaponsAvailable()
+    self:LayoutWeaponCards(advanced)
+    for slot,card in pairs(self.weaponCards) do
+        local usable=self:WeaponChoiceAvailable(slot)
+        enabled(card,usable);enabled(self.slotButtons[slot],usable)
+        card:SetAlpha(usable and 1 or .4)
+        if card.gear then
+            enabled(card.gear,usable);card.gear:SetAlpha(weapons[slot] and 1 or .4)
+        end
+    end
+    self.weaponAdvancedCheckbox:SetChecked(advanced and 1 or nil)
+    enabled(self.weaponAdvancedCheckbox,available)
+    self.weaponAdvancedCheckbox:SetAlpha(available and 1 or .45)
+end
 function V:CreateWeaponryPage(p)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
-    local rail=sidebar(p,253);self.weaponSidebar=rail
-    local function group(title,y,height)
-        return sidebarGroup(rail,title,y,height)
+    -- Simple mode uses the full page for equipped slots; Advanced adds body slots.
+    self.weaponCards={}
+    local function group(title,x,y,w,h)
+        local box=CreateFrame("Frame",nil,p)
+        box:SetPoint("TOPLEFT",p,"TOPLEFT",x,-y);box:SetWidth(w);box:SetHeight(h)
+        local heading=label(box,title,8,0,w-16,16)
+        heading:SetFont("Fonts\\FRIZQT__.TTF",12);box.heading=heading
+        local rule=box:CreateTexture(nil,"BACKGROUND")
+        rule:SetPoint("TOPLEFT",box,"TOPLEFT",8,-18);rule:SetWidth(w-16);rule:SetHeight(1)
+        rule:SetTexture(.5,.44,.3,.4)
+        return box
     end
-    local function choice(box,slot,title,column,y)
-        local x=column==1 and 25 or 83
-        self:CreateSlotButton(box,box,slot,x,y,28)
-        local caption=label(box,title,x-8,y+30,44,14,true)
-        caption:SetFont("Fonts\\FRIZQT__.TTF",10)
-        caption:SetTextColor(.82,.82,.82)
-        caption:SetJustifyH("CENTER");caption:SetJustifyV("MIDDLE")
-    end
-    -- Paired positions read left-to-right; all choices stay in a compact rail
-    -- beside the model and above the wardrobe selector.
-    local waist=group("Waist",8,72)
-    choice(waist,101,"Left",1,25);choice(waist,102,"Right",2,25)
-    local back=group("Back",84,116)
-    choice(back,103,"Primary",1,25);choice(back,104,"Alt",2,25)
-    choice(back,105,"Shield",1,71);choice(back,106,"Ranged",2,71)
-    local quiver=CreateFrame("Frame",nil,rail)
-    quiver:SetPoint("TOPLEFT",rail,"TOPLEFT",6,-206);quiver:SetWidth(136);quiver:SetHeight(45)
-    self:CreateSlotButton(quiver,quiver,107,25,9,28)
-    local quiverTitle=label(quiver,"Quiver",66,15,55,16)
-    quiverTitle:SetFont("Fonts\\FRIZQT__.TTF",11);quiverTitle:SetJustifyV("MIDDLE")
-    self.weaponOptionsButton=settingsButton(p,"Settings",0,90,nil,function() V:OpenWeaponOptions() end,.75,26)
-    self.weaponOptionsButton:ClearAllPoints()
-    self.weaponOptionsButton:SetPoint("TOPLEFT",p,"TOPLEFT",336-self.weaponOptionsButton:GetWidth(),-90)
-    self:CreateWeaponOptions()
-end
-function V:CreateWeaponOptions()
-    local f=sheet("SaureksClosetWeaponOptions",self.frame,"Weapon Settings")
-    self.weaponOptions=f;f:Hide();f:SetPoint("TOPLEFT",self.frame,"TOPLEFT",384,0)
-    f.close:SetScript("OnClick",function() V:CloseWeaponOptions() end)
-    f:SetScript("OnHide",function() GameTooltip:Hide();V:ReleaseNeighbor() end)
-    table.insert(UISpecialFrames,f:GetName())
-    local stored=section(f,23,90,318,94,true)
-    self.weaponStoredOptions=stored
-    label(stored,"Stored weapons",12,8,290,18)
-    local function storedChoice(kind,field,text,y,tooltip)
-        local name=kind=="ranged" and "SaureksClosetHideRangedWhenStored" or "SaureksClosetHideMeleeWhenStored"
-        local checkbox=CreateFrame("CheckButton",name,stored,"UICheckButtonTemplate")
-        self[field.."Checkbox"]=checkbox;checkbox.kind=kind
-        checkbox:SetPoint("TOPLEFT",stored,"TOPLEFT",8,-y);checkbox:SetWidth(24);checkbox:SetHeight(24)
-        checkbox:SetHitRectInsets(0,-278,0,0)
-        local caption=label(stored,text,38,y+1,270,22,true)
-        self[field.."Label"]=caption
-        caption:SetFont("Fonts\\FRIZQT__.TTF",11);caption:SetJustifyV("MIDDLE")
-        checkbox:SetScript("OnClick",function() V:SetWeaponStoredHidden(this.kind,this:GetChecked()) end)
-        checkbox:SetScript("OnEnter",function()
-            GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:ClearLines()
-            GameTooltip:AddLine(tooltip,1,1,1,true);GameTooltip:Show()
+    self.weaponActiveGroup=group("Equipped weapon slots",23,140,318,238)
+    self.weaponSlotDescription=label(self.weaponActiveGroup,"",8,22,302,28,true)
+    self.weaponSlotDescription:SetFont("Fonts\\FRIZQT__.TTF",10);self.weaponSlotDescription:SetSpacing(4)
+    self.weaponSlotDescription:SetTextColor(.7,.7,.7)
+    self.weaponCarriedGroup=group("Carried on your body",23,241,318,150)
+    local function choice(parent,slot,x,y,w)
+        local card=CreateFrame("Button",nil,parent)
+        card:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y);card:SetWidth(w);card:SetHeight(30);card.slot=slot
+        card:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
+        card:RegisterForClicks("LeftButtonUp","RightButtonUp")
+        card:SetScript("OnClick",function()
+            if not V:WeaponChoiceAvailable(this.slot) then return end
+            if arg1=="RightButton" then V:OpenSlotMenu(this.slot) else V:OpenBrowser(this.slot) end
         end)
-        checkbox:SetScript("OnLeave",function() GameTooltip:Hide() end)
+        self.weaponCards[slot]=card
+        local b=self:CreateSlotButton(card,card,slot,8,3,24)
+        b:SetScript("OnClick",card:GetScript("OnClick"))
+        card:SetScript("OnEnter",b:GetScript("OnEnter"));card:SetScript("OnLeave",b:GetScript("OnLeave"))
+        card.title=label(card,self.weaponNames[slot-100],43,8,w-47,14)
+        card.title:SetFont("Fonts\\FRIZQT__.TTF",11)
+        if slot>=108 then
+            card.note=label(card,"",57,29,257,13,true);card.note:SetFont("Fonts\\FRIZQT__.TTF",10)
+            card.note:Hide()
+        else
+            local cog=CreateFrame("Button",nil,b);card.gear=cog;cog.slot=slot
+            cog:SetPoint("BOTTOMRIGHT",b,"BOTTOMRIGHT",4,-3);cog:SetWidth(16);cog:SetHeight(16)
+            cog:SetFrameLevel(b:GetFrameLevel()+3)
+            cog:SetNormalTexture(art.."PlacementCog.tga")
+            cog:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Round","ADD")
+            cog:SetScript("OnClick",function()
+                if not V:WeaponChoiceAvailable(this.slot) then return end
+                if not V:SlotSelection(this.slot) then V:OpenBrowser(this.slot);return end
+                V:CloseBrowser();V:OpenPlacementTuner(this.slot)
+            end)
+            cog:SetScript("OnEnter",function()
+                GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Edit placement",1,.82,0)
+                GameTooltip:AddLine(V:SlotSelection(this.slot) and "Position, rotation and scale." or "Choose an item first.",1,1,1);GameTooltip:Show()
+            end)
+            cog:SetScript("OnLeave",function() GameTooltip:Hide() end)
+        end
+        return card
     end
-    storedChoice("ranged","hideRangedWhenStored","Hide ranged weapon when not in use",30,
-        "Hide your ranged weapon while it is stored. It remains visible while drawn.")
-    storedChoice("melee","hideMeleeWhenStored","Hide melee weapons when not in use",60,
-        "Hide melee weapons while they are stored. Drawn weapons and shields remain visible.")
-    local placement=section(f,23,198,318,74,true)
-    label(placement,"Placement",12,8,290,18)
-    local help=label(placement,"Right-click a weapon or quiver slot and choose Placement Tuner to adjust its position.",12,30,290,36,true)
-    help:SetFont("Fonts\\FRIZQT__.TTF",10);help:SetTextColor(.8,.8,.8)
-    self.weaponNotice=label(f,"",29,286,306,40,true)
-    self.weaponNotice:SetFont("Fonts\\FRIZQT__.TTF",10)
+    for row,slot in ipairs({108,109,110}) do choice(self.weaponActiveGroup,slot,0,28+(row-1)*60,318) end
+    for row,slots in ipairs({{101,102},{103,104},{105,106},{107}}) do
+        for column,slot in ipairs(slots) do choice(self.weaponCarriedGroup,slot,(column-1)*160,22+(row-1)*32,158) end
+    end
+    self:CreateWeaponOptions(p)
+    self.weaponNotice=label(p,"",31,70,302,11,true);self.weaponNotice:SetFont("Fonts\\FRIZQT__.TTF",9)
+end
+function V:CreateWeaponOptions(parent)
+    local options=CreateFrame("Frame",nil,parent);self.weaponModeOptions=options
+    options:SetPoint("TOPLEFT",parent,"TOPLEFT",23,-82);options:SetWidth(318);options:SetHeight(22)
+    local checkbox=CreateFrame("CheckButton","SaureksClosetWeaponAdvancedMode",options,"UICheckButtonTemplate")
+    self.weaponAdvancedCheckbox=checkbox
+    checkbox:SetPoint("TOPLEFT",options,"TOPLEFT",8,0);checkbox:SetWidth(22);checkbox:SetHeight(22)
+    checkbox:SetHitRectInsets(0,-124,0,0)
+    local caption=label(options,"Advanced mode",0,0,124,22,true)
+    caption:ClearAllPoints();caption:SetPoint("LEFT",checkbox,"RIGHT",2,0);caption:SetJustifyV("MIDDLE")
+    caption:SetFont("Fonts\\FRIZQT__.TTF",11)
+    checkbox:SetScript("OnClick",function() V:SetWeaponAdvancedMode(this:GetChecked()) end)
+    checkbox:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Advanced mode",1,.82,0)
+        GameTooltip:AddLine("Off: change your equipped main hand, off hand and ranged appearances. Weapons sheathe normally.",1,1,1,true)
+        GameTooltip:AddLine("On: choose hand appearances and carried body items independently. Carried items stay visible; hand weapons disappear when put away.",.75,.75,.75,true)
+        GameTooltip:AddLine("Switching modes keeps all your saved choices.",.75,.75,.75,true);GameTooltip:Show()
+    end)
+    checkbox:SetScript("OnLeave",function() GameTooltip:Hide() end)
+
 end
 function V:OpenWeaponOptions()
-    if not self.weaponOptions or not self.frame:IsVisible() or self.tab~="weaponry" then return end
-    self.weaponOptions:Show()
-    if self.browser and self.browser:IsShown() then self:CloseBrowser() end
-    self:SetPanelArea("doublewide");self:Refresh()
+    self:SetTab("weaponry")
 end
 function V:CloseWeaponOptions()
-    if self.weaponOptions then self.weaponOptions:Hide() end
+    -- Kept for shared browser/page cleanup; inline options must stay visible.
     self:ReleaseNeighbor()
 end
 function V:CreateBagsPage(p)
@@ -718,11 +820,8 @@ function V:OpenSlotMenu(slot)
             local selectedSlot=V.menuSlot
             local selected=V:SlotSelection(selectedSlot)
             if V:IsWeaponPosition(selectedSlot) then
-                UIDropDownMenu_AddButton({text="Custom Item",checked=selected and 1 or nil,func=function() V:OpenBrowser(selectedSlot) end})
-                UIDropDownMenu_AddButton({text="Game Default",checked=not selected and 1 or nil,func=function() V:CloseBrowser();V:ClearSlot(selectedSlot) end})
-                UIDropDownMenu_AddButton({text="Placement Tuner",notCheckable=1,disabled=not selected and 1 or nil,func=function()
-                    V:CloseBrowser();V:OpenPlacementTuner(selectedSlot)
-                end})
+                UIDropDownMenu_AddButton({text="Choose appearance",notCheckable=1,func=function() V:OpenBrowser(selectedSlot) end})
+                UIDropDownMenu_AddButton({text=selectedSlot>=108 and "Passthrough" or "Remove carried item",notCheckable=1,func=function() V:CloseBrowser();V:ClearSlot(selectedSlot) end})
                 return
             end
             UIDropDownMenu_AddButton({text="Custom Item",checked=selected~=nil and selected~=0 and 1 or nil,func=function() V:OpenBrowser(selectedSlot) end})
@@ -741,6 +840,7 @@ function V:OpenSlotMenu(slot)
 end
 function V:OpenBrowser(slot)
     if not self.slotButtons[slot] or (self:IsWeaponPosition(slot) and self.tab~="weaponry") then return end
+    if self:IsWeaponPosition(slot) and not self:WeaponChoiceAvailable(slot) then return end
     self:CancelDraft();self.slot=slot;self.offset=0
     self.quality=nil;self.material=nil;self.favoritesOnly=false
     self.query="";self.search:SetText("")
@@ -1366,7 +1466,7 @@ function V:RefreshList()
     if self.maxOffset>0 then self.scroll:Show();self.scrollThumb:Show() else self.scrollThumb:Hide();self.scroll:Hide() end
     self.qualityLabel:SetText(self.quality=="unobtainable" and "Unobtainable" or ("Quality: "..(self.qualityNames[self.quality] or "All")))
     self.materialLabel:SetText("Type: "..self:ItemTypeName(self.material,self.slot))
-    self.browser.title:SetText(self.slotNames[self.slot].." Appearance")
+    self.browser.title:SetText(self.slotNames[self.slot]..(self:IsCarriedWeapon(self.slot) and " - Carried" or " Appearance"))
     self.resultsLabel:SetText(table.getn(matches)..(table.getn(matches)==1 and " Item" or " Items"))
     if table.getn(matches)==0 then self.emptyLabel:Show() else self.emptyLabel:Hide() end
     for i,b in ipairs(self.rows) do
@@ -1526,17 +1626,8 @@ function V:Refresh()
     self:RefreshUpdateUI()
     local c=VanityStudioCharacter
     self.enabledButton.caption:SetText(c.enabled and "Disable" or "Enable")
-    local storedAvailable=self:WeaponStoredVisibilityAvailable()
-    for _,field in ipairs({"hideRangedWhenStored","hideMeleeWhenStored"}) do
-        local checkbox=self[field.."Checkbox"]
-        if checkbox then
-            checkbox:SetChecked(c.weapons and c.weapons[field] and 1 or nil)
-            enabled(checkbox,storedAvailable);checkbox:SetAlpha(storedAvailable and 1 or .45)
-            self[field.."Label"]:SetAlpha(storedAvailable and 1 or .45)
-        end
-    end
     if self.weaponNotice then
-        self.weaponNotice:SetText(not storedAvailable and "Update SaureksCloset.dll and restart WoW." or self.weaponError or "")
+        self.weaponNotice:SetText(not self:CarriedWeaponsAvailable() and "Update SaureksCloset.dll and restart WoW." or self.weaponError or "")
     end
     self.activeOutfitLabel:SetText(self:ActiveOutfitText())
     if self.bagSlots then
@@ -1545,12 +1636,15 @@ function V:Refresh()
     for slot,b in pairs(self.slotButtons) do
         local id=self:SlotSelection(slot);local icon
         if id and id>0 then local n,l,q,lev,typ,sub,stack,loc,path=GetItemInfo(id);icon=path or self:CatalogIcon(id)
+        elseif slot>=108 and slot<=110 and type(GetInventoryItemTexture)=="function" then
+            icon=GetInventoryItemTexture("player",slot-92)
         end
         b.icon:SetTexture(icon or "Interface\\PaperDoll\\UI-PaperDoll-Slot-"..(icons[slot] or self.weaponIcons[slot-100]))
         if id==0 then b.hiddenOverlay:Show() else b.hiddenOverlay:Hide() end
     end
     self:RefreshSlotHighlights()
-    if self.tab=="armor" or self.tab=="weaponry" or self.tab=="bags" or self.tab=="exposure" then self:RefreshPreview()
+    self:RefreshWeaponCards()
+    if self.tab=="armor" or self.tab=="bags" or self.tab=="exposure" then self:RefreshPreview()
     elseif self.tab=="body" then self:RefreshBody();self:RefreshPreview()
     elseif self.tab=="outfits" then self:RefreshOutfits() end
     if self.browser:IsShown() then self:RefreshList() end

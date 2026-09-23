@@ -105,5 +105,5 @@ assert(string.find(exported,'"yaw": 23.000000',1,true) and string.find(exported,
 assert(string.find(exported,'\\u0001',1,true) and not string.find(exported,"nan"))
 WriteFile=function() error("writer unavailable") end
 assert(V:ExportBagTunerFits()==exported)
-local output=assert(io.open("/private/tmp/saureks-bag-tuner-test.json","w"));output:write(exported);output:close()
+local output=assert(io.open((os.getenv("TMPDIR") or "/tmp").."/saureks-bag-tuner-test.json","w"));output:write(exported);output:close()
 print("PASS: bag tuner live dispatch, fit identity, validation, defaults, pause, persistence, individual field reset/load, retries and JSON export")

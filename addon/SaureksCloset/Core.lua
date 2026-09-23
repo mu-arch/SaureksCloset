@@ -2,7 +2,7 @@
 VanityStudio = { index = {}, slots = {}, applied = {}, pending = {}, errors = {} }
 local V = VanityStudio
 -- Read from reloaded code; client addon metadata can retain the startup version.
-V.VERSION = "3.6.9"
+V.VERSION = "3.7.9"
 V.UNSAVED = {} -- Runtime key; the single draft itself lives in character saved variables.
 V.slotOrder = {1,3,15,4,5,19,9,10,6,7,8,16,17,18}
 V.slotNames = {[1]="Head",[3]="Shoulders",[4]="Shirt",[5]="Chest",[6]="Waist",[7]="Legs",[8]="Feet",[9]="Wrists",[10]="Hands",[15]="Back",[16]="Main hand",[17]="Off hand",[18]="Ranged",[19]="Tabard"}
@@ -36,9 +36,12 @@ function V:ItemBrowseLevel(item)
 end
 function V:ItemTypeOptions(slot,quality,maxLevel)
     local seen,options={},{}
+    local weapon=self.IsWeaponPosition and self:IsWeaponPosition(slot)
+    local real=weapon and slot>=108 and self:RealWeaponItems() or nil
     for _,item in ipairs(self.slots[slot] or {}) do
         local key=self:ItemTypeKey(item,slot)
-        if self:MatchesItemQuality(item,quality) and (not maxLevel or self:ItemBrowseLevel(item)<=maxLevel) and not seen[key] then seen[key]=true;table.insert(options,key) end
+        if (not weapon or self:WeaponChoiceCompatible(item[1],slot,real)) and
+            self:MatchesItemQuality(item,quality) and (not maxLevel or self:ItemBrowseLevel(item)<=maxLevel) and not seen[key] then seen[key]=true;table.insert(options,key) end
     end
     table.sort(options);return options
 end
@@ -81,6 +84,7 @@ end
 function V:Initialize()
     VanityStudioDB = VanityStudioDB or {}
     VanityStudioDB.portraitDiagnostics=nil -- Retire the generated-thumbnail diagnostics.
+    self.armorHistory=VanityStudioDB.armorHistory or {}
     VanityStudioDB.favorites = VanityStudioDB.favorites or {}
     VanityStudioDB.outfits = VanityStudioDB.outfits or {}
     if VanityStudioDB.hideHigherLevelItems==nil then VanityStudioDB.hideHigherLevelItems=true end
@@ -110,6 +114,7 @@ function V:Initialize()
     self:RefreshTrueBody()
     self:InitializeBagTuning()
     self.armorLifeState = self:ArmorLifeState()
+    self:CheckArmorRepairs()
     if c.outfitDirty then self:TrackUnsaved() end
     self.ready = true
     self:CreateLauncher()
@@ -146,17 +151,26 @@ function V:Sync()
     -- Appearance setters can synchronously emit model/inventory events.
     -- Those notifications must not schedule another recovery of our own work.
     self.syncingAppearance = true
+    -- The original client can defer UNIT_MODEL_CHANGED until after the helper
+    -- returns. Ignore only that short echo of our own writes, not later game
+    -- rebuilds that genuinely need repair.
+    self.ignoreArmorModelEventsUntil=GetTime()+1
     self:UpdateArmorEquipment()
     local c = VanityStudioCharacter
     self:SyncBody()
-    if self.refreshArmorDisplay then
+    local refreshArmorDisplay=self.refreshArmorDisplay
+    if refreshArmorDisplay then
         -- Consume before calling the helper: its model events are synchronous
         -- on some clients, deferred on others. Neither may trigger another pulse.
         self.refreshArmorDisplay = nil
         self:RefreshArmorDisplay()
     end
     for _,slot in ipairs(self.slotOrder) do
+        local draft = self.draft and self.draft.slot == slot
         local id = c.selected[slot]
+        -- The browser owns this slot until Apply or Cancel, including hidden
+        -- and passthrough choices. Background retries must use that same choice.
+        if draft then id = self.draft.id end
         -- An already-applied item remains valid if the client temporarily
         -- cannot supply its tooltip data. Do not strip it during combat.
         local cached = id == 0 or (id and (self.applied[slot] == id or GetItemInfo(id)))
@@ -181,9 +195,9 @@ function V:Sync()
             self.pending[slot] = nil
             if not id then self.errors[slot] = nil end
         end
-        if not id or not c.enabled then
+        if not id or (not c.enabled and not draft) then
             self:Release(slot)
-        elseif cached and self:Available() and self.applied[slot] ~= id then
+        elseif cached and self:Available() and (refreshArmorDisplay or self.applied[slot] ~= id) then
             local ok,err = pcall(SetUnitVisibleItemID, "player", slot, id)
             if ok then
                 self.applied[slot] = id
@@ -366,6 +380,7 @@ function V:LoadOutfit(name)
     if self:SyncBody()==false then c.body=previousBody;self:Message(self.bodyError);return false end
     self.editingBody=nil;self:InvalidatePreviewModel(.25,true)
     c.selected=selected;c.weapons=self:NormalizeWeapons(outfit.weapons)
+    self:MigrateEquippedWeaponOverrides(c.selected,c.weapons)
     c.activeUnsaved=name==self.UNSAVED and true or nil
     c.activeOutfit=name~=self.UNSAVED and name or nil;c.outfitDirty=c.activeUnsaved
     self.pending={};self.errors={};self:Sync();self:Refresh();return true
@@ -392,9 +407,11 @@ end
 
 function V:Filter(slot, query, quality, material, favorites, maxLevel)
     local result = {}
+    local weapon=self.IsWeaponPosition and self:IsWeaponPosition(slot)
+    local real=weapon and slot>=108 and self:RealWeaponItems() or nil
     query = string.lower(query or "")
     for _,item in ipairs(self.slots[slot] or {}) do
-        local match = self:MatchesItemQuality(item,quality) and
+        local match = (not weapon or self:WeaponChoiceCompatible(item[1],slot,real)) and self:MatchesItemQuality(item,quality) and
             (not maxLevel or self:ItemBrowseLevel(item)<=maxLevel) and
             (material == nil or self:ItemTypeKey(item,slot) == material) and
             (not favorites or VanityStudioDB.favorites[item[1]])
@@ -459,13 +476,67 @@ function V:RecordArmorEvent(message)
     if VanityStudioDB then VanityStudioDB.armorHistory=self.armorHistory end
 end
 
-function V:QueueArmorCheck(reason)
+function V:CheckArmorRepairs()
+    if self.syncingAppearance or (UnitExists and not UnitExists("player")) then return end
+    -- Original 1.12 has no GetInventoryItemDurability. Its inventory tooltip
+    -- returns the real item's repair cost, independently of the visible ID.
+    if not self.repairTip then
+        self.repairTip=CreateFrame("GameTooltip","SaureksClosetRepairTooltip",UIParent,"GameTooltipTemplate")
+    end
+    local previous=self.armorRepairCosts or {}
+    local current={}
+    local repaired=false
+    for _,slot in ipairs(self.slotOrder) do
+        local link=GetInventoryItemLink("player",slot)
+        if link then
+            self.repairTip:SetOwner(UIParent,"ANCHOR_NONE")
+            self.repairTip:ClearLines()
+            local hasItem,hasCooldown,cost=self.repairTip:SetInventoryItem("player",slot)
+            self.repairTip:Hide()
+            local before=previous[slot]
+            if hasItem and type(cost)=="number" then
+                current[slot]={link=link,cost=cost}
+                -- Only a completed repair qualifies. Damage, vendor discounts,
+                -- missing item data and swapping equipment must not rebuild us.
+                if before and before.link==link and before.cost>0 and cost==0 then repaired=true end
+            elseif before and before.link==link then current[slot]=before end
+        end
+    end
+    self.armorRepairCosts=current
+    if repaired and VanityStudioCharacter.enabled then
+        self:QueueArmorCheck("equipment repaired")
+        -- A confirmed repair is not an echo of our own model setter. It must
+        -- recover even immediately after choosing an appearance or drawing.
+        self.armorCheckRefreshDisplay=true
+        self.armorCheckReason="equipment repaired"
+    end
+end
+
+function V:QueueArmorCheck(reason,refreshDisplay)
     if self.syncingAppearance or not VanityStudioCharacter.enabled then return end
+    if refreshDisplay and self.ignoreArmorModelEventsUntil and
+        GetTime()<self.ignoreArmorModelEventsUntil then return end
+    if refreshDisplay then
+        self.armorCheckRefreshDisplay=true
+        self.armorCheckReason=reason
+    end
     -- Keep the first deadline so a stream of combat notifications cannot
     -- postpone the check indefinitely. No timer runs when there are no events.
     if not self.armorCheckAt then
         self.armorCheckAt=GetTime()+.25
-        self:RecordArmorEvent("check queued: "..reason)
+        self.armorCheckReason=self.armorCheckReason or reason
+        local inCombat=UnitAffectingCombat and UnitAffectingCombat("player")
+        local renderer=""
+        if type(SaureksClosetInspect)=="function" then
+            local inspection={pcall(SaureksClosetInspect)}
+            if inspection[1] and inspection[2]==3 then
+                -- revision/composed/reloads/detail-updates identify whether
+                -- our native body renderer initiated work around this event.
+                renderer="; renderer="..tostring(inspection[5]).."/"..tostring(inspection[6])..
+                    "/"..tostring(inspection[7]).."/"..tostring(inspection[8])
+            end
+        end
+        self:RecordArmorEvent("check queued: "..reason.."; refresh="..tostring(refreshDisplay and true or false).."; combat="..tostring(inCombat and true or false)..renderer)
     end
 end
 
@@ -473,12 +544,28 @@ function V:UpdateArmorCheck()
     if not self.armorCheckAt or GetTime()<self.armorCheckAt or self.respawnRecovery then return end
     if UnitExists and not UnitExists("player") then return end
     self.armorCheckAt=nil
+    local reason=self.armorCheckReason or "unknown"
+    local refreshDisplay=self.armorCheckRefreshDisplay
+    self.armorCheckReason=nil;self.armorCheckRefreshDisplay=nil
     local c=VanityStudioCharacter
     if not c.enabled or not self:Available() then return end
+    if refreshDisplay then
+        -- A client model rebuild can reset rendered armor while leaving the
+        -- virtual item fields unchanged. Reasserting equal IDs is therefore a
+        -- no-op in the helper. Sync performs one temporary field change and
+        -- restores the complete outfit, which rebuilds the stale visuals once.
+        self.refreshArmorDisplay=true
+        self:RecordArmorEvent("display refresh requested after "..reason)
+        -- Run the nudge and complete restore in this one Lua update. There is
+        -- no intervening rendered frame and no periodic follow-up worker.
+        self:Sync()
+        return
+    end
     -- Inventory/model updates may overwrite visible item fields without an
     -- equipment-link change. The Lua applied cache cannot detect that. Let the
     -- helper compare the real fields: equal IDs do not rebuild the model.
     self.syncingAppearance=true
+    self.ignoreArmorModelEventsUntil=GetTime()+1
     local checked=0
     local requested={}
     for _,slot in ipairs(self.slotOrder) do
@@ -517,7 +604,8 @@ function V:RefreshArmorDisplay()
     -- one refresh pair for the whole outfit, not an off/on pass over every slot.
     for _,slot in ipairs(self.slotOrder) do
         local id = c.selected[slot]
-        if id and (id == 0 or GetItemInfo(id)) then
+        if self.draft and self.draft.slot==slot then id=self.draft.id end
+        if id and (id == 0 or self.applied[slot] == id or GetItemInfo(id)) then
             local temporary = 0
             local usable = id > 0
             if id == 0 then
@@ -526,7 +614,6 @@ function V:RefreshArmorDisplay()
                 temporary = nil
             end
             if usable then
-                self.applied[slot] = nil
                 local ok,err = pcall(SetUnitVisibleItemID,"player",slot,temporary)
                 if not ok then self.errors[slot] = tostring(err) end
                 return
@@ -570,6 +657,7 @@ function V:UpdateRespawnRecovery()
     -- World entry reasserts IDs; lifecycle transitions also refresh stale textures.
     self.respawnRecovery = nil
     self.armorCheckAt = nil -- This application already includes all armor fields.
+    self.armorCheckReason=nil;self.armorCheckRefreshDisplay=nil
     self.refreshArmorDisplay = recovery.refreshDisplay
     self.applied = {}
     self.needsSync = true
@@ -586,10 +674,18 @@ V.events:RegisterEvent("UNIT_LEVEL")
 V.events:RegisterEvent("PLAYER_DEAD")
 V.events:RegisterEvent("PLAYER_ALIVE")
 V.events:RegisterEvent("PLAYER_UNGHOST")
+V.events:RegisterEvent("UPDATE_INVENTORY_ALERTS")
+V.events:RegisterEvent("MERCHANT_SHOW")
+V.events:RegisterEvent("MERCHANT_UPDATE")
+V.events:RegisterEvent("MERCHANT_CLOSED")
 V.events:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == "SaureksCloset" then V:Initialize()
     elseif V.ready and (event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST") then
         V:QueueRespawnRecovery(event)
+    elseif V.ready and event == "MERCHANT_SHOW" then
+        V:CheckArmorRepairs()
+    elseif V.ready and (event == "UPDATE_INVENTORY_ALERTS" or event == "MERCHANT_UPDATE" or event == "MERCHANT_CLOSED") then
+        V.armorRepairCheckPending=true
     elseif V.ready and event == "BAG_UPDATE" then
         local quiver=V:RealQuiverItem()
         if V.lastEquippedQuiver~=quiver then
@@ -601,6 +697,9 @@ V.events:SetScript("OnEvent", function()
     elseif V.ready and event == "UNIT_PORTRAIT_UPDATE" and arg1 == "player" then
         V:RefreshPortraits()
     elseif V.ready and event == "UNIT_MODEL_CHANGED" and arg1 == "player" then
+        -- Weapon attachment updates also emit this event. Treat it as a field
+        -- check, not evidence that the whole character needs rebuilding. The
+        -- explicit death/release/resurrection recovery still repairs textures.
         V:QueueArmorCheck(event)
         local recovery = V.respawnRecovery
         if recovery and not V.syncingAppearance then
@@ -610,10 +709,12 @@ V.events:SetScript("OnEvent", function()
         V:RefreshPortraits();V:RefreshPreviewForModelEvent()
     elseif V.ready and (event == "PLAYER_ENTERING_WORLD" or (event == "UNIT_INVENTORY_CHANGED" and arg1 == "player")) then
         if event == "PLAYER_ENTERING_WORLD" then
+            V:CheckArmorRepairs()
             V.appliedRace = nil;V.bagTunerSynced={};V:RefreshTrueBody();V:RefreshBody()
             V:RefreshPortraits();V:InvalidatePreviewModel(.25,true)
             V:QueueRespawnRecovery(event)
         elseif not V.syncingAppearance then
+            V.armorRepairCheckPending=true
             if V.respawnRecovery then V.respawnRecovery.next = GetTime() + .25 end
             if V:UpdateArmorEquipment() then V.needsSync = true
             else V:QueueArmorCheck(event) end
@@ -630,6 +731,10 @@ V.events:SetScript("OnUpdate", function()
     elapsed = elapsed + arg1
     if elapsed < .5 then return end
     elapsed = 0
+    if V.armorRepairCheckPending then
+        V.armorRepairCheckPending=nil
+        V:CheckArmorRepairs()
+    end
     V:UpdateRespawnRecovery()
     if V.trueBodyPending and V:BodyAvailable() and V:RefreshTrueBody() then
         V:RefreshBody()

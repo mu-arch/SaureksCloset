@@ -39,6 +39,19 @@ int main(){
     s.items[0]=guns;assert(!s.valid());
     // One-handed weapons can be stored on the back; selected location wins.
     s={};s.items[2]=daggers;s.equipped[0]=daggers;assert(s.routes()[0]==2);
+    s={};s.independent=true;s.items[5]=bows;s.items[9]=guns;s.equipped[2]=123456789;
+    assert(s.valid()&&s.routes()[2]==9); // custom-server wand need not be a cosmetic asset
+    s.items[9]=0;assert(s.routes()[2]==-1); // decoration never becomes an attack appearance
+    s.items[9]=guns;s.equipped[2]=0;assert(s.routes()[2]==-1);
+    s.items[7]=swords;s.items[8]=143;s.equipped={{swords,143,0}};
+    assert(s.routes()[0]==7&&s.routes()[1]==8);
+    s.items[8]=guns;assert(!s.valid());
+    s={};s.items[5]=guns;s.equipped[2]=bows;
+    auto legacy=s;assert(s.routes()[2]==5);
+    for(int mode:{0,1}){
+        s.carriedMode=mode;assert(!(s==legacy)&&s.routes()[2]==-1);
+        s.items[9]=guns;assert(s.routes()[2]==9);s.items[9]=0;
+    }
     for(unsigned i=0;i<7;i++)for(unsigned j=0;j<i;j++)assert(weaponPoints[i]!=weaponPoints[j]);
     std::cout<<"PASS: weapon asset validation, physical compatibility, independent routes, real-equipment matching\n";
 }

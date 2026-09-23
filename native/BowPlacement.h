@@ -2,7 +2,7 @@
 // Build 5875 CM2 attachment layout. Read the active model, not the player's
 // original race: wardrobe previews and race overrides have their own skeletons.
 // Called only during recursive child update, after the parent bones are ready.
-static bool animatedAttachmentMatrix(std::uintptr_t parent,unsigned point,std::array<float,16>& matrix,std::array<float,16>* parentBoneMatrix=nullptr){
+static bool animatedAttachmentMatrix(std::uintptr_t parent,unsigned point,std::array<float,16>& matrix,std::array<float,16>* parentBoneMatrix=nullptr,std::array<float,3>* authoredAnchor=nullptr){
     std::uintptr_t data=0,header=0,lookup=0,attachments=0,bones=0;
     unsigned lookupCount=0,attachmentCount=0,boneCount=0,id=0;
     std::uint16_t index=0,bone=0;
@@ -35,6 +35,7 @@ static bool animatedAttachmentMatrix(std::uintptr_t parent,unsigned point,std::a
             local[1]*matrix[4+axis]+local[2]*matrix[8+axis];
         if(!std::isfinite(matrix[12+axis]))return false;
     }
+    if(authoredAnchor)*authoredAnchor=local;
     return true;
 }
 static bool animatedBackPosition(std::uintptr_t parent,std::array<float,3>& position,float rightOffset=0){
