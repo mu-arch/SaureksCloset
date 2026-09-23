@@ -126,6 +126,7 @@ function V:RefreshPreview()
         local ok,copied=pcall(function()
             V.previewBuffer:SetAlpha(0)
             if not V:CopyWardrobeModel(V.previewBuffer) then return false end
+            V:FrameBodyPreview(V.previewBuffer,true)
             V.previewBuffer:SetRotation(V.model.rotation or .61)
             V.previewDressingModel=V.previewBuffer
             return true

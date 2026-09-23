@@ -1,4 +1,4 @@
-# Weapon appearances — 3.7.9
+# Weapon appearances — 3.7.10
 
 The full Weaponry page has two modes. The **Advanced mode** checkbox switches
 between them without erasing any appearance or placement settings.
@@ -74,9 +74,19 @@ back and the staff shaft's thickness, keeping its normal angle and height. Staff
 that already sit close to the body keep their normal mounting point. Hand poses,
 Passthrough weapons and saved placement adjustments retain their behavior.
 
+## Changes in 3.7.10
+
+Equipped weapon slots now starts near the top of the Weaponry page, with room
+above its heading and description. Advanced mode sits at the bottom below both
+the equipped and carried choices, leaving their cards unobstructed.
+
+On Body only, the character preview moves slightly right and frames the bust at
+a closer scale. Its lower half fades smoothly into the existing window artwork.
+The usual full-body view returns on Outfit, Bags and Exposure.
+
 ## Installing this update
 
-Addon 3.7.9 requires renderer 30709 (DLL 3.7.9). Install the included DLL beside
+Addon 3.7.10 requires renderer 30710 (DLL 3.7.10). Install the included DLL beside
 WoW.exe, then fully quit and restart WoW. A UI reload cannot replace a loaded DLL.
-Version Details should show addon **3.7.9**, loaded DLL **3.7.9**, and required
-DLL **3.7.9**.
+Version Details should show addon **3.7.10**, loaded DLL **3.7.10**, and required
+DLL **3.7.10**.

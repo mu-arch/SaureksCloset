@@ -268,14 +268,24 @@ function V:SetTab(tab)
     if self.wardrobeViewShadowFrame then
         if sideControls then self.wardrobeViewShadowFrame:Show() else self.wardrobeViewShadowFrame:Hide() end
     end
-    local modelX=sideControls and 96 or 61
+    local modelX=tab=="body" and 113 or sideControls and 96 or 61
+    local modelWidth=tab=="body" and 232 or 244
     for _,model in ipairs({self.model,self.previewBuffer}) do
         model:ClearAllPoints();model:SetPoint("TOPLEFT",self.pagesByName.armor,"TOPLEFT",modelX,-86)
-        model:SetWidth(244);model:SetHeight(340)
+        model:SetWidth(modelWidth);model:SetHeight(340)
+        self:FrameBodyPreview(model,true)
     end
+    if tab=="body" then self.bodyPreviewFade:Show() else self.bodyPreviewFade:Hide() end
     if modelPage then self.rotationControls:Show() else self.rotationControls:Hide() end
     if modelPage and not wasCharacter then self:HidePreviewUntilReady();self:InvalidatePreviewModel(0,true) end
     self:Refresh()
+end
+function V:FrameBodyPreview(model,force)
+    local body=self.tab=="body"
+    if not force and model.closetBodyFramed==body then return end
+    model:SetModelScale(body and 1.55 or 1)
+    model:SetPosition(0,0,body and -.55 or 0)
+    model.closetBodyFramed=body
 end
 function V:CreateUI()
     self.uiReady=false
@@ -460,6 +470,27 @@ function V:CreateArmorPage(p)
     buffer:SetPoint("TOPLEFT",p,"TOPLEFT",61,-86);buffer:SetWidth(244);buffer:SetHeight(340);buffer:SetAlpha(0)
     self.previewBuffer=buffer
     m:SetFrameLevel(p:GetFrameLevel()+2);buffer:SetFrameLevel(p:GetFrameLevel()+2)
+    -- Repaint the exact underlying wardrobe art above the lower part of the
+    -- Body preview. Graduated opacity makes the bust disappear into the scene
+    -- without a straight crop, while leaving other preview pages untouched.
+    local fade=CreateFrame("Frame",nil,p);self.bodyPreviewFade=fade
+    fade:SetPoint("TOPLEFT",p,"TOPLEFT",165,-258);fade:SetWidth(177);fade:SetHeight(172)
+    fade:SetFrameLevel(math.max(m:GetFrameLevel(),buffer:GetFrameLevel())+1)
+    fade:EnableMouse(false)
+    fade.strips={}
+    for y=0,123,3 do
+        local strip=texture(fade,art.."Main.blp",0,y,177,3,"ARTWORK")
+        strip:SetTexCoord(146/323,1,(258+y-75)/355,(261+y-75)/355)
+        local progress=(y+3)/126
+        strip:SetAlpha(progress*progress*(3-2*progress))
+        table.insert(fade.strips,strip)
+    end
+    -- The remaining artwork conceals the model below the completed fade, so
+    -- its own frame edge cannot bring back a hard cut beneath the selector.
+    local tail=texture(fade,art.."Main.blp",0,126,177,46,"ARTWORK")
+    tail:SetTexCoord(146/323,1,309/355,1)
+    fade.tail=tail
+    fade:Hide()
     -- This artwork is split across four power-of-two TGA files for the 1.12
     -- client. Keep it above every embedded menu and window-edge overlay so no
     -- sidebar can obscure the ornamental frame.
@@ -593,7 +624,7 @@ function V:WeaponChoiceAvailable(slot)
 end
 function V:LayoutWeaponCards(advanced)
     local group=self.weaponActiveGroup
-    group:ClearAllPoints();group:SetPoint("TOPLEFT",self.pagesByName.weaponry,"TOPLEFT",23,advanced and -132 or -140)
+    group:ClearAllPoints();group:SetPoint("TOPLEFT",self.pagesByName.weaponry,"TOPLEFT",23,-92)
     group:SetHeight(advanced and 102 or 238)
     group.heading:SetText(advanced and "In your hands" or "Equipped weapon slots")
     self.weaponSlotDescription:SetText(advanced and "Choose the weapons shown while attacking." or "Change the slots you have equipped.\nMain hand and off hand are separate choices.")
@@ -655,11 +686,11 @@ function V:CreateWeaponryPage(p)
         rule:SetTexture(.5,.44,.3,.4)
         return box
     end
-    self.weaponActiveGroup=group("Equipped weapon slots",23,140,318,238)
+    self.weaponActiveGroup=group("Equipped weapon slots",23,92,318,238)
     self.weaponSlotDescription=label(self.weaponActiveGroup,"",8,22,302,28,true)
     self.weaponSlotDescription:SetFont("Fonts\\FRIZQT__.TTF",10);self.weaponSlotDescription:SetSpacing(4)
     self.weaponSlotDescription:SetTextColor(.7,.7,.7)
-    self.weaponCarriedGroup=group("Carried on your body",23,241,318,150)
+    self.weaponCarriedGroup=group("Carried on your body",23,209,318,150)
     local function choice(parent,slot,x,y,w)
         local card=CreateFrame("Button",nil,parent)
         card:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y);card:SetWidth(w);card:SetHeight(30);card.slot=slot
@@ -706,7 +737,7 @@ function V:CreateWeaponryPage(p)
 end
 function V:CreateWeaponOptions(parent)
     local options=CreateFrame("Frame",nil,parent);self.weaponModeOptions=options
-    options:SetPoint("TOPLEFT",parent,"TOPLEFT",23,-82);options:SetWidth(318);options:SetHeight(22)
+    options:SetPoint("TOPLEFT",parent,"TOPLEFT",23,-366);options:SetWidth(318);options:SetHeight(22)
     local checkbox=CreateFrame("CheckButton","SaureksClosetWeaponAdvancedMode",options,"UICheckButtonTemplate")
     self.weaponAdvancedCheckbox=checkbox
     checkbox:SetPoint("TOPLEFT",options,"TOPLEFT",8,0);checkbox:SetWidth(22);checkbox:SetHeight(22)
