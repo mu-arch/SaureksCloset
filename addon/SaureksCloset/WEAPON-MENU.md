@@ -1,4 +1,4 @@
-# Weapon appearances — 3.7.10
+# Weapon appearances — 3.7.11
 
 The full Weaponry page has two modes. The **Advanced mode** checkbox switches
 between them without erasing any appearance or placement settings.
@@ -84,9 +84,15 @@ On Body only, the character preview moves slightly right and frames the bust at
 a closer scale. Its lower half fades smoothly into the existing window artwork.
 The usual full-body view returns on Outfit, Bags and Exposure.
 
+## Changes in 3.7.11
+
+The Body-only character preview now zooms more tightly on the face, shoulders
+and upper torso. Its existing lower fade, position, and all other wardrobe page
+framing stay in place.
+
 ## Installing this update
 
-Addon 3.7.10 requires renderer 30710 (DLL 3.7.10). Install the included DLL beside
+Addon 3.7.11 requires renderer 30711 (DLL 3.7.11). Install the included DLL beside
 WoW.exe, then fully quit and restart WoW. A UI reload cannot replace a loaded DLL.
-Version Details should show addon **3.7.10**, loaded DLL **3.7.10**, and required
-DLL **3.7.10**.
+Version Details should show addon **3.7.11**, loaded DLL **3.7.11**, and required
+DLL **3.7.11**.

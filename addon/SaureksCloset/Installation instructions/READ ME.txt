@@ -1,6 +1,6 @@
 SAUREK'S CLOSET - INSTALLATION
 
-Version 3.7.10 requires renderer 30710 (DLL 3.7.10).
+Version 3.7.11 requires renderer 30711 (DLL 3.7.11).
 Simple mode changes your equipped main hand, off hand and ranged slots.
 Check Advanced mode to choose separate carried items and tune placement.
 Both modes preserve your saved choices. See WEAPON-MENU.md.
@@ -32,5 +32,5 @@ The DLL copy in this instructions folder is only for installation;
 WoW will not load it from here. After replacing a DLL, fully restart the
 game. The /reload command only reloads the addon.
 
-Version Details should show addon 3.7.10, loaded DLL 3.7.10, and required
-DLL 3.7.10. These are the compatible versions for this update.
+Version Details should show addon 3.7.11, loaded DLL 3.7.11, and required
+DLL 3.7.11. These are the compatible versions for this update.

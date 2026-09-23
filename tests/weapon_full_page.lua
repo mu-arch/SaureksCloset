@@ -67,6 +67,11 @@ function methods:SetSpacing(value) self.spacing=value end
 function methods:SetAlpha(value) self.alpha=value end
 function methods:SetModelScale(value) self.modelScale=value end
 function methods:SetPosition(x,y,z) self.position={x,y,z} end
+function methods:GetModelScale() return self.modelScale or 1.37 end
+function methods:GetPosition()
+    local p=self.position or {0,0,.2}
+    return p[1],p[2],p[3]
+end
 function methods:SetTextColor(r,g,b) self.color={r,g,b} end
 function methods:SetJustifyH(value) self.align=value end
 function methods:SetJustifyV(value) self.verticalAlign=value end
@@ -91,6 +96,7 @@ dofile("addon/SaureksCloset/Weaponry.lua")
 dofile("addon/SaureksCloset/Preview.lua")
 dofile("addon/SaureksCloset/UI.lua")
 local V=VanityStudio
+V.NativeBody=function() return {race=1,sex=1} end
 V.frame=CreateFrame("Frame","FullPageTestMain")
 V.frame:SetWidth(384);V.frame:SetHeight(512)
 V.pagesByName={}
@@ -115,6 +121,9 @@ V.SyncWeapons=function() end
 V.TrackUnsaved=function() end
 V.Message=function(self,text) self.lastMessage=text end
 V:SetTab("weaponry")
+for _,model in ipairs({V.model,V.previewBuffer}) do
+    assert(model.modelScale==nil and model.position==nil,"Non-Body pages must not reset the native model framing")
+end
 assert(V.pagesByName.weaponry:IsVisible(),"The weapon page must open directly")
 assert(not V.pagesByName.armor:IsVisible(),"The character page is still beneath the weapon controls")
 for _,model in ipairs({V.model,V.previewBuffer}) do assert(not model:IsVisible(),"A player model is visible on the options page") end
@@ -284,25 +293,67 @@ for _,pageName in ipairs({"armor","body","bags","exposure"}) do
     for _,fill in ipairs(V.weaponSelectorFill) do assert(not fill:IsVisible(),"Weaponry-only texture extended another page") end
 end
 V:SetTab("body")
-assert(V.bodyPreviewFade:IsVisible() and #V.bodyPreviewFade.strips==42,"Body preview needs a soft lower fade")
+assert(V.bodyPreviewFade:IsVisible() and #V.bodyPreviewFade.strips==32,"Body preview needs a soft lower fade")
+local backdropX,_,backdropWidth=rect(V.wardrobeBackgrounds[1])
+local fadeX,_,fadeWidth=rect(V.bodyPreviewFade)
+assert(fadeX==backdropX and fadeWidth==backdropWidth,"Body fade must span the whole scenic area, including behind the options")
 local previousAlpha=-1
 for _,strip in ipairs(V.bodyPreviewFade.strips) do
+    local stripX,_,stripWidth=rect(strip)
+    assert(stripX==backdropX and stripWidth==backdropWidth,"No fade strip may leave an unfaded section of the character")
     assert(strip.alpha>previousAlpha and strip.alpha<=1,"Body fade must grow smoothly toward the backdrop")
     previousAlpha=strip.alpha
 end
 assert(previousAlpha==1,"The lower preview edge must disappear into the backdrop")
-assert(V.bodyPreviewFade.tail and V.bodyPreviewFade.tail.anchor[5]==-126,"No model should reappear below the fade")
+local tailX,fadeEnd,tailWidth,fadeTailHeight=rect(V.bodyPreviewFade.tail)
+assert(tailX==backdropX and tailWidth==backdropWidth,"The lower body must stay hidden across the full scenic width")
+assert(fadeEnd==344 and fadeEnd+fadeTailHeight==430,"The bust must fully fade before the footer without reappearing below it")
 for _,model in ipairs({V.model,V.previewBuffer}) do
-    assert(model.anchor[4]==113 and model.width==232,"Body preview should sit a little farther right")
-    assert(model.modelScale==1.55 and model.position[3]==-.55,"Body preview should frame the bust and face")
+    local x,y,w,h=rect(model)
+    local bx,by,bw,bh=rect(V.wardrobeBackgrounds[1])
+    assert(x>=bx and x+w<=bx+bw and y>=by and y+h<=by+bh,
+        "Both Body model viewports must stay inside the scenic area, including at the top and right edges")
+    assert(model.anchor[4]==129 and model.width==213,"Body viewport should end at the right border")
+    assert(model.modelScale==2.2 and model.position[1]==0 and model.position[2]>0 and model.position[3]<-2,
+        "Body preview must pan the bust right while preserving its zoom and vertical framing")
 end
+-- Native camera target fixtures cover short, tall and broad bodies. Check the
+-- transformed face is above the full-body target but inside its upper extent;
+-- this catches the former horizontal-only pan and a one-offset-for-every-race fix.
+for _,sample in ipairs({{1,1,1.740527,.888759,1.990295},{4,1,2.101545,1.091703,2.276414},
+    {6,0,1.626176,1.008614,1.967832},{7,1,.758638,.493915,1.002644}}) do
+    VanityStudioCharacter.body={race=sample[1],sex=sample[2]}
+    for _,model in ipairs({V.model,V.previewBuffer}) do
+        V:FrameBodyPreview(model)
+        local faceZ=sample[3]*model.modelScale+model.position[3]
+        local projectedPan=model.position[2]/sample[5]*311*1.30/2
+        assert(model.position[1]==0 and math.abs(projectedPan-15)<.01,
+            "Every race must retain the same 15-pixel rightward pan inside the fixed viewport")
+        assert(faceZ>sample[4]*1.1 and faceZ<sample[4]*1.9,"The face must stay within the upper part of the native camera")
+    end
+end
+VanityStudioCharacter.enabled=false
+V:FrameBodyPreview(V.model)
+assert(V.model.position[3]<-2,"Disabling a Gnome override must frame the native human body")
+VanityStudioCharacter.enabled=true;VanityStudioCharacter.body=nil
 V:SetTab("bags")
 assert(not V.bodyPreviewFade:IsVisible(),"Other pages must not inherit the Body fade")
 for _,model in ipairs({V.model,V.previewBuffer}) do
-    assert(model.anchor[4]==96 and model.width==244 and model.modelScale==1 and model.position[3]==0,
-        "The normal character preview must return on other pages")
+    assert(model.anchor[4]==96 and model.anchor[5]==-86 and model.width==244 and model.height==340 and model:GetModelScale()==1.37 and model.position[3]==.2,
+        "The other pages must recover their original model framing")
 end
+-- Preview cloning can replace the hidden buffer's native camera while Body is
+-- open. Restore it before copying, then remember the new camera on that buffer.
+V:SetTab("body")
+V:RestoreBodyPreview(V.previewBuffer)
+V.previewBuffer:SetModelScale(1.72);V.previewBuffer:SetPosition(.1,.2,.3)
+V:FrameBodyPreview(V.previewBuffer)
 V:SetTab("armor")
+assert(V.model:GetModelScale()==1.37 and V.model.position[3]==.2,
+    "The visible model must retain its original Outfit camera")
+assert(V.previewBuffer:GetModelScale()==1.72 and V.previewBuffer.position[1]==.1 and
+    V.previewBuffer.position[2]==.2 and V.previewBuffer.position[3]==.3,
+    "A cloned buffer must restore its own new Outfit camera")
 assert(V.pagesByName.armor:IsVisible() and V.model:IsVisible() and V.wardrobeBackgrounds[1]:IsVisible())
 assert(V.rotationControls:IsVisible(),"Returning to Outfit must restore model controls")
 assert(not V.pagesByName.weaponry:IsVisible())

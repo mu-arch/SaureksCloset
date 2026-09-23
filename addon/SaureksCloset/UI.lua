@@ -268,24 +268,61 @@ function V:SetTab(tab)
     if self.wardrobeViewShadowFrame then
         if sideControls then self.wardrobeViewShadowFrame:Show() else self.wardrobeViewShadowFrame:Hide() end
     end
-    local modelX=tab=="body" and 113 or sideControls and 96 or 61
-    local modelWidth=tab=="body" and 232 or 244
+    local modelX=tab=="body" and 129 or sideControls and 96 or 61
+    -- The model widget owns its render viewport. Keep Body's viewport inside
+    -- the scenic area so ears, shoulders and animated limbs cannot escape it.
+    local modelY=tab=="body" and -75 or -86
+    local modelWidth=tab=="body" and 213 or 244
+    local modelHeight=tab=="body" and 311 or 340
     for _,model in ipairs({self.model,self.previewBuffer}) do
-        model:ClearAllPoints();model:SetPoint("TOPLEFT",self.pagesByName.armor,"TOPLEFT",modelX,-86)
-        model:SetWidth(modelWidth);model:SetHeight(340)
-        self:FrameBodyPreview(model,true)
+        model:ClearAllPoints();model:SetPoint("TOPLEFT",self.pagesByName.armor,"TOPLEFT",modelX,modelY)
+        model:SetWidth(modelWidth);model:SetHeight(modelHeight)
+        self:FrameBodyPreview(model)
     end
     if tab=="body" then self.bodyPreviewFade:Show() else self.bodyPreviewFade:Hide() end
     if modelPage then self.rotationControls:Show() else self.rotationControls:Hide() end
     if modelPage and not wasCharacter then self:HidePreviewUntilReady();self:InvalidatePreviewModel(0,true) end
     self:Refresh()
 end
-function V:FrameBodyPreview(model,force)
-    local body=self.tab=="body"
-    if not force and model.closetBodyFramed==body then return end
-    model:SetModelScale(body and 1.55 or 1)
-    model:SetPosition(0,0,body and -.55 or 0)
-    model.closetBodyFramed=body
+function V:RestoreBodyPreview(model)
+    if not model.closetBodyFramed then return end
+    local saved=model.closetBodyRestoration
+    model:SetModelScale(saved.scale)
+    model:SetPosition(saved.x,saved.y,saved.z)
+    model.closetBodyRestoration=nil
+    model.closetBodyFramed=nil
+end
+-- Native build-5875 M2 cameras: {face Z, full-body Z, half-view height}, male/female.
+-- Use each model's own head height so short and tall races keep the same bust framing.
+local bodyPreviewCameras={
+    {{1.863569,.987278,2.145804},{1.740527,.888759,1.990295}}, -- Human
+    {{1.880145,1.072974,2.117404},{1.822372,1.004492,2.123710}}, -- Orc
+    {{1.298815,.765609,1.626445},{1.325147,.784244,1.616408}}, -- Dwarf
+    {{2.240359,1.207730,2.503745},{2.101545,1.091703,2.276414}}, -- Night Elf
+    {{1.646762,.906834,1.980775},{1.645367,.934755,1.858947}}, -- Undead
+    {{1.626176,1.008614,1.967832},{1.920520,1.065749,2.107813}}, -- Tauren
+    {{.798806,.513815,1.047558},{.758638,.493915,1.002644}}, -- Gnome
+    {{2.052249,1.166833,2.148758},{2.225957,1.199099,2.329100}}, -- Troll
+}
+function V:FrameBodyPreview(model)
+    if self.tab~="body" then self:RestoreBodyPreview(model);return end
+    if not model.closetBodyFramed then
+        local x,y,z=model:GetPosition()
+        model.closetBodyRestoration={scale=model:GetModelScale(),x=x,y=y,z=z}
+    end
+    local c=VanityStudioCharacter
+    local body=c.enabled and c.body or self:NativeBody()
+    local cameras=bodyPreviewCameras[body and body.race or 1] or bodyPreviewCameras[1]
+    local camera=cameras[body and body.sex==1 and 2 or 1]
+    local zoom=2.2
+    model:SetModelScale(zoom)
+    -- This client's Y axis moves sideways; Z is vertical. Place the enlarged
+    -- face above the full-body camera target, with the chest below the fade.
+    -- Pan about 15 screen pixels right at the current window scale, keeping
+    -- the clipping viewport fixed and the pan consistent across race sizes.
+    local rightOffset=30*camera[3]/(311*1.30)
+    model:SetPosition(0,rightOffset,1.65*camera[2]-zoom*camera[1])
+    model.closetBodyFramed=true
 end
 function V:CreateUI()
     self.uiReady=false
@@ -474,21 +511,24 @@ function V:CreateArmorPage(p)
     -- Body preview. Graduated opacity makes the bust disappear into the scene
     -- without a straight crop, while leaving other preview pages untouched.
     local fade=CreateFrame("Frame",nil,p);self.bodyPreviewFade=fade
-    fade:SetPoint("TOPLEFT",p,"TOPLEFT",165,-258);fade:SetWidth(177);fade:SetHeight(172)
+    local fadeTop,fadeLength=248,96
+    -- Match the entire scenic backdrop, including the model behind the options.
+    -- A partial-width overlay leaves a visible vertical edge across the body.
+    fade:SetPoint("TOPLEFT",p,"TOPLEFT",19,-fadeTop);fade:SetWidth(323);fade:SetHeight(430-fadeTop)
     fade:SetFrameLevel(math.max(m:GetFrameLevel(),buffer:GetFrameLevel())+1)
     fade:EnableMouse(false)
     fade.strips={}
-    for y=0,123,3 do
-        local strip=texture(fade,art.."Main.blp",0,y,177,3,"ARTWORK")
-        strip:SetTexCoord(146/323,1,(258+y-75)/355,(261+y-75)/355)
-        local progress=(y+3)/126
+    for y=0,fadeLength-3,3 do
+        local strip=texture(fade,art.."Main.blp",0,y,323,3,"ARTWORK")
+        strip:SetTexCoord(0,1,(fadeTop+y-75)/355,(fadeTop+y+3-75)/355)
+        local progress=(y+3)/fadeLength
         strip:SetAlpha(progress*progress*(3-2*progress))
         table.insert(fade.strips,strip)
     end
     -- The remaining artwork conceals the model below the completed fade, so
     -- its own frame edge cannot bring back a hard cut beneath the selector.
-    local tail=texture(fade,art.."Main.blp",0,126,177,46,"ARTWORK")
-    tail:SetTexCoord(146/323,1,309/355,1)
+    local tail=texture(fade,art.."Main.blp",0,fadeLength,323,430-fadeTop-fadeLength,"ARTWORK")
+    tail:SetTexCoord(0,1,(fadeTop+fadeLength-75)/355,1)
     fade.tail=tail
     fade:Hide()
     -- This artwork is split across four power-of-two TGA files for the 1.12
@@ -1014,6 +1054,7 @@ end
 function V:CreateBodyPage(p)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
     local rail=sidebar(p,270);self.bodySidebar=rail
+    rail:ClearAllPoints();rail:SetPoint("TOPLEFT",p,"TOPLEFT",19,-86)
     self.bodyRows={}
     self.bodyMenu=CreateFrame("Frame","SaureksClosetBodyMenu",self.frame)
     self.bodyMenu.displayMode="MENU";self.bodyMenu:Hide()
@@ -1050,26 +1091,18 @@ function V:CreateBodyPage(p)
     choice(appearance,"skin",1,"Skin");choice(appearance,"face",2,"Face")
     choice(appearance,"hairStyle",3,"Hair");choice(appearance,"hairColor",4,"Color")
     choice(appearance,"facial",5,"Features")
-    local captionWidth=72
-    local resetWidth=104
-    local reset=section(p,336-resetWidth,90,resetWidth,26,true,"Button",.75)
+    -- Put the destructive-to-this-page action after all appearance choices.
+    -- The native panel artwork is the same red button used by the header.
+    local reset=button(p,"Reset",31,362,122,function() CloseDropDownMenus();V:ClearBody() end)
     self.realBodyButton=reset
-    texture(reset,"Interface\\Buttons\\UI-CheckBox-Up",5,3,20,20,"ARTWORK")
-    self.trueModelCheck=texture(reset,"Interface\\Buttons\\UI-CheckBox-Check",5,3,20,20,"OVERLAY")
-    self.trueModelLabel=label(reset,"Disable",28,4,captionWidth,18,true)
-    self.trueModelLabel:SetFont("Fonts\\FRIZQT__.TTF",11)
-    self.trueModelLabel:SetJustifyV("MIDDLE")
-    local hover=texture(reset,"Interface\\QuestFrame\\UI-QuestTitleHighlight",4,4,resetWidth-8,18,"ARTWORK")
-    hover:SetBlendMode("ADD");hover:SetAlpha(.3);hover:Hide()
+    getglobal(reset:GetName().."Text"):SetFont("Fonts\\FRIZQT__.TTF",11)
     reset:SetScript("OnEnter",function()
-        hover:Show()
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:ClearLines()
-        GameTooltip:AddLine("Disable all race & body changes",1,1,1,true)
+        GameTooltip:AddLine("Restore your original race and appearance",1,1,1,true)
         GameTooltip:Show()
     end)
-    reset:SetScript("OnLeave",function() hover:Hide();GameTooltip:Hide() end)
-    reset:SetScript("OnHide",function() hover:Hide();GameTooltip:Hide() end)
-    reset:SetScript("OnClick",function() CloseDropDownMenus();V:ClearBody() end)
+    reset:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    reset:SetScript("OnHide",function() GameTooltip:Hide() end)
 end
 function V:BodyChoiceLabel(key,value,index)
     if key=="race" then return VanityStudioRaces[value][1]
@@ -1092,8 +1125,7 @@ end
 function V:RefreshBody()
     if not self.uiReady then return end
     local body=self:BodyDraft();local available=self:BodyAvailable() and body~=nil
-    if self:UsingTrueModel() then self.trueModelCheck:Show() else self.trueModelCheck:Hide() end
-    enabled(self.realBodyButton,self:UsingTrueModel() or self:BodyAvailable())
+    enabled(self.realBodyButton,not self:UsingTrueModel() and self:BodyAvailable())
     for key,row in pairs(self.bodyRows) do
         local index=1
         if body and key~="race" and key~="sex" then

@@ -29,7 +29,7 @@ The packager creates the installable addon ZIP, checks its integrity, and verifi
 
 The local Lua regression suite uses Lua 5.0.3 and extracted original Blizzard UI references listed in `tests/test.lua`. These client references are not distributed in this repository. Native test sources cover appearance state, previews, weapon routing, and attachment lifetime simulations.
 
-The 3.7.10 build passed the native weapon and staff-placement simulations under address and undefined-behavior sanitizers, version consistency checks, all 70 supported-client signatures, and the 16-body staff-fit audit. Mocked UI and native simulations do not replace testing inside the supported game client. See `native/RESEARCH.md` and `native/WEAPONRY.md` for renderer behavior and remaining validation boundaries.
+The 3.7.11 build passed the native weapon and staff-placement simulations under address and undefined-behavior sanitizers, version consistency checks, all 70 supported-client signatures, and the 16-body staff-fit audit. Mocked UI and native simulations do not replace testing inside the supported game client. See `native/RESEARCH.md` and `native/WEAPONRY.md` for renderer behavior and remaining validation boundaries.
 
 ## Licenses
 

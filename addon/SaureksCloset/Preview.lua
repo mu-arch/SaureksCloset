@@ -57,6 +57,12 @@ function V:CommitDraft()
 end
 function V:PreviewItems()
     local items={}
+    if self.tab=="body" then
+        -- A plain shirt keeps the body editor readable without changing the
+        -- player's selected appearance or the outfit shown on other pages.
+        for _,slot in ipairs(self.slotOrder) do items[slot]=slot==4 and 6096 or 0 end
+        return items
+    end
     for _,slot in ipairs(self.slotOrder) do
         local id
         if VanityStudioCharacter.enabled then id=VanityStudioCharacter.selected[slot] end
@@ -125,8 +131,9 @@ function V:RefreshPreview()
         if now<(self.previewCaptureAt or 0) then return end
         local ok,copied=pcall(function()
             V.previewBuffer:SetAlpha(0)
+            if V.tab=="body" then V:RestoreBodyPreview(V.previewBuffer) end
             if not V:CopyWardrobeModel(V.previewBuffer) then return false end
-            V:FrameBodyPreview(V.previewBuffer,true)
+            V:FrameBodyPreview(V.previewBuffer)
             V.previewBuffer:SetRotation(V.model.rotation or .61)
             V.previewDressingModel=V.previewBuffer
             return true
@@ -147,11 +154,15 @@ function V:RefreshPreview()
         return
     end
     if self.previewDressAt and now<self.previewDressAt then return end
-    local items=self:PreviewItems();local weapons=self:PreviewWeapons()
-    local routes=self:PreviewWeaponRoutes(weapons)
-    local dressSignature=key..self:WeaponSignature(weapons,nil,true)..":pose"..self:WeaponPreviewMode()
+    local bodyPreview=self.tab=="body"
+    local items=self:PreviewItems();local weapons=bodyPreview and {} or self:PreviewWeapons()
+    local routes=bodyPreview and {} or self:PreviewWeaponRoutes(weapons)
+    -- Include the page's dressing policy so entering/leaving Body always
+    -- redresses the shared model, even when all ordinary item choices match.
+    local dressSignature=key..":body"
+    if not bodyPreview then dressSignature=key..":equipment"..self:WeaponSignature(weapons,nil,true)..":pose"..self:WeaponPreviewMode() end
     for _,slot in ipairs(self.slotOrder) do dressSignature=dressSignature..":"..items[slot] end
-    local signature=dressSignature..self:WeaponDisplaySignature(weapons)
+    local signature=dressSignature..(bodyPreview and "" or self:WeaponDisplaySignature(weapons))
     if self.previewReveal and self.previewReveal.dressSignature==dressSignature then
         local reveal=self.previewReveal
         if now>(self.previewDeadline or now+8) then
@@ -164,6 +175,7 @@ function V:RefreshPreview()
         local previous=self.model;local target=reveal.target
         target.rotation=previous.rotation or .61;target:SetRotation(target.rotation)
         if target~=previous then previous:SetAlpha(0);self.model=target;self.previewBuffer=previous end
+        if self.tab=="body" then self:FrameBodyPreview(target) end
         target:SetAlpha(1)
         self.previewSignature=signature;self.previewDressSignature=reveal.dressSignature;self.previewError=nil;self.previewReveal=nil;self.previewDressAt=nil;self.previewDressingModel=nil
         self.previewNote:SetText(next(self.previewWaiting or {}) and "Some item data is unavailable." or "")
@@ -201,6 +213,7 @@ function V:RefreshPreview()
         end
         V:DressWeaponPlacements(target,weapons)
         target:SetRotation(V.model.rotation or .61)
+        if V.tab=="body" then V:FrameBodyPreview(target) end
     end)
     if ok and target.weaponToken then
         self.previewReveal={target=target,signature=signature,dressSignature=dressSignature,at=now}

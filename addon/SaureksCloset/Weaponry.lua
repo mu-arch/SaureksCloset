@@ -239,13 +239,21 @@ function V:EffectiveWeapons(weapons,overrides)
     return result
 end
 function V:WeaponPreviewMode()
+    if self.tab=="body" then return 0 end
     if self.draft and self.draft.slot==110 then return 2 end
     if self.draft and (self.draft.slot==108 or self.draft.slot==109) then return 1 end
     return self.weaponPreviewMode or 0
 end
 function V:ApplyWeaponRenderer(token,weapons)
     if not self:WeaponRendererAvailable() then return false end
-    local w=self:EffectiveWeapons(weapons);local real=self:RealWeaponItems()
+    local bodyPreview=self.tab=="body" and token>0 and
+        ((self.model and self.model.weaponToken==token) or (self.previewBuffer and self.previewBuffer.weaponToken==token))
+    -- Empty carried mode hides stock sheathed weapons and releases every
+    -- custom attachment. Keep real weapon IDs solely to identify leftovers.
+    -- World token 0 and saved-look preview tokens retain their own appearance.
+    local w=bodyPreview and {independent=true,carriedEnabled=true} or self:EffectiveWeapons(weapons)
+    local real=self:RealWeaponItems()
+    local actualQuiver=bodyPreview and 0 or self:RealQuiverItem()
     local carried=self:CarriedWeaponsEnabled(w)
     if w.independent and not self:IndependentWeaponsAvailable() then return false,-2 end
     -- Older renderers also differ when carried mode is off: their independent
@@ -255,7 +263,7 @@ function V:ApplyWeaponRenderer(token,weapons)
     if w.backBag and not self:BagRendererAvailable() then return false,-2 end
     local previewMode=0
     if token>0 and ((self.model and self.model.weaponToken==token) or (self.previewBuffer and self.previewBuffer.weaponToken==token)) then previewMode=self:WeaponPreviewMode() end
-    local ok,status=pcall(SaureksClosetSetWeapons,token,carried and w[101] or 0,carried and w[102] or 0,carried and w[103] or 0,carried and w[104] or 0,carried and w[105] or 0,carried and w[106] or 0,carried and w[107] or 0,real[1],real[2],real[3],w.quiverHorizontal and 1 or 0,0,0,self:RealQuiverItem(),w.backBag or 0,w[108] or 0,w[109] or 0,w[110] or 0,w.independent and 1 or 0,previewMode,carried and 1 or 0)
+    local ok,status=pcall(SaureksClosetSetWeapons,token,carried and w[101] or 0,carried and w[102] or 0,carried and w[103] or 0,carried and w[104] or 0,carried and w[105] or 0,carried and w[106] or 0,carried and w[107] or 0,real[1],real[2],real[3],w.quiverHorizontal and 1 or 0,0,0,actualQuiver,w.backBag or 0,w[108] or 0,w[109] or 0,w[110] or 0,w.independent and 1 or 0,previewMode,carried and 1 or 0)
     return ok and status==1,status
 end
 function V:SyncWeapons()
