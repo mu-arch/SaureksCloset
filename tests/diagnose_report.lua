@@ -38,16 +38,3 @@ VanityStudio:Diagnose()
 assert(saved:find("Armor visual inspection: true",1,true))
 assert(saved:find("Armor visual 5: expected=888; ok=true; status=0; rendered=999; dirty=0; attachments=6",1,true))
 print("Diagnostic report records actual rendered armor mismatches")
--- A visible authored cape and an uninitialized simulation distinguish a draw
--- mapping failure from a cape that is actually hidden. No pointers are logged.
-function SaureksClosetInspectCapePhysics() return 1,1,1,1,1,1,2,0,0,0,1,7,0,0 end
-VanityStudio:Diagnose()
-assert(saved:find("visible cape sections,simulation ready",1,true))
-assert(saved:find("Cape inspection: true,1,1,1,1,1,1,2,0,0,0,1,7,0,0",1,true))
-SaureksClosetInspectCapePhysics=function() error("test unavailable") end
-VanityStudio:Diagnose()
-assert(saved:find("Cape inspection: false,",1,true))
-SaureksClosetInspectCapePhysics=nil
-VanityStudio:Diagnose()
-assert(not saved:find("Cape inspection:",1,true))
-print("Diagnostic report distinguishes cape draw failures and supports older renderers")

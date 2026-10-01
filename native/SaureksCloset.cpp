@@ -8,7 +8,6 @@
 #include <cmath>
 #include "MinHook.h"
 #include "BuildSignatures.h"
-#include "CapeBuildSignatures.h"
 #include "Appearance.h"
 #include "PreviewState.h"
 #include "WeaponryProbe.h"
@@ -209,9 +208,7 @@ static bool __fastcall updateComponentHook(void* component,void*,int wait){
     return ready;
 }
 static void forgetWeapons(std::uintptr_t model);
-static void capeForgetModel(std::uintptr_t model);
 static void __fastcall destroyModelHook(void* model,void*){
-    capeForgetModel(reinterpret_cast<std::uintptr_t>(model));
     forgetWeapons(reinterpret_cast<std::uintptr_t>(model));
     previews.forget(reinterpret_cast<std::uintptr_t>(model));destroyModelOriginal(model);
 }
@@ -355,47 +352,9 @@ static int __fastcall weaponryProbe(void* L){
     return sizeof(values)/sizeof(values[0]);
 }
 #include "WeaponRenderer.h"
-#include "CapeWorldCollision.h"
-#include "CapeRenderer.h"
 #include "ProjectileRenderer.h"
 #include "UpdateChecker.h"
 #include "VoiceRenderer.h"
-static bool capeBridgeReady=false;
-static int __fastcall setCapePhysicsLua(void* L){
-    if(!capeBridgeReady||!isNumber(L,1))return result(L,0);
-    const double value=toNumber(L,1);
-    if(value!=0&&value!=1)return result(L,0);
-    capeSetEnabled(value==1);return result(L,1);
-}
-static int __fastcall configureCapePhysicsLua(void* L){
-    if(!capeBridgeReady)return result(L,0);
-    for(int i=1;i<=5;++i)if(!isNumber(L,i))return result(L,0);
-    const double bags=toNumber(L,1),weapons=toNumber(L,2),weight=toNumber(L,3),stiffness=toNumber(L,4),air=toNumber(L,5);
-    if((bags!=0&&bags!=1)||(weapons!=0&&weapons!=1)||!std::isfinite(weight)||weight<.25||weight>3||
-       !std::isfinite(stiffness)||stiffness<0||stiffness>1||!std::isfinite(air)||air<0||air>1)return result(L,0);
-    capeConfigure(bags==1,weapons==1,static_cast<float>(weight),static_cast<float>(stiffness),static_cast<float>(air));return result(L,1);
-}
-static int __fastcall resetCapePhysicsLua(void* L){
-    if(!capeBridgeReady)return result(L,0);
-    capeReset();return result(L,1);
-}
-static int __fastcall capePhysicsStatusLua(void* L){return result(L,capeBridgeReady?capeStatus():3);}
-static int __fastcall inspectCapePhysicsLua(void* L){
-    Player player;CapeMesh mesh;
-    const bool hasPlayer=capeBridgeReady&&snapshot(player)&&player.model;
-    const bool readable=hasPlayer&&capeReadMesh(player.model,mesh);
-    unsigned visible=0,groups=0;
-    if(readable)for(unsigned i=0;i<mesh.sections.size();++i)if(mesh.visible[i]&&mesh.capeSections[i])++visible;
-    if(hasPlayer)read(player.model+0x3F8,groups);
-    const auto stats=capeState.cloth.stats();
-    const double values[]={2,double(capeBridgeReady),double(capeEnabled),double(capeBridgeReady?capeStatus():3),
-        double(hasPlayer),double(readable),double(visible),double(capeState.cloth.ready()),
-        double(capeState.source.size()),double(capeState.triangles.size()),double(mesh.gpu),double(groups),
-        double(stats.contacts),double(stats.budgetExceeded),double(capeState.bounds.size()),
-        double(stats.boundTests),double(stats.collisionTests),double(stats.boundsRejected)};
-    for(double value:values)pushNumber(L,value);
-    return sizeof(values)/sizeof(values[0]);
-}
 static int __fastcall version(void* L){return result(L,40011);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
@@ -414,11 +373,6 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
         registerOriginal("SaureksClosetGetBagFitDefaults",reinterpret_cast<std::uintptr_t>(&getBagFitDefaults));
         registerOriginal("SaureksClosetSetBagFit",reinterpret_cast<std::uintptr_t>(&setBagFit));
         registerOriginal("SaureksClosetSetBags",reinterpret_cast<std::uintptr_t>(&setBags));
-        registerOriginal("SaureksClosetSetCapePhysics",reinterpret_cast<std::uintptr_t>(&setCapePhysicsLua));
-        registerOriginal("SaureksClosetConfigureCapePhysics",reinterpret_cast<std::uintptr_t>(&configureCapePhysicsLua));
-        registerOriginal("SaureksClosetResetCapePhysics",reinterpret_cast<std::uintptr_t>(&resetCapePhysicsLua));
-        registerOriginal("SaureksClosetCapePhysicsStatus",reinterpret_cast<std::uintptr_t>(&capePhysicsStatusLua));
-        registerOriginal("SaureksClosetInspectCapePhysics",reinterpret_cast<std::uintptr_t>(&inspectCapePhysicsLua));
         registerOriginal("SaureksClosetSetBagInstanceFit",reinterpret_cast<std::uintptr_t>(&setBagInstanceFit));
         registerOriginal("SaureksClosetWeaponryProbe",reinterpret_cast<std::uintptr_t>(&weaponryProbe));
         registerOriginal("SaureksClosetSetUpdateChecks",reinterpret_cast<std::uintptr_t>(&setUpdateChecks));
@@ -469,27 +423,7 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
         {0x7106C0,reinterpret_cast<void*>(&transformHook),reinterpret_cast<void**>(&transformOriginal)},
         {0x704120,reinterpret_cast<void*>(&registerHook),reinterpret_cast<void**>(&registerOriginal)}};
     for(auto& h:hooks)if(MH_CreateHook(reinterpret_cast<void*>(h.address),h.replacement,h.original)!=MH_OK){MH_Uninitialize();return TRUE;}
-    // Graphics hooks are optional: an incompatible cape path must leave the
-    // existing wardrobe, bags and weaponry available.
-    Hook capeHooks[]={
-        {0x70CB30,reinterpret_cast<void*>(&capeDrawHook),reinterpret_cast<void**>(&capeDrawOriginal)},
-        {0x58A830,reinterpret_cast<void*>(&capeSubmitHook),reinterpret_cast<void**>(&capeSubmitOriginal)},
-        {0x58A7C0,reinterpret_cast<void*>(&capeBindHook),reinterpret_cast<void**>(&capeBindOriginal)}};
-    bool capeCompatible=true;
-    for(const auto& signature:capeSignatures){
-        unsigned char bytes[12]{};
-        if(!read(signature.address,bytes)||std::memcmp(bytes,signature.bytes,12)){capeCompatible=false;break;}
-    }
-    unsigned capeHooksCreated=0;
-    if(capeCompatible){
-        for(auto& hook:capeHooks){
-            if(MH_CreateHook(reinterpret_cast<void*>(hook.address),hook.replacement,hook.original)!=MH_OK)break;
-            ++capeHooksCreated;
-        }
-        capeBridgeReady=capeHooksCreated==sizeof(capeHooks)/sizeof(capeHooks[0]);
-        if(!capeBridgeReady)for(unsigned i=0;i<capeHooksCreated;++i)MH_RemoveHook(reinterpret_cast<void*>(capeHooks[i].address));
-    }
     // All hooks exist before any are activated; failure leaves the API unavailable.
-    if(MH_EnableHook(MH_ALL_HOOKS)!=MH_OK){capeBridgeReady=false;MH_Uninitialize();}
+    if(MH_EnableHook(MH_ALL_HOOKS)!=MH_OK)MH_Uninitialize();
     return TRUE;
 }

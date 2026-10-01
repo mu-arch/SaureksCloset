@@ -560,7 +560,7 @@ tunerOpen=true;V:SetTab("not-a-page");assert(tunerOpen and tunerCloses==1)
 V:SetTab("bags");assert(not tunerOpen and tunerCloses==2)
 print("PASS: page changes close the floating tuner before switching preview policy")
 V.bagTunerWindow=nil;V:SetTab("weaponry")
-for _,name in ipairs({"CreateArmorPage","CreateBodyPage","CreateWeaponryPage","CreateBagsPage","CreateExposurePage","CreatePhysicsPage","CreateOutfitPage","CreateSettingsPage","CreateBrowser","CreateOutfitDetails","CreateWardrobeSelector","SetTab"}) do
+for _,name in ipairs({"CreateArmorPage","CreateBodyPage","CreateWeaponryPage","CreateBagsPage","CreateExposurePage","CreateOutfitPage","CreateSettingsPage","CreateBrowser","CreateOutfitDetails","CreateWardrobeSelector","SetTab"}) do
     V[name]=function() end
 end
 V:CreateUI()

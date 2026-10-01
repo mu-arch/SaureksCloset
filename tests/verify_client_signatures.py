@@ -12,8 +12,7 @@ size = struct.unpack_from('<H', binary, pe + 20)[0]
 base = struct.unpack_from('<I', binary, optional + 28)[0]
 sections = [struct.unpack_from('<8sIIIIIIHHI', binary, optional + size + 40*i)
             for i in range(count)]
-root = Path(__file__).resolve().parents[1]
-source = (root / 'native/BuildSignatures.h').read_text() + (root / 'native/CapeBuildSignatures.h').read_text()
+source = (Path(__file__).resolve().parents[1] / 'native/BuildSignatures.h').read_text()
 signatures = re.findall(r'\{(0x[0-9a-f]+),\{([^}]+)\}\}', source)
 for address, values in signatures:
     rva = int(address, 16) - base
