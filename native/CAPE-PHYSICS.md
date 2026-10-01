@@ -26,7 +26,7 @@ and rebase their indices. Simulation vertices are mapped to those draw spans.
 This path is regression-tested separately from parsing the original M2 files.
 
 The runtime uses `CapeCloth.h` at a fixed 60 Hz, at most three substeps and
-four constraint iterations, with world-space gravity and inertia, compliant
+eight constraint iterations, with world-space gravity and inertia, compliant
 edge-length and triangle-area constraints, and approximate
 bending constraints across adjacent triangles. Free motion therefore reacts to
 the real shoulder movement and contact geometry. The solver does not generate
@@ -40,17 +40,22 @@ splits tighten the fit. Animation updates pose these compact intervals instead
 of skinning and traversing the full body mesh. The body uses at most 32 boxes,
 each attachment at most four, with at most 64 relevant boxes in the solver.
 
-Solid contacts use whole-triangle separating-axis checks and supporting-plane
-projection. Runtime contacts share one continuous rear supporting direction, avoiding
-opposing local box-face corrections. The player's back direction comes from
-`model+0xFC`, independent of root-bone animation. Positional collision correction
-is not added to velocity. Stronger damping, a lower speed limit and a 0.30-unit
-rest-frame excursion limit restrain free flight; body clearance has final priority. Seam targets are cleared before spring solves. Final projection and
-validation run after all constraints and pin updates, including zero-tick frames
-and resets. If iterative contacts exhaust their budget, the current cloth is cleared
-behind a common supporting plane instead of dropping the cape draw. Slow frames
-discard excess catch-up time without resetting the pose. Conservative bounds can hold the cloth slightly outside the rendered
-skin; they approximate the body rather than matching every surface crease.
+The live runtime fixes the shoulder/collar vertices at their exact native
+skinned positions, including during collision recovery. Those vertices are
+passed through unchanged in GPU and CPU output. Contacts cannot move the
+attachment or translate the entire garment. Faces incident to sewn vertices
+are excluded from coarse box contact; these boxes are not a reliable model of
+the actual neckline. Free faces still use solid contact checks. Contacts and
+length/area constraints alternate before the final rendering check.
+
+The motion reference is the current skinned cape, not the unskinned mesh at the
+model origin. Before submission, `capePoseFits` checks exact seam positions,
+vertex displacement, every edge (5% plus 1 mm numerical allowance), triangle
+area and orientation. An incompatible result uses the original native cape draw
+and reports status 4. The fallback remains until Reset cape motion, toggling
+physics, or changing the cape/model; it does not alternate between normal and
+simulated draws each frame. This protects attachment and shape. It does NOT
+establish collision-free cloth for an incompatible body/equipment fit.
 
 Immutable mesh arrays and prepared GPU bytes are cached. Only visibility,
 bone palettes and camera transforms refresh for ordinary animation. Detailed
@@ -106,7 +111,8 @@ whose default-buffer check itself mutates that shared temporary descriptor.
 - `SaureksClosetSetCapePhysics(0/1)` and `SaureksClosetResetCapePhysics()` return
   1 on acceptance, 0 if unavailable or invalid.
 - `SaureksClosetCapePhysicsStatus()` returns 0 disabled, 1 waiting for a visible
-  cape, 2 active, or 3 unavailable for the current model/rendering path.
+  cape, 2 active, 3 unavailable, or 4 normal cape motion because the simulated
+  fit was rejected. The page names that fallback explicitly and permits reset.
 - `/closet diagnose` includes `SaureksClosetInspectCapePhysics()` output:
   schema, bridge ready, enabled, status, player available, mesh readable,
   visible authored cape sections, simulation ready, vertex and triangle counts,
@@ -114,19 +120,17 @@ whose default-buffer check itself mutates that shared temporary descriptor.
   active bound count, bound tests, world tests and rejected-bound status (schema 2).
   These counts distinguish a genuinely hidden cape from a render-path problem;
   the report contains no native pointers or player identifiers.
-- Teleports, model changes and long frame gaps reset the simulation. Invalid
-  geometry and unsupported draw batches use the original cape. Physics work
-  limits first recover to a pose projected outside the body. A frame rejected
-  by iterative contacts is cleared against a common rear support plane. Truly
-  invalid bounds cannot be rendered as valid physics; unsupported data still
-  needs in-game diagnosis.
+- Teleports and model changes reset the simulation. Slow frames limit catch-up
+  work. Shape/attachment failures use native motion, never a skipped cape draw,
+  an offset seam or a globally translated collision solution.
 - Collision work, cape size, attachment traversal and query bounds are bounded.
   This is a one-player simulation, not scene-wide cloth on every character.
 - World collisions follow the client's collision mesh, which can differ from
   visible artwork. Non-collidable scenery is not automatically a surface.
   Cached world geometry is approximate for moving platforms and other moving
   scenery; it has no stable native face IDs for continuous motion tracking.
-- Exact final whole-face clearance applies to the fitted body/equipment bounds.
+- Final whole-face clearance applies to simulated free faces and fitted bounds.
+  Sewn faces and native fallback are not covered by that guarantee.
   Swept detection conservatively tests relative bounds; it is not a general
   continuous deforming-mesh proof. Detailed world contact remains vertex-based,
   so thin scenery can pass between coarse cape vertices. Self-collision and
@@ -171,3 +175,11 @@ and slow frames without authored-pose resets. An offline sequence of root turns,
 translations, vertical movement and frame stalls exercised 240 actual-model
 render paths for 120 updates each. This does not reproduce live limb animations
 or establish that all in-game scenery clipping is eliminated.
+
+Attachment regression validation: all 240 GPU48/CPU32/CPU40 paths rendered a
+cape with no missing submissions; 192 of 480 material draws used accepted
+simulation, and 288 used the explicit native fallback. The current coarse
+bounds are still incompatible with many authored fits. Tests now reject
+shoulder translation, elongated edges and collapsed faces, and check that a
+small valid flex remains simulated. This is fit protection, not a completed
+replacement for the client's cape animation on every model.

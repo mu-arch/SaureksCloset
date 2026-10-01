@@ -56,6 +56,7 @@ struct Config {
     float density=.25f, damping=2.f, friction=.12f;
     float maxSpeed=40.f, teleportDistance=3.f, maxFrameTime=.25f;
     bool selfCollision=true;
+    bool fixedAttachment=false; // Authored shoulder/collar vertices cannot be displaced.
     bool stableBounds=false; // Resolve overlapping body volumes along one outward direction.
     float poseLimit=0; // Optional bound on free motion around a supplied rest-frame pose.
     unsigned maxVertices=2048, maxTriangles=4096, maxColliderTriangles=8192;
@@ -285,6 +286,7 @@ class Cloth {
     bool boxContact(const Face& face,const ColliderBox& box,bool sweep,bool project){
         if(stats_.boundTests>=config_.maxBoundTests){stats_.budgetExceeded=true;stats_.boundsRejected=true;return true;}
         ++stats_.boundTests;
+        if(config_.fixedAttachment&&(invMass_[face.tri.a]==0||invMass_[face.tri.b]==0||invMass_[face.tri.c]==0))return false;
         const auto t=face.tri;const std::uint32_t ids[3]={t.a,t.b,t.c};Vec3 current[3],previous[3];
         const Vec3 padding{config_.thickness,config_.thickness,config_.thickness};
         const Vec3 half=box.currentHalf+padding,oldHalf=box.previousHalf+padding;
@@ -339,7 +341,7 @@ class Cloth {
         return true;
     }
     bool clearBehindBounds(Vec3 normal){
-        if(boxes_.empty()||dot(normal,normal)<1.e-10f)return false;
+        if(config_.fixedAttachment||boxes_.empty()||dot(normal,normal)<1.e-10f)return false;
         normal=normalized(normal);float support=-1.e30f,lowest=1.e30f;
         for(const auto& box:boxes_){float d=dot(box.currentCenter,normal)+config_.thickness+.0002f;
             for(unsigned axis=0;axis<3;++axis)d+=std::fabs(dot(box.currentAxes[axis],normal))*component(box.currentHalf,axis);
@@ -355,7 +357,7 @@ class Cloth {
         stats_.boundsRejected=false;return true;
     }
     bool pinTargets(const std::vector<Vec3>& pose){
-        pinPose_=pose;
+        pinPose_=pose;if(config_.fixedAttachment)return true;
         for(unsigned iteration=0;iteration<config_.boundIterations;++iteration){bool changed=false;
             for(const auto& box:boxes_)for(auto pin:pins_){
                 if(stats_.boundTests>=config_.maxBoundTests){stats_.budgetExceeded=true;stats_.boundsRejected=true;return false;}++stats_.boundTests;
@@ -544,6 +546,19 @@ public:
                 if(!config_.stableBounds||boxes_.empty()||!clearBehindBounds(boxes_[0].preferredDirection)){resetState(animatedWorldPositions);return false;}
             }
             if(!finishVelocities(std::max(elapsedSeconds,config_.fixedStep),true,false)){stats_.invalidInput=true;resetState(animatedWorldPositions);return false;}
+        }
+        if(config_.fixedAttachment&&!boxes_.empty()){
+            // Contacts must participate in the length solve. A final large
+            // post-solve shove was stretching the neckline into a long strip.
+            for(unsigned iteration=0;iteration<8;++iteration){
+                for(auto& spring:stretch_){spring.lambda=0;solveSpring(spring,h);}
+                for(auto& face:faces_){face.lambda=0;solveArea(face,h);}
+                for(auto pin:pins_)x_[pin]=animatedWorldPositions[pin];
+                for(const auto& box:boxes_)for(const auto& face:faces_)boxContact(face,box,false,true);
+                if(stats_.boundsRejected&&stats_.budgetExceeded)return false;
+            }
+            if(!solidBounds(false))return false;
+            // Constraint projection is not an extra impulse.
         }
         lastPose_=animatedWorldPositions;return true;
     }

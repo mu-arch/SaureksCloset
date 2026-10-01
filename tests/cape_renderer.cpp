@@ -204,7 +204,7 @@ static void cachedGeometry(){
     for(unsigned frame=0;frame<4;++frame){now+=17;assert(capeWriteDraw(0x90000,nullptr,1));}
     assert(geometryReads==copies&&worldQueries==queries);
     assert(capeState.gpuVertices.data()==gpuData);
-    assert(capeState.cloth.config().fixedStep==1.f/60.f&&capeState.cloth.config().iterations==4);
+    assert(capeState.cloth.config().fixedStep==1.f/60.f&&capeState.cloth.config().iterations==8);
     assert(capeState.cloth.collisionSampleCount()==capeState.source.size());
     assert(!capeState.cloth.config().selfCollision);
     now+=101;assert(capeWriteDraw(0x90000,nullptr,1));assert(worldQueries==queries+1);
@@ -215,10 +215,10 @@ static void cachedGeometry(){
     put(0x81000,0u);now+=17;assert(!capeWriteDraw(0x90000,nullptr,1));assert(capeStatus()==1);
     capeSetEnabled(false);
 }
-static void firmBodyFrame(){
+static void firmBodyFrame(bool obstructed=true){
     fixture();CapeMesh mesh;assert(capeReadMesh(player.model,mesh));
     auto vertices=mesh.vertices;auto lookup=mesh.lookup;auto triangles=mesh.triangles;
-    for(unsigned i=0;i<8;++i){CapeSourceVertex vertex{};vertex.position={i&1?.2f:-.1f,i&2?.25f:-.25f,i&4?1.8f:.1f};vertex.weights[0]=255;vertex.normal={-1,0,0};vertices.push_back(vertex);lookup.push_back(6+i);}
+    for(unsigned i=0;i<8;++i){CapeSourceVertex vertex{};vertex.position={i&1?.2f:(obstructed?-.5f:-.1f),i&2?.25f:-.25f,i&4?1.8f:.1f};vertex.weights[0]=255;vertex.normal={-1,0,0};vertices.push_back(vertex);lookup.push_back(6+i);}
     const unsigned faces[]={0,1,3,0,3,2,4,6,7,4,7,5,0,4,5,0,5,1,2,3,7,2,7,6,0,2,6,0,6,4,1,5,7,1,7,3};
     for(unsigned i:faces)triangles.push_back(6+i);
     auto sections=mesh.sections;CapeSection body;body.count=8;body.first=6;body.triangleFirst=12;body.triangleCount=36;sections.push_back(body);
@@ -226,19 +226,34 @@ static void firmBodyFrame(){
     array(0x30044,0x50000,vertices);array(0x40000,0x60000,lookup);array(0x40008,0x61000,triangles);
     array(0x40010,0x62000,std::vector<std::uint32_t>(lookup.size()));array(0x40018,0x63000,sections);array(0x40020,0x64000,units);
     put(0x81000,std::array<unsigned,2>{{1,1}});
-    assert(capeWriteDraw(0x90000,nullptr,1)&&capeStatus()==2);
-    assert(capeState.bounds.size()==1);
-    for(const auto& point:capeState.cloth.positions())assert(point.x<-.117f);
-    const unsigned copies=geometryReads;
-    for(unsigned frame=0;frame<30;++frame){now+=17;assert(capeWriteDraw(0x90000,nullptr,1));for(const auto& point:capeState.cloth.positions())assert(point.x<-.117f);}
-    assert(geometryReads==copies);
-    // Even budget exhaustion must draw a cleared cape, not skip a material
-    // and flicker or fall through to the unchecked original cape.
-    const_cast<cape::Config&>(capeState.cloth.config()).maxBoundTests=0;now+=17;
     const unsigned before=submits;capeSubmitHook(nullptr,1);
-    assert(capeStatus()==2&&submits==before+1&&!capeState.cloth.stats().boundsRejected);
-    for(const auto& point:capeState.cloth.positions())assert(point.x<-.117f);
+    if(!obstructed){
+        assert(capeStatus()==2&&submits==before+1);
+        assert(capePoseFits(capeState.cloth.positions(),capeState.animated,capeState.triangles,capeState.pins));
+        for(unsigned pin:capeState.pins)assert(cape::length(capeState.cloth.positions()[pin]-capeState.animated[pin])<.00001f);
+        capeSetEnabled(false);return;
+    }
+    assert(capeStatus()==4&&capeState.fitFallback&&submits==before+1&&bound==&nativeBuffer);
+    // Deliberately incompatible body volume may not displace shoulder anchors
+    // or emit elongated triangles. Every material keeps native rendering.
+    const unsigned copies=geometryReads;
+    for(unsigned frame=0;frame<30;++frame){now+=17;const unsigned calls=submits;capeSubmitHook(nullptr,1);
+        assert(capeStatus()==4&&submits==calls+1&&bound==&nativeBuffer);}
+    assert(geometryReads==copies);capeReset();assert(!capeState.fitFallback);
     capeSetEnabled(false);
+}
+static void garmentFitGuard(){
+    const std::vector<cape::Vec3> normal{{0,0,1},{0,.2f,1},{0,0,.8f},{0,.2f,.8f}};
+    const std::vector<cape::Triangle> faces{{0,1,2},{1,3,2}};const std::vector<std::uint32_t> pins{0,1};
+    assert(capePoseFits(normal,normal,faces,pins));
+    auto shifted=normal;for(auto& p:shifted)p.x+=.05f;assert(!capePoseFits(shifted,normal,faces,pins));
+    auto stretched=normal;stretched[2].z-=.03f;assert(!capePoseFits(stretched,normal,faces,pins));
+    auto collapsed=normal;collapsed[3]=collapsed[2];assert(!capePoseFits(collapsed,normal,faces,pins));
+    auto flex=normal;flex[2].x=flex[3].x=.01f;assert(capePoseFits(flex,normal,faces,pins));
+    // Comparing to the animated pose respects moving shoulders, not a fixed
+    // model-origin reference while the character leans or turns.
+    auto moving=normal;for(auto& p:moving){p.x+=2;p.z+=.4f;}
+    assert(capePoseFits(moving,moving,faces,pins));assert(!capePoseFits(normal,moving,faces,pins));
 }
 static void disconnectedCollar(){
     fixture(false);CapeState state;assert(capeReadMesh(player.model,state.mesh));state.sections={0,1};
@@ -251,4 +266,4 @@ static void disconnectedCollar(){
     assert(capeBuildTopology(state));
     for(unsigned i=6;i<9;++i)assert(std::find(state.pins.begin(),state.pins.end(),i)!=state.pins.end());
 }
-int main(){optimizedDraw(true);optimizedDraw(false);optimizedDraw(false,5);drawAndCheck(true);drawAndCheck(false);invalidRetry();cachedGeometry();firmBodyFrame();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: optimized GPU/CPU groups, UV/rebased indices, private output, binding restore, failure retry, geometry/world caches, bounded fast configuration, solid body frames, LOD invalidation, collar attachment and tail exclusion passed\n";}
+int main(){optimizedDraw(true);optimizedDraw(false);optimizedDraw(false,5);drawAndCheck(true);drawAndCheck(false);invalidRetry();cachedGeometry();firmBodyFrame(false);firmBodyFrame();garmentFitGuard();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: optimized GPU/CPU groups, UV/rebased indices, private output, binding restore, failure retry, geometry/world caches, bounded fast configuration, solid body frames, LOD invalidation, collar attachment and tail exclusion passed\n";}

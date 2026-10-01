@@ -1673,7 +1673,7 @@ function V:RefreshPhysicsPage()
     local status=available and self:CapePhysicsStatus() or nil
     self.capePhysicsCheckbox:SetChecked(selected and 1 or nil)
     enabled(self.capePhysicsCheckbox,available)
-    enabled(self.resetCapePhysicsButton,available and selected and VanityStudioCharacter.enabled and status==2)
+    enabled(self.resetCapePhysicsButton,available and selected and VanityStudioCharacter.enabled and (status==2 or status==4))
     local text
     if not available then text="Update SaureksCloset.dll and restart WoW to use cape physics."
     elseif not VanityStudioCharacter.enabled then text="Addon is off. Your cape preference is saved."
@@ -1682,6 +1682,7 @@ function V:RefreshPhysicsPage()
     elseif self.capePhysicsError then text=self.capePhysicsError
     elseif status==1 then text="Waiting for a visible cape."
     elseif status==2 then text="Active on your character."
+    elseif status==4 then text="Using normal cape motion to preserve its fit. Reset to retry physics."
     elseif status==0 then text="Starting cape physics..."
     else text="Cape physics status is unavailable." end
     self.capePhysicsStatusLabel:SetText(text)
