@@ -67,8 +67,35 @@ static void skinnedMeshContact(){
     assert(cloth.positions()[4].z<.005f&&cloth.stats().contacts==0);
 }
 
+static void fixedClockAndTail(){
+    auto motion=[](unsigned fps){cape::Config config;config.fixedStep=1.f/60;config.maxSubsteps=3;config.damping=9;config.maxSpeed=3;
+        cape::NvClothSolver cloth;auto rest=pose();assert(cloth.initialize(rest,faces,pins,config));
+        for(unsigned frame=0;frame<=fps*3;++frame){auto input=rest;const float time=frame/float(fps);const float x=time<.5f?7*time*time:7*(time-.25f);
+            for(auto& p:input)p.x+=x;assert(cloth.step(frame?1.f/fps:0,input,{}));}
+        return cloth.positions();
+    };
+    const auto reference=motion(60);
+    for(unsigned fps:{30u,90u,120u,144u,240u}){auto result=motion(fps);float error=0;
+        for(unsigned i=0;i<result.size();++i)error=std::max(error,cape::length(result[i]-reference[i]));
+        std::cout<<"cape timing "<<fps<<" fps error="<<error<<"\n";assert(error<.035f);
+    }
+    const std::array<float,16> identity{{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};
+    auto mesh=std::make_shared<cape::CollisionMesh>();mesh->body=true;mesh->tailGroups.resize(1);
+    for(unsigned i=0;i<8;++i){mesh->vertices.push_back({{i&1?.2f:-.2f,i&2?.04f:-.04f,.5f+(i&4?.04f:-.04f)},{{255,0,0,0}},{{0,0,0,0}}});mesh->tailGroups[0].push_back(i);}
+    cape::AnimatedCollider collider{mesh,{identity},identity};auto capsules=cape::capeTailCapsules({collider});assert(capsules.size()==1);
+    assert(capsules[0].a.x<capsules[0].b.x&&capsules[0].radius>.05f);
+    cape::Config config;config.fixedStep=1.f/60;config.maxSubsteps=3;config.damping=9;config.maxSpeed=3;
+    cape::NvClothSolver cloth;auto rest=pose();assert(cloth.initialize(rest,faces,pins,config));cloth.setColliders({collider});
+    for(unsigned frame=0;frame<240;++frame){assert(cloth.step(1.f/60,rest,{}));assert(capeFabricFits(cloth.positions(),rest,rest,faces,pins));}
+    const auto mid=(cloth.positions()[2]+cloth.positions()[5])*.5f;
+    const float distance=std::sqrt(mid.y*mid.y+(mid.z-.5f)*(mid.z-.5f));
+    std::cout<<"tail virtual contact distance="<<distance<<" radius="<<capsules[0].radius<<"\n";
+    assert(distance>=capsules[0].radius-.012f); // A tail between real vertices must move the face.
+    for(auto pin:pins)assert(cape::length(cloth.positions()[pin]-rest[pin])<1.e-5f);
+}
+
 int main(){
-    gravityAndTuning();skinnedMeshContact();sustainedRunResponse();
+    fixedClockAndTail();gravityAndTuning();skinnedMeshContact();sustainedRunResponse();
     cape::NvClothSolver cloth;cape::Config config;config.fixedStep=1.f/60;config.maxSubsteps=3;config.poseLimit=.12f;config.damping=9;config.maxSpeed=3;
     const auto rest=pose();assert(cloth.initialize(rest,faces,pins,config));
     cape::ColliderBox box;box.currentCenter=box.previousCenter={0,0,1};box.currentHalf=box.previousHalf={.4f,.4f,.9f};box.preferredDirection={-1,0,0};

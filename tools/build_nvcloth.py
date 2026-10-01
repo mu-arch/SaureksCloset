@@ -9,10 +9,12 @@ ROOT = Path(__file__).resolve().parents[1]
 VENDOR = ROOT / 'native/vendor/nvcloth'
 NV = VENDOR / 'NvCloth'
 
+# NvCloth SIMD array views type-pun vector registers. Strict aliasing can
+# miscompile sphere grid indices (including out-of-range writes).
 def flags():
     result = ['-std=c++17', '-O2', '-DNDEBUG', '-DNV_CLOTH_IMPORT=',
               '-DNV_CLOTH_ENABLE_CUDA=0', '-DNV_CLOTH_ENABLE_DX11=0',
-              '-fno-exceptions', '-fno-rtti', '-msse2']
+              '-fno-exceptions', '-fno-rtti', '-fno-strict-aliasing', '-msse2']
     for folder in [NV/'include', NV/'include/NvCloth', NV/'include/NvCloth/ps',
                    NV/'src', NV/'extensions/include', NV/'extensions/src', VENDOR/'PxShared/include']:
         result += ['-isystem', str(folder)]

@@ -6,6 +6,7 @@
 
 namespace cape {
 using Rotation=std::array<Vec3,3>;
+inline Vec3 capeAnchor(const std::vector<Vec3>& pose,const std::vector<std::uint32_t>& pins){Vec3 anchor{};for(auto pin:pins)anchor+=pose[pin];return anchor/float(pins.size());}
 inline Rotation identityRotation(){return {{{1,0,0},{0,1,0},{0,0,1}}};}
 // Actual NVIDIA CPU solver. Owned and called exclusively by the cape worker.
 class NvClothSolver {

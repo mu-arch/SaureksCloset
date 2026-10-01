@@ -1730,7 +1730,7 @@ function V:RefreshPhysicsPage()
     self.capeOptionsNotice:SetText(options and "Body collisions are always enabled." or "Update SaureksCloset.dll and restart WoW to use these settings.")
     self.capePhysicsCheckbox:SetChecked(selected and 1 or nil)
     enabled(self.capePhysicsCheckbox,available)
-    enabled(self.resetCapePhysicsButton,available and selected and VanityStudioCharacter.enabled and (status==2 or status==4 or status==5))
+    enabled(self.resetCapePhysicsButton,available and selected and VanityStudioCharacter.enabled and (status==2 or status==4 or status==5 or status==6))
     local text
     if not available then text="Update SaureksCloset.dll and restart WoW to use cape physics."
     elseif not VanityStudioCharacter.enabled then text="Addon is off. Your cape preference is saved."
@@ -1739,6 +1739,7 @@ function V:RefreshPhysicsPage()
     elseif self.capePhysicsError then text=self.capePhysicsError
     elseif status==1 then text="Waiting for a visible cape."
     elseif status==2 then text="Active: NvCloth cape physics."
+    elseif status==6 then text="Recovering cape physics. Holding the last cloth pose."
     elseif status==5 then text="Preparing NvCloth cape physics..."
     elseif status==4 then text="Temporarily using normal cape motion. Physics will retry automatically."
     elseif status==0 then text="Starting cape physics..."

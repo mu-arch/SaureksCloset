@@ -118,6 +118,8 @@ check(V.capePhysicsStatusLabel.text=="Active: NvCloth cape physics." and V.reset
 check(V:ResetCapePhysics() and resets==1 and VanityStudioCharacter.physics.cape,"Reset restarts motion without changing the saved preference")
 status=5;arg1=.5;V.events.scripts.OnUpdate()
 check(V.capePhysicsStatusLabel.text=="Preparing NvCloth cape physics..." and V.resetCapePhysicsButton.enabled,"Worker preparation is distinct from invisible cape and can be reset")
+status=6;arg1=.5;V.events.scripts.OnUpdate()
+check(V.capePhysicsStatusLabel.text=="Recovering cape physics. Holding the last cloth pose." and V.resetCapePhysicsButton.enabled,"A recovery holds physics rather than claiming the normal cape animation is active")
 status=4;arg1=.5;V.events.scripts.OnUpdate()
 check(V.capePhysicsStatusLabel.text=="Temporarily using normal cape motion. Physics will retry automatically." and V.resetCapePhysicsButton.enabled,"Fit conflicts show the native fallback honestly and permit retry")
 local resetsBefore=resets;check(V:ResetCapePhysics() and resets==resetsBefore+1,"Fit fallback can be reset explicitly")

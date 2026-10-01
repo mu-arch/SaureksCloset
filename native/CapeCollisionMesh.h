@@ -4,13 +4,32 @@
 #include <memory>
 namespace cape {
 struct CollisionVertex {Vec3 position;std::array<std::uint8_t,4> weights,bones;};
-struct CollisionMesh {std::vector<CollisionVertex> vertices;std::vector<Triangle> triangles;};
+struct CollisionMesh {
+    std::vector<CollisionVertex> vertices;std::vector<Triangle> triangles;
+    bool body=false;
+    std::vector<std::vector<unsigned>> tailGroups;
+};
 struct AnimatedCollider {
     std::shared_ptr<const CollisionMesh> mesh;
     std::vector<std::array<float,16>> bones;
     std::array<float,16> renderToWorld{};
 };
 inline Vec3 collisionTransform(const std::array<float,16>& m,Vec3 p){return {m[0]*p.x+m[4]*p.y+m[8]*p.z+m[12],m[1]*p.x+m[5]*p.y+m[9]*p.z+m[13],m[2]*p.x+m[6]*p.y+m[10]*p.z+m[14]};}
+inline std::array<float,16> capeCompose(const std::array<float,16>& a,const std::array<float,16>& b){
+    std::array<float,16> out{};for(unsigned c=0;c<4;++c)for(unsigned r=0;r<4;++r)for(unsigned k=0;k<4;++k)out[c*4+r]+=a[k*4+r]*b[c*4+k];return out;
+}
+inline std::vector<AnimatedCollider> interpolateCapeColliders(const std::vector<AnimatedCollider>& prior,const std::vector<AnimatedCollider>& current,float alpha){
+    auto out=current;
+    for(auto& entry:out){const AnimatedCollider* old=nullptr;
+        for(const auto& candidate:prior)if(candidate.mesh==entry.mesh&&candidate.bones.size()==entry.bones.size()){old=&candidate;break;}
+        for(unsigned i=0;i<entry.bones.size();++i){auto world=capeCompose(entry.renderToWorld,entry.bones[i]);
+            if(old){const auto before=capeCompose(old->renderToWorld,old->bones[i]);for(unsigned k=0;k<16;++k)world[k]=before[k]+alpha*(world[k]-before[k]);}
+            entry.bones[i]=world;
+        }
+        entry.renderToWorld={{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};
+    }
+    return out;
+}
 inline Vec3 capeClosestPoint(Vec3 p,Vec3 a,Vec3 b,Vec3 c){
     const Vec3 ab=b-a,ac=c-a,ap=p-a;
     const float d1=dot(ab,ap),d2=dot(ac,ap);if(d1<=0&&d2<=0)return a;
@@ -33,11 +52,42 @@ inline CapeContact capeMeshContact(Vec3 p,const std::vector<ColliderTriangle>& t
     }
     if(!found)return {};
     const float side=dot(p-point,normal);
-    if(side>.06f||side<-.06f)return {}; // No distant/open-surface plane extrusion.
-    // A nearby collision may correct at most 1 cm on acquisition. Subsequent
+    if(side>.06f)return {}; // No distant/open-surface plane extrusion.
+    // A nearby collision corrects penetration gradually on acquisition. Subsequent
     // solves follow the actual surface, with no native-animation target.
-    if(side<-.007f)point+=normal*(side+.007f);
-    return {point-normal*.12f,.123f};
+    if(side<-.02f)point+=normal*(side+.02f);
+    return {point-normal*.20f,.208f};
+}
+struct CapeCapsule {Vec3 a,b;float radius=0;};
+inline std::vector<CapeCapsule> capeTailCapsules(const std::vector<AnimatedCollider>& meshes){
+    std::vector<CapeCapsule> out;
+    for(const auto& entry:meshes){if(!entry.mesh)continue;
+        for(const auto& group:entry.mesh->tailGroups){std::vector<Vec3> points;
+            for(auto id:group){if(id>=entry.mesh->vertices.size())continue;const auto& v=entry.mesh->vertices[id];Vec3 p{};bool okay=true;
+                for(unsigned k=0;k<4;++k)if(v.weights[k]){if(v.bones[k]>=entry.bones.size()){okay=false;break;}p+=collisionTransform(entry.bones[v.bones[k]],v.position)*(v.weights[k]/255.f);}
+                p=collisionTransform(entry.renderToWorld,p);if(okay&&finite(p))points.push_back(p);
+            }
+            if(points.size()<3||group.empty()||group[0]>=entry.mesh->vertices.size())continue;
+            Vec3 center{};for(auto p:points)center+=p;center=center/float(points.size());
+            // Principal axis of this small, skinned tail segment. A covariance
+            // fit follows its bend without snapping between a box's axes.
+            Vec3 lo{1.e30f,1.e30f,1.e30f},hi{-1.e30f,-1.e30f,-1.e30f};
+            for(auto id:group)if(id<entry.mesh->vertices.size()){auto p=entry.mesh->vertices[id].position;
+                lo={std::min(lo.x,p.x),std::min(lo.y,p.y),std::min(lo.z,p.z)};hi={std::max(hi.x,p.x),std::max(hi.y,p.y),std::max(hi.z,p.z)};}
+            Vec3 span=hi-lo;const Vec3 authored=span.x>=span.y&&span.x>=span.z?Vec3{1,0,0}:span.y>=span.z?Vec3{0,1,0}:Vec3{0,0,1};
+            const auto& first=entry.mesh->vertices[group[0]];unsigned influence=0;for(unsigned k=1;k<4;++k)if(first.weights[k]>first.weights[influence])influence=k;
+            if(first.bones[influence]>=entry.bones.size())continue;
+            const auto matrix=capeCompose(entry.renderToWorld,entry.bones[first.bones[influence]]);
+            const Vec3 guide=normalized(collisionTransform(matrix,authored)-collisionTransform(matrix,{}),authored);
+            Vec3 axis=guide;
+            for(unsigned n=0;n<8;++n){Vec3 next{};for(auto p:points){const auto d=p-center;next+=d*dot(d,axis);}axis=normalized(next,axis);}
+            if(dot(axis,guide)<0)axis=-axis; // Stable endpoint identity for swept contact.
+            float low=0,high=0,radius=0;for(auto p:points){auto d=p-center;float along=dot(d,axis);low=std::min(low,along);high=std::max(high,along);radius=std::max(radius,length(d-axis*along));}
+            if(high-low<.001f){low-=.0005f;high+=.0005f;}
+            out.push_back({center+axis*low,center+axis*high,radius+.012f});if(out.size()==16)return out;
+        }
+    }
+    return out;
 }
 // Runs on the worker from immutable geometry and copied bone matrices.
 inline std::vector<ColliderTriangle> skinCapeContacts(const std::vector<AnimatedCollider>& meshes,const std::vector<Vec3>& cloth){
@@ -61,8 +111,8 @@ inline std::vector<ColliderTriangle> skinCapeContacts(const std::vector<Animated
             result.push_back({{a,b,c},{a,b,c}});
         }
     }
-    if(result.size()>512){const Vec3 center=(low+high)*.5f;const auto distance=[&](const ColliderTriangle& t){Vec3 d=(t.current[0]+t.current[1]+t.current[2])/3.f-center;return dot(d,d);};
-        std::nth_element(result.begin(),result.begin()+512,result.end(),[&](const auto& a,const auto& b){return distance(a)<distance(b);});result.resize(512);}
+    if(result.size()>1024){const Vec3 center=(low+high)*.5f;const auto distance=[&](const ColliderTriangle& t){Vec3 d=(t.current[0]+t.current[1]+t.current[2])/3.f-center;return dot(d,d);};
+        std::nth_element(result.begin(),result.begin()+1024,result.end(),[&](const auto& a,const auto& b){return distance(a)<distance(b);});result.resize(1024);}
     return result;
 }
 }

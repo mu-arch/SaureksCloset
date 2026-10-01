@@ -31,6 +31,7 @@ class Worker {
 #endif
     void run(){
         NvClothSolver solver;std::uint64_t generation=0;double previousTime=0;
+        std::vector<Vec3> lastGood;Vec3 lastAnchor{};
         for(;;){
             Job job;
             {std::unique_lock<std::mutex> lock(mutex_);condition_.wait(lock,[&]{return stopping_||pendingValid_;});
@@ -41,13 +42,20 @@ class Worker {
             const auto delay=delay_.load();if(delay)std::this_thread::sleep_for(std::chrono::milliseconds(delay));
 #endif
             bool okay=true;
-            if(generation!=job.generation){okay=solver.initialize(job.pose,job.faces,job.pins,job.config);generation=job.generation;previousTime=job.time;}
+            if(generation!=job.generation){okay=solver.initialize(job.pose,job.faces,job.pins,job.config);generation=job.generation;previousTime=job.time;lastGood.clear();}
             solver.setColliders(job.colliders);
             if(okay)okay=solver.step(static_cast<float>(std::max(0.,job.time-previousTime)),job.pose,job.surfaces,job.boxes,job.pose);
             previousTime=job.time;
             if(okay)okay=capeFabricFits(solver.positions(),job.pose,solver.material(),job.faces,job.pins);
+            if(okay){lastGood=solver.positions();lastAnchor=capeAnchor(job.pose,job.pins);}
+            else if(lastGood.size()==job.pose.size()){
+                auto recovery=lastGood;const auto shift=capeAnchor(job.pose,job.pins)-lastAnchor;
+                for(auto& p:recovery)p+=shift;
+                for(auto pin:job.pins)recovery[pin]=job.pose[pin];
+                if(capeRepairFabric(recovery,job.pose,solver.material(),job.faces,job.pins))solver.reset(recovery);
+            }
             Result out;out.generation=job.generation;out.serial=job.serial;out.okay=okay;out.stats=solver.stats();out.frame=job.frame;
-            if(okay){out.offsets.resize(job.pose.size());for(unsigned i=0;i<job.pose.size();++i)out.offsets[i]=solver.positions()[i]-job.pose[job.pins[0]];}
+            if(okay){out.offsets.resize(job.pose.size());for(unsigned i=0;i<job.pose.size();++i)out.offsets[i]=solver.positions()[i]-capeAnchor(job.pose,job.pins);}
             out.finished=job.sampled;
             {std::lock_guard<std::mutex> lock(mutex_);running_=false;
                 if(wanted_.load()==job.generation)result_=std::move(out);
@@ -124,16 +132,19 @@ bool AsyncCloth::step(float elapsed,const std::vector<Vec3>& pose,const std::vec
     Result result;worker().exchange(std::move(job),result);
     if(result.generation==generation_&&result.serial>received_){
         received_=result.serial;stats_=result.stats;
-        if(!result.okay){hasResult_=false;resultOffsets_.clear();return false;}
+        if(!result.okay){stats_.boundsRejected=true;resultTime_=result.finished;}
         // A suspended/overloaded worker may not reintroduce an old pose.
-        if(std::chrono::steady_clock::now()-result.finished<std::chrono::milliseconds(250)){
+        else if(std::chrono::steady_clock::now()-result.finished<std::chrono::milliseconds(250)){
             resultOffsets_=std::move(result.offsets);resultFrame_=result.frame;resultTime_=result.finished;hasResult_=true;
         }
     }
-    if(hasResult_&&std::chrono::steady_clock::now()-resultTime_>=std::chrono::milliseconds(250)){hasResult_=false;resultOffsets_.clear();}
+    if(hasResult_&&std::chrono::steady_clock::now()-resultTime_>=std::chrono::milliseconds(250))stats_.boundsRejected=true;
     positions_=pose;
-    if(hasResult_&&resultOffsets_.size()==pose.size())for(unsigned i=0;i<pose.size();++i)positions_[i]=pose[pins_[0]]+rotateDelta(resultOffsets_[i],resultFrame_,frame_);
+    if(hasResult_&&resultOffsets_.size()==pose.size()){const auto anchor=capeAnchor(pose,pins_);
+        for(unsigned i=0;i<pose.size();++i)positions_[i]=anchor+rotateDelta(resultOffsets_[i],resultFrame_,frame_);
+    }
     for(auto pin:pins_)positions_[pin]=pose[pin];
+    if(hasResult_&&!capeFabricFits(positions_,pose,material_,faces_,pins_)&&!capeRepairFabric(positions_,pose,material_,faces_,pins_))return false;
     return true;
 }
 #ifndef _WIN32

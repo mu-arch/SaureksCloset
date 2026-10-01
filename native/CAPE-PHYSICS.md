@@ -25,13 +25,17 @@ is one replaceable pending job and one latest result, not an unbounded frame
 queue. Job time is accumulated so dropped intermediate snapshots do not slow
 the simulation. Catch-up is limited to three 60 Hz steps. Mesh/reset/teleport
 changes create a new generation; old jobs cannot publish into that generation.
-Results more than 250 ms old expire. The normal cape remains visible while a
-new simulation is preparing or recovering.
+A new result sampled more than 250 ms ago is not accepted. After the first
+valid solve, a stalled or failed worker retains the last cloth shape at the
+current attachment instead of alternating with native animation. It reports a
+recovering status. Failed steps reset from the last valid cloth shape with
+zero momentum, not from the native free-cape pose. Native motion is still used
+while a new mesh/explicit reset is first preparing.
 
-Completed particle coordinates are stored relative to the shoulder anchor and
+Completed particle coordinates are stored relative to the mean position of the pinned mount and
 rotated with the current player frame. Free vertices do not inherit the native
-cape animation or get blended back toward it. Shoulder/collar vertices always
-use the current native coordinates. Consequently an asynchronous result does
+cape animation or get blended back toward it. The upper third of the cape and small separate collar panels always use the
+current native coordinates, preserving their seam to the back. Consequently an asynchronous result does
 not visibly lag the whole garment behind a moving player. The current-frame
 fabric check is also applied before submitting vertices. CPU/GPU draws use private
 buffers; the original shared model, UVs, indices and materials are untouched.
@@ -54,21 +58,25 @@ steps. Damping removes residual motion. Air resistance scales aerodynamic drag
 from zero to 0.0008; lift is disabled. These are NvCloth coefficients, not
 physical drag coefficients. Tethers resist stretching.
 
-NvCloth's translating local frame keeps coordinates near the shoulder and
-accounts for root acceleration. Velocity limiting acts on relative particle
+NvCloth's translating local frame uses the average mount position. Incoming
+pin/bone snapshots are interpolated at fixed simulation timestamps, so 90/120/
+144 FPS cannot alternate the inferred movement speed between solver steps.
+Catch-up skips do not compress a long movement into three fast steps. Root
+inertia is attenuated to 25% to absorb the client's instant run/stop changes. Velocity limiting acts on relative particle
 motion, not the player's world speed. Only the seam follows the native pose;
 there are no native-pose motion spheres on the free cape. At rest an unobstructed
 cape settles downward under gravity. Surface contact can change that shape.
 
 The renderer snapshots visible body/equipment geometry and current bone
 matrices. The worker skins it, excludes the cape itself, culls distant triangles
-and retains at most 512 nearby faces. Bags and weapon attachments are filtered
+and retains at most 1024 nearby faces. Bags and weapon attachments are filtered
 before loading their geometry according to the saved collision options. Each
 free particle gets a finite local exclusion sphere derived from its nearest
 actual mesh surface. Raw NvCloth triangle colliders extrapolate open meshes into
 infinite planes; using finite contact neighborhoods avoids those launches.
-Contact acquisition limits correction to 1 cm and ignores distant back faces,
-so existing deep authored clipping is not forcibly ejected. This is a local
+Contact acquisition gradually corrects penetration and no longer drops a
+contact once the particle is 6 cm behind its surface. It remains a finite
+15 cm neighborhood, so deep pre-existing authored intersections can remain. This is a local
 contact approximation, not an all-surface clearance guarantee.
 
 Nearby native scenery triangles are cached for up to 100 ms and limited to
@@ -80,9 +88,19 @@ thread. Moving simulation off-thread does not make all cape work free.
 elongation of 25% plus 3 mm relative to the initial fabric; that is a catastrophic
 failure guard, not the intended stretch. NvCloth's stiff distance constraints
 and tethers enforce the actual fabric length. Folded and rotated triangles are
-valid cloth. Invalid output triggers a temporary native fallback and retry,
-not a partial blend that makes the cape look animated normally. Thin objects
-can pass between the coarse original vertices; self-collision is disabled.
+valid cloth. Each fixed step bounds relative particle displacement as well as velocity.
+An isolated contact overshoot receives a bounded edge-length projection, with
+corrections applied to both current and previous particles to avoid adding an
+impulse. Distances between two native-pinned vertices are excluded from the
+fabric strain guard. Display-time attachment prediction also receives this
+repair. Failed worker output holds the last valid cloth rather than switching
+to native animation. Tauren skin/fur panels in the 150x geoset family remain native-rendered, but
+also generate independently budgeted skinned tail capsules. Stable capsule
+endpoints retain identity as the tail bends. NvCloth continuous collision and
+virtual face/edge samples on free triangles handle tail contact between render
+vertices; pinned triangles are excluded from virtual-particle impulses.
+Self-collision is disabled; capsule approximations and sparse samples still
+cannot guarantee exact clearance for every animation and equipment combination.
 
 ## Native integration (build 5875)
 
@@ -104,8 +122,8 @@ World AABB query 0x6721B0 returns 52-byte faces with inline vertices, using mask
 GPU work always stays on the original render thread with its binding restored.
 
 Status: 0 off, 1 waiting for a visible cape, 2 NvCloth active, 3 unsupported,
-4 temporary native fallback with an automatic retry, 5 preparing the worker.
-Reset is available for states 2, 4 and 5. `/closet diagnose` retains schema 2:
+4 temporary native fallback with an automatic retry, 5 preparing the worker, 6 recovering while holding the last physical shape.
+Reset is available for states 2, 4, 5 and 6. `/closet diagnose` retains schema 2:
 bridge, preference, status, player/mesh/visibility, initialized state, mesh
 counts, graphics mode, optimized groups and last completed worker counters.
 The contact count measures active mesh backstops; it is not an exact penetration
@@ -132,3 +150,7 @@ cannot substitute for visual/performance verification in the running client.
 Dependency version/license/portability notes are in
 `vendor/nvcloth/PROVENANCE.md`. NVIDIA's API documentation is at
 https://nvidiagameworks.github.io/NvCloth/1.1/UserGuide/Index.html.
+
+Additional offline verification replays actual HumanFemale and both Tauren
+stand/run bone tracks with starts, stops and turns across all five cape variants.
+This is still an offline animation replay, not verification in the running game.

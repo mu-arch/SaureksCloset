@@ -56,7 +56,7 @@ end
 function V:CapePhysicsStatus()
     if not self:CapePhysicsAvailable() then return nil end
     local ok,status=pcall(SaureksClosetCapePhysicsStatus)
-    if ok and (status==0 or status==1 or status==2 or status==3 or status==4 or status==5) then return status end
+    if ok and (status==0 or status==1 or status==2 or status==3 or status==4 or status==5 or status==6) then return status end
 end
 
 function V:SetCapePhysics(enabled)
@@ -70,7 +70,7 @@ function V:SetCapePhysics(enabled)
 end
 
 function V:ResetCapePhysics()
-    if not VanityStudioCharacter.enabled or not self:CapePhysicsEnabled() or (self:CapePhysicsStatus()~=2 and self:CapePhysicsStatus()~=4 and self:CapePhysicsStatus()~=5) then return false end
+    if not VanityStudioCharacter.enabled or not self:CapePhysicsEnabled() or (self:CapePhysicsStatus()~=2 and self:CapePhysicsStatus()~=4 and self:CapePhysicsStatus()~=5 and self:CapePhysicsStatus()~=6) then return false end
     local ok,result=pcall(SaureksClosetResetCapePhysics)
     ok=ok and result~=0 and result~=false
     self.capePhysicsError=not ok and "Could not reset cape motion. Try again." or nil

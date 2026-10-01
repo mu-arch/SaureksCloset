@@ -288,6 +288,14 @@ static void garmentFitGuard(){
     auto moving=normal;for(auto& p:moving){p.x+=2;p.z+=.4f;}
     assert(capePoseFits(moving,moving,faces,pins));assert(!capePoseFits(normal,moving,faces,pins));
 }
+static void upperBackAttachment(){
+    fixture();CapeState state;assert(capeReadMesh(player.model,state.mesh));state.sections={0};
+    // A cape row below the old 15% strip still belongs to its upper back mount.
+    state.mesh.vertices[2].position.z=1.5f;state.mesh.vertices[3].position.z=1.5f;
+    assert(capeBuildTopology(state));
+    assert(std::find(state.pins.begin(),state.pins.end(),2)!=state.pins.end());
+    assert(std::find(state.pins.begin(),state.pins.end(),3)!=state.pins.end());
+}
 static void disconnectedCollar(){
     fixture(false);CapeState state;assert(capeReadMesh(player.model,state.mesh));state.sections={0,1};
     auto& mesh=state.mesh;
@@ -299,4 +307,4 @@ static void disconnectedCollar(){
     assert(capeBuildTopology(state));
     for(unsigned i=6;i<9;++i)assert(std::find(state.pins.begin(),state.pins.end(),i)!=state.pins.end());
 }
-int main(){optimizedDraw(true);optimizedDraw(false);optimizedDraw(false,5);drawAndCheck(true);drawAndCheck(false);invalidRetry();cachedGeometry();firmBodyFrame(false);firmBodyFrame();ignoreBagContacts();garmentFitGuard();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: optimized GPU/CPU groups, UV/rebased indices, private output, binding restore, failure retry, geometry/world caches, bounded fast configuration, solid body frames, LOD invalidation, collar attachment and tail exclusion passed\n";}
+int main(){optimizedDraw(true);optimizedDraw(false);optimizedDraw(false,5);drawAndCheck(true);drawAndCheck(false);invalidRetry();cachedGeometry();firmBodyFrame(false);firmBodyFrame();ignoreBagContacts();garmentFitGuard();upperBackAttachment();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: optimized GPU/CPU groups, UV/rebased indices, private output, binding restore, failure retry, geometry/world caches, bounded fast configuration, solid body frames, LOD invalidation, collar attachment and tail exclusion passed\n";}

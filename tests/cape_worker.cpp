@@ -4,6 +4,7 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <limits>
 int main(){
     cape::Config config;config.fixedStep=1.f/60;config.maxSubsteps=3;config.poseLimit=.12f;config.damping=9;
     const std::vector<cape::Vec3> rest{{0,-.3f,2},{0,.3f,2},{0,-.3f,1},{0,.3f,1},{0,-.3f,0},{0,.3f,0}};
@@ -12,13 +13,22 @@ int main(){
     assert(cloth.initialize(rest,faces,pins,config));assert(!cloth.hasResult());
     assert(cloth.step(0,rest,{}));cape::waitCapeWorkerForTests();
     float motion=0;
-    for(unsigned frame=0;frame<120;++frame){auto animated=rest;for(auto& p:animated)p.x+=.05f*std::sin(frame*.12f);
+    for(unsigned frame=0;frame<120;++frame){auto animated=rest;for(auto& p:animated)p.x+=frame/60.f*7+.05f*std::sin(frame*.12f);
         assert(cloth.step(1.f/60,animated,{}));cape::waitCapeWorkerForTests();
         assert(cloth.hasResult());assert(capeFabricFits(cloth.positions(),animated,cloth.material(),faces,pins));
         assert(capeFabricFits(cloth.positions(),animated,cloth.material(),faces,pins));
         for(unsigned i=0;i<rest.size();++i)motion=std::max(motion,cape::length(cloth.positions()[i]-animated[i]));
     }
     assert(motion>.01f);
+    // One bad collision snapshot cannot replace a moving cloth with native pose.
+    auto running=rest;for(auto& p:running)p.x+=119/60.f*7+.05f*std::sin(119*.12f);
+    cape::ColliderTriangle invalid;invalid.current[0].x=std::numeric_limits<float>::quiet_NaN();
+    assert(cloth.step(.016f,running,{invalid}));cape::waitCapeWorkerForTests();
+    assert(cloth.step(0,running,{}));assert(cloth.hasResult()&&cloth.stats().boundsRejected);
+    assert(cape::length(cloth.positions().back()-running.back())>.02f);
+    for(auto pin:pins)assert(cape::length(cloth.positions()[pin]-running[pin])<1.e-5f);
+    cape::waitCapeWorkerForTests();assert(cloth.step(.016f,running,{}));cape::waitCapeWorkerForTests();
+    assert(cloth.step(.016f,running,{})&&cloth.hasResult()&&!cloth.stats().boundsRejected);cape::waitCapeWorkerForTests();
     // A deliberately blocked worker must never block a draw or grow its queue.
     cape::delayCapeWorkerForTests(100);
     const auto begin=std::chrono::steady_clock::now();
@@ -32,12 +42,13 @@ int main(){
     cape::waitCapeWorkerForTests();cape::delayCapeWorkerForTests(0);
     assert(cloth.step(.016f,moved,{}));cape::waitCapeWorkerForTests();assert(cloth.hasResult());
     for(auto p:cloth.positions())assert(p.x>99.8f); // No result from before reset can be applied.
-    // Expired deformation is not reused while the worker is stalled.
+    // A stalled worker holds the last physical shape at the current attachment,
+    // rather than flickering back to the game cape.
     cape::delayCapeWorkerForTests(300);
     assert(cloth.step(.016f,moved,{}));
     std::this_thread::sleep_for(std::chrono::milliseconds(270));
-    assert(cloth.step(.016f,moved,{}));assert(!cloth.hasResult());
-    for(unsigned i=0;i<moved.size();++i)assert(cape::length(cloth.positions()[i]-moved[i])<.00001f);
+    assert(cloth.step(.016f,moved,{}));assert(cloth.hasResult()&&cloth.stats().boundsRejected);
+    for(auto pin:pins)assert(cape::length(cloth.positions()[pin]-moved[pin])<.00001f);
     cape::delayCapeWorkerForTests(0);cape::waitCapeWorkerForTests();
     // Capes with different vertex counts cannot consume each other's result.
     assert(cloth.initialize({{0,0,1},{0,1,1},{0,0,0}},{{0,1,2}},{0,1},config));

@@ -14,7 +14,7 @@ int main(){
         capeSubmitHook(nullptr,1);assert(capeStatus()==5&&submits==calls+2);
         cape::waitCapeWorkerForTests();float motion=0;
         for(unsigned frame=0;frame<90;++frame){
-            auto matrix=identity;matrix[12]=std::sin(frame*.1f)*.06f;
+            auto matrix=identity;matrix[12]=frame/60.f*7+std::sin(frame*.1f)*.06f;
             put(0x80000,matrix);put(0x100fc,matrix);now+=17;
             const auto before=submits;capeSubmitHook(nullptr,1);
             assert(capeStatus()==2&&submits==before+1&&bound==&nativeBuffer);

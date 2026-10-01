@@ -29,9 +29,36 @@ inline bool capeFabricFits(const std::vector<cape::Vec3>& pose,const std::vector
         for(unsigned k=0;k<3;++k){unsigned a=ids[k],b=ids[(k+1)%3];
             // A severely elongated fabric is invalid; a folded/rotated face is
             // valid cloth and must not be blended back into the game's pose.
+            const bool fixedA=std::find(pins.begin(),pins.end(),a)!=pins.end();
+            const bool fixedB=std::find(pins.begin(),pins.end(),b)!=pins.end();
+            // Native skinning can change the distance between two fixed seam
+            // points. Cloth cannot correct that and must not trigger a reset.
+            if(fixedA&&fixedB)continue;
             float rest=cape::length(material[a]-material[b]);
             if(cape::length(pose[a]-pose[b])>rest*1.25f+.003f)return false;
         }
     }
     return true;
+}
+
+// A final strain projection repairs isolated contact overshoots without ever
+// blending the entire garment back to the native cape animation.
+inline bool capeRepairFabric(std::vector<cape::Vec3>& pose,const std::vector<cape::Vec3>& animated,const std::vector<cape::Vec3>& material,const std::vector<cape::Triangle>& faces,const std::vector<std::uint32_t>& pins){
+    if(pose.size()!=animated.size()||pose.size()!=material.size())return false;
+    for(auto p:pose)if(!cape::finite(p))return false;
+    std::vector<bool> fixed(pose.size(),false);for(auto pin:pins){if(pin>=pose.size())return false;fixed[pin]=true;pose[pin]=animated[pin];}
+    for(unsigned iteration=0;iteration<24;++iteration){bool moved=false;
+        for(const auto& face:faces){unsigned ids[]={face.a,face.b,face.c};for(auto id:ids)if(id>=pose.size())return false;
+            for(unsigned k=0;k<3;++k){unsigned a=ids[k],b=ids[(k+1)%3];float weight=(!fixed[a])+(!fixed[b]);if(!weight)continue;
+                const auto delta=pose[b]-pose[a];const float length=cape::length(delta),limit=cape::length(material[b]-material[a])*1.06f+.001f;
+                if(length<=limit)continue;
+                const auto correction=delta*((length-limit)/(length*weight));
+                if(!fixed[a])pose[a]+=correction;
+                if(!fixed[b])pose[b]-=correction;
+                moved=true;
+            }
+        }
+        if(!moved)break;
+    }
+    return capeFabricFits(pose,animated,material,faces,pins);
 }

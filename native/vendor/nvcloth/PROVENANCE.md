@@ -15,7 +15,12 @@ MSVC-specific SSE constraint overload to `PX_VC`. LLVM-MinGW and GCC use the
 existing portable SIMD implementation, as the Linux build does. No solver
 algorithm has been rewritten. CPU SSE2 is used; CUDA, DirectX compute and AVX
 are not required. `tools/build_nvcloth.py` builds a static library without a
-network download. The game ships one SaureksCloset.dll as before.
+network download. The CPU build uses `-fno-strict-aliasing`: the SIMD helpers
+access vector registers through float/integer array views. GCC's strict-aliasing
+optimization produced invalid sphere-grid indices and intermittent crashes in
+the capsule regression; sanitizer instrumentation alone masked that failure.
+The sphere/capsule regression is therefore also run in the optimized ordinary
+build. The game ships one SaureksCloset.dll as before.
 
 NvCloth/PxShared remain under their own license, not the license covering the
 project's original integration code.

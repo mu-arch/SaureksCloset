@@ -264,8 +264,9 @@ static bool capeBuildTopology(CapeState& s){
     float low=s.rest[0].z,high=low;
     for(const auto& p:s.rest){low=std::min(low,p.z);high=std::max(high,p.z);}
     if(high-low<.05f)return false;
-    // Fix the authored shoulder seam. No body/neck bones are changed.
-    const float seam=high-std::min(.16f,(high-low)*.15f);
+    // The upper third includes the back attachment, not just the neckline.
+    // It must stay exactly skinned or the integrated shoulder/back panels open.
+    const float seam=high-(high-low)/3.f;
     std::vector<bool> pinned(s.rest.size(),false);
     for(unsigned i=0;i<s.rest.size();++i)if(s.rest[i].z>=seam)pinned[i]=true;
     for(const auto sectionIndex:s.sections){
@@ -281,10 +282,12 @@ static bool capeBuildTopology(CapeState& s){
     for(unsigned i=0;i<parent.size();++i)parent[i]=i;
     const auto root=[&](unsigned i){while(parent[i]!=i)i=parent[i];return i;};
     for(const auto& t:s.triangles){parent[root(t.a)]=root(t.b);parent[root(t.b)]=root(t.c);}
+    unsigned largestComponent=0;
+    for(unsigned component=0;component<parent.size();++component)if(root(component)==component){unsigned count=0;for(unsigned i=0;i<parent.size();++i)if(root(i)==component)++count;largestComponent=std::max(largestComponent,count);}
     for(unsigned component=0;component<parent.size();++component)if(root(component)==component){
         unsigned count=0;bool attached=false;float top=-std::numeric_limits<float>::max(),bottom=std::numeric_limits<float>::max();
         for(unsigned i=0;i<parent.size();++i)if(root(i)==component){++count;attached=attached||pinned[i];top=std::max(top,s.rest[i].z);bottom=std::min(bottom,s.rest[i].z);}
-        if(attached)continue;
+        if(attached&&!(count<=12&&count<largestComponent))continue;
         const float edge=top-std::min(.16f,(top-bottom)*.15f);
         for(unsigned i=0;i<parent.size();++i)if(root(i)==component&&(count<=12||s.rest[i].z>=edge))pinned[i]=true;
     }
@@ -301,7 +304,8 @@ static bool capeAnimate(CapeState& s){
     return true;
 }
 static std::shared_ptr<const cape::CollisionMesh> capeCollisionGeometry(const CapeMesh& mesh,bool body){
-    auto result=std::make_shared<cape::CollisionMesh>();
+    auto result=std::make_shared<cape::CollisionMesh>();result->body=body;
+    std::array<std::vector<unsigned>,256> tailGroups;
     for(const auto& v:mesh.vertices)result->vertices.push_back({v.position,v.weights,v.bones});
     for(unsigned index=0;index<mesh.sections.size();++index){
         if(!mesh.visible[index]||(body&&mesh.capeSections[index]))continue;
@@ -312,7 +316,16 @@ static std::shared_ptr<const cape::CollisionMesh> capeCollisionGeometry(const Ca
             const auto& a=mesh.vertices[t.a];const auto& b=mesh.vertices[t.b];const auto& c=mesh.vertices[t.c];
             if(cape::dot(cape::cross(b.position-a.position,c.position-a.position),a.normal+b.normal+c.normal)<0)std::swap(t.b,t.c);
             result->triangles.push_back(t);
+            // Tauren skin/fur panels share the 150x family with capes, but have
+            // already been excluded from capeSections by their texture type.
+            if(body&&section.geoset>=1500&&section.geoset<1600){
+                for(unsigned id:{t.a,t.b,t.c}){const auto& v=mesh.vertices[id];unsigned k=0;for(unsigned j=1;j<4;++j)if(v.weights[j]>v.weights[k])k=j;
+                    tailGroups[v.bones[k]].push_back(id);}
+            }
         }
+    }
+    for(auto& group:tailGroups)if(!group.empty()){
+        std::sort(group.begin(),group.end());group.erase(std::unique(group.begin(),group.end()),group.end());result->tailGroups.push_back(std::move(group));
     }
     return result;
 }
@@ -486,7 +499,7 @@ static void capeConfigure(bool bags,bool weapons,float weight,float stiffness,fl
 }
 static void capeSetEnabled(bool enabled){if(capeEnabled!=enabled){capeEnabled=enabled;capeReset();}}
 static unsigned capeStatus(){
-    if((capeRuntimeStatus==2||capeRuntimeStatus==4||capeRuntimeStatus==5)&&static_cast<std::uint32_t>(bagClockMilliseconds()-capeLastDraw)>250)capeRuntimeStatus=1;
+    if((capeRuntimeStatus==2||capeRuntimeStatus==4||capeRuntimeStatus==5||capeRuntimeStatus==6)&&static_cast<std::uint32_t>(bagClockMilliseconds()-capeLastDraw)>250)capeRuntimeStatus=1;
     return capeRuntimeStatus;
 }
 static void capeForgetModel(std::uintptr_t model){
@@ -607,7 +620,7 @@ static bool capeWriteDraw(std::uintptr_t renderer,const void* description,unsign
     capeBindOriginal(buffer,capeBoundFormat);
     capeSubmitOriginal(description,indexed);
     capeBindOriginal(capeBoundBuffer,capeBoundFormat);
-    capeRuntimeStatus=2;capeLastDraw=bagClockMilliseconds();return true;
+    capeRuntimeStatus=s.cloth.stats().boundsRejected?6:2;capeLastDraw=bagClockMilliseconds();return true;
 }
 static void __fastcall capeSubmitHook(const void* description,unsigned indexed){
     if(capeEnabled&&capeDrawScope){
