@@ -14,8 +14,8 @@ int main(){
     float motion=0;
     for(unsigned frame=0;frame<120;++frame){auto animated=rest;for(auto& p:animated)p.x+=.05f*std::sin(frame*.12f);
         assert(cloth.step(1.f/60,animated,{}));cape::waitCapeWorkerForTests();
-        assert(cloth.hasResult());assert(cloth.limitToFit(animated,[&](const auto& p){return capePoseFits(p,animated,faces,pins);}));
-        assert(capePoseFits(cloth.positions(),animated,faces,pins));
+        assert(cloth.hasResult());assert(capeFabricFits(cloth.positions(),animated,cloth.material(),faces,pins));
+        assert(capeFabricFits(cloth.positions(),animated,cloth.material(),faces,pins));
         for(unsigned i=0;i<rest.size();++i)motion=std::max(motion,cape::length(cloth.positions()[i]-animated[i]));
     }
     assert(motion>.01f);

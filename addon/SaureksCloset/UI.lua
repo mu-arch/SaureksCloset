@@ -1647,23 +1647,68 @@ function V:CreatePhysicsPage(p)
     self.physicsBackground:SetVertexColor(.6,.6,.6)
     self.physicsBorder,self.physicsShadowFrame=createWardrobeViewFrame(p,"SaureksClosetPhysicsViewBorder",self.frame)
     self.physicsTitle=label(p,"Physics",38,94,284,20)
-    local panel=section(p,34,125,293,181,false)
-    self.physicsCapePanel=panel
-    self.physicsCapeTitle=label(panel,"Cape",14,13,263,18)
-    local toggle=CreateFrame("CheckButton","SaureksClosetCapePhysics",panel,"UICheckButtonTemplate")
-    toggle:SetPoint("TOPLEFT",panel,"TOPLEFT",11,-38);toggle:SetWidth(24);toggle:SetHeight(24)
-    self.capePhysicsCheckbox=toggle
-    self.capePhysicsLabel=label(panel,"Enable cape physics",38,43,238,18,true)
-    toggle:SetScript("OnClick",function() V:SetCapePhysics(this:GetChecked()) end)
-    self.capePhysicsStatusLabel=label(panel,"",14,77,263,43,true)
-    self.resetCapePhysicsButton=button(panel,"Reset cape motion",14,137,265,function() V:ResetCapePhysics() end)
-    self.resetCapePhysicsButton:SetScript("OnEnter",function()
-        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Reset cape motion")
-        GameTooltip:AddLine("Restart your active cape simulation from its current pose.",1,1,1,true);GameTooltip:Show()
-    end)
-    self.resetCapePhysicsButton:SetScript("OnLeave",function() GameTooltip:Hide() end)
-    self.physicsScopeLabel=label(p,"Cape physics affects only your character in the world. This preference is saved for this character, separately from saved looks.",41,321,278,55,true)
+    self.physicsCategoryButtons={}
+    local captions={"Cape","Bags","Weapons"}
+    for i,caption in ipairs(captions) do
+        local card=section(p,34,124+(i-1)*77,293,68,false)
+        local b=button(card,caption,14,11,265,function() V:OpenCapePhysics() end)
+        self.physicsCategoryButtons[i]=b;enabled(b,i==1)
+        label(card,i==1 and "Configure cloth, weight and collisions" or "Coming soon",14,39,265,18,true)
+    end
+    self.physicsScopeLabel=label(p,"Physics settings are saved for this character, separately from saved looks.",41,352,278,36,true)
+    local window=sheet("SaureksClosetCapeSettings",self.frame,"Cape Physics")
+    self.capePhysicsWindow=window
+    window:Hide();window:SetFrameStrata("DIALOG");window:SetClampedToScreen(true)
+    window:SetPoint("TOPLEFT",self.frame,"TOPRIGHT",-30,0)
+    window:SetMovable(true);window:RegisterForDrag("LeftButton")
+    window:SetScript("OnDragStart",function() this:StartMoving() end)
+    window:SetScript("OnDragStop",function() this:StopMovingOrSizing() end)
+    window.close:SetScript("OnClick",function() V.capePhysicsWindow:Hide() end)
+    table.insert(UISpecialFrames,window:GetName())
+    p:SetScript("OnHide",function() V.capePhysicsWindow:Hide() end)
+    local panel=section(window,30,78,300,326,false);self.physicsCapePanel=panel
+    local function tip(widget,title,description)
+        widget:SetScript("OnEnter",function()
+            GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText(title)
+            GameTooltip:AddLine(description,1,1,1,true);GameTooltip:Show()
+        end)
+        widget:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    end
+    local function check(name,text,y,callback,description)
+        local b=CreateFrame("CheckButton",name,panel,"UICheckButtonTemplate")
+        b:SetPoint("TOPLEFT",panel,"TOPLEFT",11,-y);b:SetWidth(24);b:SetHeight(24)
+        local caption=label(panel,text,38,y+4,247,18,true)
+        b:SetScript("OnClick",callback);tip(b,text,description)
+        return b,caption
+    end
+    self.capePhysicsCheckbox,self.capePhysicsLabel=check("SaureksClosetCapePhysics","Enable cape physics",10,function() V:SetCapePhysics(this:GetChecked()) end,"Let your cape hang and move using real-time cloth physics.")
+    self.capePhysicsStatusLabel=label(panel,"",14,42,272,42,true)
+    label(panel,"Collisions",14,90,272,18)
+    self.capeBagCollision=check("SaureksClosetCapeBagCollision","Interact with bags",112,function() V:SetCapeOption("capeBags",this:GetChecked()) end,"Let the cape collide with your equipped bags. This does not change bag animation. Off by default.")
+    self.capeWeaponCollision=check("SaureksClosetCapeWeaponCollision","Interact with weapons",140,function() V:SetCapeOption("capeWeapons",this:GetChecked()) end,"Let the cape collide with held and stowed weapons. Body collisions remain enabled.")
+    self.capeTuningControls={}
+    local function tuner(key,title,y,step,description)
+        local row={};self.capeTuningControls[key]=row
+        label(panel,title,14,y+3,130,18,true)
+        row.minus=button(panel,"-",146,y,25,function() V:SetCapeOption(key,VanityStudioCharacter.physics[key]-step) end)
+        row.value=label(panel,"",175,y+3,68,18,true);row.value:SetJustifyH("CENTER")
+        row.plus=button(panel,"+",249,y,25,function() V:SetCapeOption(key,VanityStudioCharacter.physics[key]+step) end)
+        tip(row.minus,title,description);tip(row.plus,title,description)
+    end
+    tuner("capeWeight","Cloth weight",181,.25,"Heavier cloth responds less to air. Weight does not change the cape's size or make gravity stronger.")
+    tuner("capeStiffness","Stiffness",212,.1,"Lower values fold more easily. Higher values resist bending; the cape does not become stretchy.")
+    tuner("capeAir","Air resistance",243,.05,"Higher values make movement through the air push the cape more strongly.")
+    self.capeOptionsNotice=label(panel,"",14,275,272,36,true)
+    self.resetCapePhysicsButton=button(window,"Reset motion",30,413,145,function() V:ResetCapePhysics() end)
+    tip(self.resetCapePhysicsButton,"Reset cape motion","Restart the cape simulation without changing your settings.")
+    self.capeDefaultsButton=button(window,"Restore defaults",185,413,145,function() V:RestoreCapeDefaults() end)
+    tip(self.capeDefaultsButton,"Restore defaults","Restore cloth weight, stiffness and air resistance. Keep your enable and collision choices.")
     self:RefreshPhysicsPage()
+end
+
+function V:OpenCapePhysics()
+    if not self.capePhysicsWindow then return end
+    self:RefreshPhysicsPage();self.capePhysicsWindow:Show()
 end
 
 function V:RefreshPhysicsPage()
@@ -1671,6 +1716,18 @@ function V:RefreshPhysicsPage()
     local available=self.CapePhysicsAvailable and self:CapePhysicsAvailable()
     local selected=self.CapePhysicsEnabled and self:CapePhysicsEnabled()
     local status=available and self:CapePhysicsStatus() or nil
+    local options=self:CapeOptionsAvailable()
+    local prefs=VanityStudioCharacter.physics
+    self.capeBagCollision:SetChecked(prefs.capeBags and 1 or nil)
+    self.capeWeaponCollision:SetChecked(prefs.capeWeapons and 1 or nil)
+    enabled(self.capeBagCollision,options);enabled(self.capeWeaponCollision,options)
+    enabled(self.capeDefaultsButton,options)
+    for key,row in pairs(self.capeTuningControls) do
+        local value=prefs[key];local low=key=="capeWeight" and .25 or 0;local high=key=="capeWeight" and 3 or 1
+        enabled(row.minus,options and value>low+.0001);enabled(row.plus,options and value<high-.0001)
+        row.value:SetText(key=="capeWeight" and string.format("%.2fx",value) or string.format("%.0f%%",value*100))
+    end
+    self.capeOptionsNotice:SetText(options and "Body collisions are always enabled." or "Update SaureksCloset.dll and restart WoW to use these settings.")
     self.capePhysicsCheckbox:SetChecked(selected and 1 or nil)
     enabled(self.capePhysicsCheckbox,available)
     enabled(self.resetCapePhysicsButton,available and selected and VanityStudioCharacter.enabled and (status==2 or status==4 or status==5))

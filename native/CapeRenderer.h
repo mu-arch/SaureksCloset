@@ -47,6 +47,8 @@ static thread_local std::uintptr_t capeDrawScope=0;
 static thread_local void* capeBoundBuffer=nullptr;
 static thread_local unsigned capeBoundFormat=0;
 static bool capeEnabled=false;
+static bool capeBagCollisions=false,capeWeaponCollisions=true;
+static float capeWeight=1.f,capeStiffness=.2f,capeAir=.25f;
 static unsigned capeRuntimeStatus=0; // 0 off, 1 waiting, 2 active, 3 unsupported, 4 native fit fallback, 5 worker preparing.
 static std::uint32_t capeLastDraw=0;
 static std::uintptr_t capePlayerModel=0;
@@ -108,6 +110,7 @@ struct CapeMesh {
 struct CapeEquipmentBounds {
     CapeMesh mesh;
     cape::BodyBounds fitted;
+    std::shared_ptr<const cape::CollisionMesh> collisionMesh;
     std::vector<std::uint32_t> visibility;
 };
 struct CapeState {
@@ -120,6 +123,7 @@ struct CapeState {
     std::vector<cape::Vec3> rest,animated,normals,reference;
     std::vector<std::uint32_t> pins;
     cape::BodyBounds bodyBounds;
+    std::shared_ptr<const cape::CollisionMesh> collisionMesh;
     std::vector<std::uint32_t> boundsVisibility;
     std::unordered_map<std::uintptr_t,CapeEquipmentBounds> equipmentBounds;
     std::vector<cape::ColliderBox> bounds;
@@ -296,6 +300,22 @@ static bool capeAnimate(CapeState& s){
     }
     return true;
 }
+static std::shared_ptr<const cape::CollisionMesh> capeCollisionGeometry(const CapeMesh& mesh,bool body){
+    auto result=std::make_shared<cape::CollisionMesh>();
+    for(const auto& v:mesh.vertices)result->vertices.push_back({v.position,v.weights,v.bones});
+    for(unsigned index=0;index<mesh.sections.size();++index){
+        if(!mesh.visible[index]||(body&&mesh.capeSections[index]))continue;
+        const auto& section=mesh.sections[index];
+        for(unsigned i=section.triangleFirst;i<static_cast<unsigned>(section.triangleFirst)+section.triangleCount;i+=3){
+            cape::Triangle t{capeSource(mesh,mesh.triangles[i]),capeSource(mesh,mesh.triangles[i+1]),capeSource(mesh,mesh.triangles[i+2])};
+            if(t.a>=mesh.vertices.size()||t.b>=mesh.vertices.size()||t.c>=mesh.vertices.size())return {};
+            const auto& a=mesh.vertices[t.a];const auto& b=mesh.vertices[t.b];const auto& c=mesh.vertices[t.c];
+            if(cape::dot(cape::cross(b.position-a.position,c.position-a.position),a.normal+b.normal+c.normal)<0)std::swap(t.b,t.c);
+            result->triangles.push_back(t);
+        }
+    }
+    return result;
+}
 static bool capeFitBounds(const CapeMesh& mesh,cape::BodyBounds& fitted,bool body){
     std::vector<cape::Triangle> triangles;
     for(unsigned index=0;index<mesh.sections.size();++index){
@@ -377,7 +397,8 @@ static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
     cape::Config config;
     config.fixedStep=1.f/60.f;config.maxSubsteps=3;config.iterations=8;
     config.maxContactSamples=0;config.selfCollision=false;config.maxColliderTriangles=128;
-    config.damping=9.f;config.maxSpeed=3.f;config.stableBounds=true;config.poseLimit=.12f;config.fixedAttachment=true;
+    config.damping=9.f;config.maxSpeed=3.f;config.stableBounds=true;config.poseLimit=0;config.fixedAttachment=true;
+    config.density=.35f*capeWeight;config.clothBending=capeStiffness;config.clothAir=.0008f*capeAir;
     config.maxCollisionTests=6000;config.maxColliderBoxes=64;config.maxBoundTests=100000;
     if(rebuild&&!s.cloth.initialize(s.animated,s.triangles,s.pins,config))return false;
     bool resetPose=false;
@@ -400,23 +421,28 @@ static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
     s.bounds.clear();
     if(!s.bodyBounds.ready()||s.boundsVisibility!=s.mesh.visible){
         if(!capeFitBounds(s.mesh,s.bodyBounds,true))return false;
-        s.boundsVisibility=s.mesh.visible;
+        s.boundsVisibility=s.mesh.visible;s.collisionMesh=capeCollisionGeometry(s.mesh,true);
     }
     if(!capePoseBounds(s,s.bodyBounds,s.mesh,low,high,rebuild||resetPose,true))return false;
+    std::vector<cape::AnimatedCollider> contactMeshes;
+    if(s.collisionMesh)contactMeshes.push_back({s.collisionMesh,s.mesh.bones,s.renderToWorld});
     std::uintptr_t child=0;std::array<std::uintptr_t,64> seen{};unsigned count=0;
     if(!read(model+0x1dc,child))return false;
     for(;child&&count<seen.size();++count){
         for(unsigned j=0;j<count;++j)if(seen[j]==child)return false;
         seen[count]=child;std::uintptr_t parent=0,following=0;unsigned point=0;
         if(!read(child+0x1cc,parent)||parent!=model||!read(child+0x1e4,following)||!read(child+0x1d0,point))return false;
-        if(point<=33){
+        const bool bag=ownedBagUpdate(reinterpret_cast<void*>(child));
+        const bool weapon=point<=2||(point>=26&&point<=33);
+        if(point<=33&&(bag?capeBagCollisions:(!weapon||capeWeaponCollisions))){
             unsigned loaded=0;if(!read(child+0x10,loaded))return false;
             if(loaded){auto& entry=s.equipmentBounds[child];bool changed=false;
                 if(!capeRefreshMesh(child,entry.mesh,changed))return false;
                 if(changed||!entry.fitted.ready()||entry.visibility!=entry.mesh.visible){
                     if(!capeFitBounds(entry.mesh,entry.fitted,false))return false;
-                    entry.visibility=entry.mesh.visible;
+                    entry.visibility=entry.mesh.visible;entry.collisionMesh=capeCollisionGeometry(entry.mesh,false);
                 }
+                if(entry.collisionMesh)contactMeshes.push_back({entry.collisionMesh,entry.mesh.bones,s.renderToWorld});
                 if(!capePoseBounds(s,entry.fitted,entry.mesh,low,high,changed||resetPose,false))return false;
             }
         }
@@ -432,13 +458,13 @@ static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
     cape::Rotation frame;
     for(unsigned i=0;i<3;++i){cape::Vec3 axis{};if(i==0)axis.x=1;else if(i==1)axis.y=1;else axis.z=1;
         frame[i]=capeNormal(capeTransform(s.renderToWorld,capeTransform(modelToRender,axis,true),true));}
-    s.cloth.setFrame(frame);
+    s.cloth.setFrame(frame);s.cloth.setColliders(contactMeshes);
     const float elapsed=rebuild||resetPose?0.f:static_cast<std::uint32_t>(now-s.updated)*.001f;s.updated=now;
     if(!s.cloth.step(elapsed,s.animated,s.worldSurfaces,s.bounds,s.reference)){
         s.cloth.reset(s.animated);
         if(!s.cloth.step(0,s.animated,{},s.bounds,s.reference)){s.fitFallback=true;return false;}
     }
-    if(!s.cloth.limitToFit(s.animated,[&](const auto& pose){return capePoseFits(pose,s.animated,s.triangles,s.pins);})){
+    if(!capeFabricFits(s.cloth.positions(),s.animated,s.cloth.material(),s.triangles,s.pins)){
         s.fitFallback=true;s.cloth.reset(s.animated);return false;
     }
     if(!s.cloth.hasResult()){capeRuntimeStatus=5;capeLastDraw=now;return false;}
@@ -453,6 +479,10 @@ static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
 static void capeReset(){
     for(auto& storage:capeVertexStorage)capeReleaseStorage(storage);
     capeState={};capeClearWorldCollision();capeLastDraw=0;capePlayerModel=0;capePlayerChecked=0;capeRuntimeStatus=capeEnabled?1:0;
+}
+static void capeConfigure(bool bags,bool weapons,float weight,float stiffness,float air){
+    if(capeBagCollisions==bags&&capeWeaponCollisions==weapons&&capeWeight==weight&&capeStiffness==stiffness&&capeAir==air)return;
+    capeBagCollisions=bags;capeWeaponCollisions=weapons;capeWeight=weight;capeStiffness=stiffness;capeAir=air;capeReset();
 }
 static void capeSetEnabled(bool enabled){if(capeEnabled!=enabled){capeEnabled=enabled;capeReset();}}
 static unsigned capeStatus(){

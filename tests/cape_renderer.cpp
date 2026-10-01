@@ -69,6 +69,8 @@ template<class T> static T capeFunction(std::uintptr_t address){
     if(address==0x71A460||address==0x71A720||address==0x71A9E0)return reinterpret_cast<T>(&cpuSkin);
     assert(false);return nullptr;
 }
+static std::uintptr_t ignoredBag=0;
+static bool ownedBagUpdate(void* model){return reinterpret_cast<std::uintptr_t>(model)==ignoredBag;}
 #include "../native/CapeRenderer.h"
 static void cpuSkin(void*,const void* sectionPointer,void* output){
     CapeSection section;assert(read(reinterpret_cast<std::uintptr_t>(sectionPointer),section));
@@ -241,7 +243,7 @@ static void firmBodyFrame(bool obstructed=true){
         put(0x80000,transform);put(0x100fc,transform);
         now+=frame%31==0?80:17;const unsigned calls=submits;capeSubmitHook(nullptr,1);
         assert(capeStatus()==2&&!capeState.fitFallback&&submits==calls+1&&bound==&nativeBuffer);
-        assert(capePoseFits(capeState.cloth.positions(),capeState.animated,capeState.triangles,capeState.pins));
+        assert(capeFabricFits(capeState.cloth.positions(),capeState.animated,capeState.cloth.material(),capeState.triangles,capeState.pins));
         for(unsigned pin:capeState.pins)assert(cape::length(capeState.cloth.positions()[pin]-capeState.animated[pin])<.00001f);
         for(unsigned i=0;i<capeState.animated.size();++i)motion=std::max(motion,cape::length(capeState.cloth.positions()[i]-capeState.animated[i]));
     }
@@ -255,6 +257,19 @@ static void firmBodyFrame(bool obstructed=true){
     capeReset();capeSubmitHook(nullptr,1);assert(capeStatus()==2);
     capeSetEnabled(false);
 }
+static void ignoreBagContacts(){
+    fixture();ignoredBag=0xe0000;put(player.model+0x1dc,ignoredBag);
+    put(ignoredBag+0x1cc,player.model);put(ignoredBag+0x1e4,std::uintptr_t(0));put(ignoredBag+0x1d0,3u);
+    // No readable mesh at the bag pointer: touching it would fail the draw.
+    capeSubmitHook(nullptr,1);assert(capeStatus()==2&&capeState.equipmentBounds.empty());
+    // Opting in reads bag geometry; disabling it restores exclusion immediately.
+    capeConfigure(true,true,1,.2f,.25f);capeSubmitHook(nullptr,1);assert(capeStatus()==3);
+    capeConfigure(false,true,1,.2f,.25f);capeSubmitHook(nullptr,1);assert(capeStatus()==2);
+    ignoredBag=0;put(0xe0000+0x1d0,26u); // Unreadable stowed weapon instead.
+    capeConfigure(false,false,1,.2f,.25f);capeSubmitHook(nullptr,1);assert(capeStatus()==2);
+    capeConfigure(false,true,1,.2f,.25f);capeSubmitHook(nullptr,1);assert(capeStatus()==3);
+    capeReset();
+}
 static void garmentFitGuard(){
     const std::vector<cape::Vec3> normal{{0,0,1},{0,.2f,1},{0,0,.8f},{0,.2f,.8f}};
     const std::vector<cape::Triangle> faces{{0,1,2},{1,3,2}};const std::vector<std::uint32_t> pins{0,1};
@@ -263,6 +278,11 @@ static void garmentFitGuard(){
     auto stretched=normal;stretched[2].z-=.03f;assert(!capePoseFits(stretched,normal,faces,pins));
     auto collapsed=normal;collapsed[3]=collapsed[2];assert(!capePoseFits(collapsed,normal,faces,pins));
     auto flex=normal;flex[2].x=flex[3].x=.01f;assert(capePoseFits(flex,normal,faces,pins));
+    // Lower cloth may swing without stretching while the sewn edge stays put.
+    auto swing=normal;const float angle=.55f;
+    for(unsigned i:{2u,3u}){swing[i].x=std::sin(angle)*.2f;swing[i].z=1-std::cos(angle)*.2f;}
+    assert(capeFabricFits(swing,normal,normal,faces,pins));
+    auto torn=normal;torn[2].z-=.2f;assert(!capeFabricFits(torn,normal,normal,faces,pins));
     // Comparing to the animated pose respects moving shoulders, not a fixed
     // model-origin reference while the character leans or turns.
     auto moving=normal;for(auto& p:moving){p.x+=2;p.z+=.4f;}
@@ -279,4 +299,4 @@ static void disconnectedCollar(){
     assert(capeBuildTopology(state));
     for(unsigned i=6;i<9;++i)assert(std::find(state.pins.begin(),state.pins.end(),i)!=state.pins.end());
 }
-int main(){optimizedDraw(true);optimizedDraw(false);optimizedDraw(false,5);drawAndCheck(true);drawAndCheck(false);invalidRetry();cachedGeometry();firmBodyFrame(false);firmBodyFrame();garmentFitGuard();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: optimized GPU/CPU groups, UV/rebased indices, private output, binding restore, failure retry, geometry/world caches, bounded fast configuration, solid body frames, LOD invalidation, collar attachment and tail exclusion passed\n";}
+int main(){optimizedDraw(true);optimizedDraw(false);optimizedDraw(false,5);drawAndCheck(true);drawAndCheck(false);invalidRetry();cachedGeometry();firmBodyFrame(false);firmBodyFrame();ignoreBagContacts();garmentFitGuard();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: optimized GPU/CPU groups, UV/rebased indices, private output, binding restore, failure retry, geometry/world caches, bounded fast configuration, solid body frames, LOD invalidation, collar attachment and tail exclusion passed\n";}

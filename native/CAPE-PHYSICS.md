@@ -1,17 +1,24 @@
 # Real-time cape physics
 
-Wardrobe → Physics enables NVIDIA NvCloth CPU simulation for the current
+Wardrobe → Physics → Cape opens a separate configuration window for NVIDIA
+NvCloth CPU simulation for the current
 player's world cape. The actual selected cape mesh is simulated; no rectangular
-replacement or periodic sway is generated. Previews, other players and bags are
-unaffected. Disabling the option restores the ordinary native draw.
+replacement or periodic sway is generated. Previews and other players are unaffected. The Bags and Weapons configuration
+buttons are reserved and disabled. The cape menu offers independent bag and
+weapon collision checkboxes (bags off by default, weapons on); these never
+change bag or weapon animation. Body contact stays enabled. Cloth weight
+(0.25–3×), stiffness (0–100%) and air resistance (0–100%) are character
+preferences, independent of saved looks. Restore defaults changes only these
+three tuning values. Older DLLs disable unsupported tuning controls. Disabling the option restores the ordinary native draw.
 
 ## Worker and rendering
 
 `CapeWorker.cpp` owns one persistent simulation thread. Only copied positions,
-triangle indices, pin indices, collision primitives and numeric settings cross
+triangle indices, pin indices, cached immutable collision meshes, copied bone
+matrices, collision primitives and numeric settings cross
 that boundary. The worker never reads native game memory, invokes game/Lua
 functions or touches graphics buffers. Fabric cooking, NvCloth stepping,
-contacts and fit limiting happen there.
+skinning the collision meshes, contacts and fabric validation happen there.
 
 The renderer submits through a try-lock and never waits for the solver. There
 is one replaceable pending job and one latest result, not an unbounded frame
@@ -21,11 +28,12 @@ changes create a new generation; old jobs cannot publish into that generation.
 Results more than 250 ms old expire. The normal cape remains visible while a
 new simulation is preparing or recovering.
 
-Completed deformation offsets are applied relative to the current animated
-cape and rotated with the current player frame. Shoulder/collar vertices always
+Completed particle coordinates are stored relative to the shoulder anchor and
+rotated with the current player frame. Free vertices do not inherit the native
+cape animation or get blended back toward it. Shoulder/collar vertices always
 use the current native coordinates. Consequently an asynchronous result does
 not visibly lag the whole garment behind a moving player. The current-frame
-fit check is also applied before submitting vertices. CPU/GPU draws use private
+fabric check is also applied before submitting vertices. CPU/GPU draws use private
 buffers; the original shared model, UVs, indices and materials are untouched.
 
 Windows pins the module when first starting the worker, outside DllMain. The
@@ -37,34 +45,44 @@ NVIDIA GPU requirement and no extra DLL to install.
 ## Simulation and collision
 
 `CapeNvCloth.cpp` cooks topology and geodesic tethers once per mesh/reset.
-Pinned particles have zero inverse mass. NvCloth's vertical, horizontal and
-shear constraints are stiff; bending is softer. Solver frequency is 240 Hz,
-advanced in bounded 60 Hz steps. Damping is applied, aerodynamic lift/drag are
-disabled, and tethers resist stretching. Simulation coordinates stay near the
-shoulder origin to preserve precision at large world positions.
+Pinned particles have zero inverse mass. Free particle mass is derived from
+triangle area and cloth density (0.35 kg/m² at 1×), with a small numerical mass
+floor. The weight option affects response to air rather than multiplying
+gravity. Vertical, horizontal and shear constraints are stiff; the stiffness
+option controls bending. Solver frequency is 240 Hz, advanced in bounded 60 Hz
+steps. Damping removes residual motion. Air resistance scales aerodynamic drag
+from zero to 0.0008; lift is disabled. These are NvCloth coefficients, not
+physical drag coefficients. Tethers resist stretching.
 
-Conservative animated body/equipment boxes select per-particle NvCloth
-separation constraints. These backstop spheres begin at the native fitted cape
-surface, rather than pushing the entire cape behind a box's furthest corner.
-This avoids the previous reset loop where the native fit overlapped a coarse
-box, was pushed outward and then failed shape validation. Existing authored
-clipping is not repaired by this allowance. Body collision is an approximation;
-it is not a proof that every triangle clears all visible surfaces.
+NvCloth's translating local frame keeps coordinates near the shoulder and
+accounts for root acceleration. Velocity limiting acts on relative particle
+motion, not the player's world speed. Only the seam follows the native pose;
+there are no native-pose motion spheres on the free cape. At rest an unobstructed
+cape settles downward under gravity. Surface contact can change that shape.
 
-Nearby native scenery collision triangles are cached for up to 100 ms and
-limited to 128 faces. NvCloth processes these triangles on the worker. Snapshot
-acquisition, body-bound posing, the native world query and drawing still run
-on the game thread. Moving simulation off-thread reduces its contribution to
-render stalls; it does not make all cape work free.
+The renderer snapshots visible body/equipment geometry and current bone
+matrices. The worker skins it, excludes the cape itself, culls distant triangles
+and retains at most 512 nearby faces. Bags and weapon attachments are filtered
+before loading their geometry according to the saved collision options. Each
+free particle gets a finite local exclusion sphere derived from its nearest
+actual mesh surface. Raw NvCloth triangle colliders extrapolate open meshes into
+infinite planes; using finite contact neighborhoods avoids those launches.
+Contact acquisition limits correction to 1 cm and ignores distant back faces,
+so existing deep authored clipping is not forcibly ejected. This is a local
+contact approximation, not an all-surface clearance guarantee.
 
-Motion constraints bound free displacement around the current skinned cape.
-`CapeFit.h` checks exact pins, at most 0.18 units of displacement, 5% edge-length
-error (or 1 mm allowance), triangle area and orientation. A bounded line search
-can retain a safe fraction of the computed deformation and attenuate momentum
-instead of resetting the cloth. This prioritizes preserving the garment when a
-collision would require stretching. It can reduce collision corrections and
-is not an all-surface clearance guarantee. Thin surfaces can pass between the
-coarse original cape vertices; self-collision is disabled.
+Nearby native scenery triangles are cached for up to 100 ms and limited to
+128 faces. NvCloth processes these on the worker. Snapshot acquisition,
+body-bound posing, the native world query and drawing still run on the game
+thread. Moving simulation off-thread does not make all cape work free.
+
+`CapeFit.h` validates finite output, exact shoulder pins and a maximum edge
+elongation of 25% plus 3 mm relative to the initial fabric; that is a catastrophic
+failure guard, not the intended stretch. NvCloth's stiff distance constraints
+and tethers enforce the actual fabric length. Folded and rotated triangles are
+valid cloth. Invalid output triggers a temporary native fallback and retry,
+not a partial blend that makes the cape look animated normally. Thin objects
+can pass between the coarse original vertices; self-collision is disabled.
 
 ## Native integration (build 5875)
 
@@ -90,14 +108,16 @@ Status: 0 off, 1 waiting for a visible cape, 2 NvCloth active, 3 unsupported,
 Reset is available for states 2, 4 and 5. `/closet diagnose` retains schema 2:
 bridge, preference, status, player/mesh/visibility, initialized state, mesh
 counts, graphics mode, optimized groups and last completed worker counters.
-The contact count measures active backstops; it is not an exact penetration
+The contact count measures active mesh backstops; it is not an exact penetration
 count. No native pointers or player identifiers are exported.
 
 ## Validation and limits
 
 The mandatory check runs the real NvCloth CPU library, renderer mocks in both
 synchronous and asynchronous configurations, GPU48/CPU32/CPU40 mapping,
-nonzero deformation, pin/shape guards, world-floor collision, teleports and
+gravity settling independent of native free-vertex animation, weight/air
+response, collision option filtering, finite skinned-mesh contacts, pin/fabric
+guards, world-floor collision, teleports and
 invalid inputs. Worker regressions deliberately delay simulation and check
 nonblocking submission, replacement queues, generations and mesh changes.
 The older generic solver tests remain isolated references; that solver is no

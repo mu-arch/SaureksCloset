@@ -18,7 +18,7 @@ int main(){
             put(0x80000,matrix);put(0x100fc,matrix);now+=17;
             const auto before=submits;capeSubmitHook(nullptr,1);
             assert(capeStatus()==2&&submits==before+1&&bound==&nativeBuffer);
-            assert(capePoseFits(capeState.cloth.positions(),capeState.animated,capeState.triangles,capeState.pins));
+            assert(capeFabricFits(capeState.cloth.positions(),capeState.animated,capeState.cloth.material(),capeState.triangles,capeState.pins));
             for(unsigned i=0;i<capeState.animated.size();++i)motion=std::max(motion,cape::length(capeState.cloth.positions()[i]-capeState.animated[i]));
             cape::waitCapeWorkerForTests();
         }

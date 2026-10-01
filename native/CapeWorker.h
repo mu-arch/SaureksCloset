@@ -1,4 +1,5 @@
 #pragma once
+#include "CapeCollisionMesh.h"
 #include "CapeNvCloth.h"
 #include <chrono>
 namespace cape {
@@ -13,11 +14,15 @@ class AsyncCloth {
     Rotation frame_=identityRotation(),resultFrame_=identityRotation();
     std::vector<Vec3> positions_,resultOffsets_;
     std::vector<Triangle> faces_;
+    std::vector<Vec3> material_;
+    std::vector<AnimatedCollider> colliders_;
     std::vector<std::uint32_t> pins_;
 public:
     bool initialize(const std::vector<Vec3>&,const std::vector<Triangle>&,const std::vector<std::uint32_t>&,Config={});
     bool step(float,const std::vector<Vec3>&,const std::vector<ColliderTriangle>&,const std::vector<ColliderBox>& = {},const std::vector<Vec3>& = {});
     void reset(const std::vector<Vec3>&);
+    void setColliders(const std::vector<AnimatedCollider>& colliders){colliders_=colliders;}
+    const std::vector<Vec3>& material()const{return material_;}
     bool ready()const{return initialized_;}
     bool hasResult()const{return hasResult_;}
     void setFrame(const Rotation& frame){frame_=frame;}

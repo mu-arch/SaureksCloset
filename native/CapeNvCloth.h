@@ -1,4 +1,5 @@
 #pragma once
+#include "CapeCollisionMesh.h"
 #include "CapeCloth.h"
 #include <array>
 #include <memory>
@@ -13,6 +14,8 @@ class NvClothSolver {
     Config config_{};
     Stats stats_{};
     std::vector<Vec3> positions_;
+    std::vector<Vec3> material_;
+    std::vector<AnimatedCollider> colliders_;
     void acceptFit(const std::vector<Vec3>& pose,float fraction);
 public:
     NvClothSolver();
@@ -22,6 +25,8 @@ public:
     bool initialize(const std::vector<Vec3>& pose,const std::vector<Triangle>& faces,const std::vector<std::uint32_t>& pins,Config config={});
     bool step(float elapsed,const std::vector<Vec3>& pose,const std::vector<ColliderTriangle>& surfaces,const std::vector<ColliderBox>& boxes={},const std::vector<Vec3>& reference={});
     void reset(const std::vector<Vec3>& pose);
+    void setColliders(const std::vector<AnimatedCollider>& colliders){colliders_=colliders;}
+    const std::vector<Vec3>& material()const{return material_;}
     bool ready()const{return bool(impl_);}
     bool hasResult()const{return ready();}
     void setFrame(const Rotation&){}

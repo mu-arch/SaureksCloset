@@ -38,10 +38,10 @@ function methods:Hide() self.shown=false end
 function methods:IsShown() return self.shown end
 function methods:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
 local function noop() end
-for _,name in ipairs({"RegisterEvent","SetFont","ClearAllPoints","SetJustifyH","SetJustifyV","SetBackdrop","SetBackdropBorderColor","SetBackdropColor","SetVertexColor","SetTexCoord","SetAlpha","SetTextColor","SetHighlightTexture","EnableMouse","SetTexture","SetBlendMode"}) do methods[name]=noop end
+for _,name in ipairs({"RegisterEvent","SetFont","ClearAllPoints","SetJustifyH","SetJustifyV","SetBackdrop","SetBackdropBorderColor","SetBackdropColor","SetVertexColor","SetTexCoord","SetAlpha","SetTextColor","SetHighlightTexture","EnableMouse","SetTexture","SetBlendMode","SetHitRectInsets","SetFrameStrata","SetClampedToScreen","SetMovable","RegisterForDrag"}) do methods[name]=noop end
 function getglobal(name) return _G[name] end
 function GetTime() return 100 end
-SlashCmdList={};UIParent=node("Frame","UIParent")
+UISpecialFrames={};SlashCmdList={};UIParent=node("Frame","UIParent")
 VanityStudioCatalog={}
 dofile("addon/SaureksCloset/Core.lua")
 dofile("addon/SaureksCloset/Physics.lua")
@@ -49,6 +49,10 @@ dofile("addon/SaureksCloset/UI.lua")
 local V=VanityStudio
 for _,name in ipairs({"InitializeWeapons","RefreshTrueBody","InitializeBagTuning","ArmorLifeState","CheckArmorRepairs","CreateLauncher","InitializeUpdates","CancelDraft","InvalidatePreviewModel","UpdateArmorEquipment","SyncBody","SyncWeapons","UpdateUpdates","UpdatePreviewLoading","UpdateRespawnRecovery","UpdateArmorCheck","RefreshBody","RefreshPortraits","QueueRespawnRecovery","Refresh"}) do V[name]=noop end
 
+local optionWrites={}
+SaureksClosetConfigureCapePhysics=function(bags,weapons,weight,stiffness,air)
+    table.insert(optionWrites,{bags,weapons,weight,stiffness,air});return 1
+end
 local writes,status,resets={},0,0
 local function setter(value)
     check(value==0 or value==1,"Native enable accepts only numeric 0 or 1")
@@ -81,6 +85,31 @@ check(table.getn(writes)==count+1 and writes[table.getn(writes)]==1,"World entry
 V.frame=CreateFrame("Frame","PhysicsTest",UIParent);V.frame.width=384;V.frame.height=512
 local p=CreateFrame("Frame",nil,V.frame);p:SetAllPoints(V.frame)
 V.pagesByName={physics=p};V:CreatePhysicsPage(p)
+check(V.physicsCategoryButtons[1].enabled and not V.physicsCategoryButtons[2].enabled and not V.physicsCategoryButtons[3].enabled,"Only Cape configuration is active")
+check(not V.capePhysicsWindow:IsShown(),"Cape settings open separately, not on the landing page")
+V.physicsCategoryButtons[1].scripts.OnClick()
+check(V.capePhysicsWindow:IsShown() and V.capePhysicsCheckbox.parent==V.physicsCapePanel,"Cape opens its own window")
+check(not V.capeBagCollision:GetChecked() and V.capeWeaponCollision:GetChecked(),"Bags default off; weapon collisions default on")
+local optionCount=table.getn(optionWrites);V:SyncCapePhysics()
+check(table.getn(optionWrites)==optionCount,"Unchanged collision/tuning preferences do not restart cloth")
+this=V.capeBagCollision;this:SetChecked(1);this.scripts.OnClick();this=nil
+check(VanityStudioCharacter.physics.capeBags and optionWrites[table.getn(optionWrites)][1]==1,"Bag checkbox enables native cape-to-bag collisions")
+check(V:SetCapeOption("capeWeapons",false) and optionWrites[table.getn(optionWrites)][2]==0,"Weapon collisions toggle independently")
+V.capeTuningControls.capeWeight.plus.scripts.OnClick()
+check(VanityStudioCharacter.physics.capeWeight==1.25 and optionWrites[table.getn(optionWrites)][3]==1.25,"Weight control updates actual native settings")
+check(V:SetCapeOption("capeWeight",99) and VanityStudioCharacter.physics.capeWeight==3 and not V.capeTuningControls.capeWeight.plus.enabled,"Weight is bounded and its upper button disables")
+check(not V:SetCapeOption("unrelated",1) and not V:SetCapeOption("capeWeight",0/0),"Invalid option names and nonfinite values are rejected")
+local configure=SaureksClosetConfigureCapePhysics
+SaureksClosetConfigureCapePhysics=function() return 0 end
+check(not V:SetCapeOption("capeWeight",1) and VanityStudioCharacter.physics.capeWeight==3,"Rejected native changes restore the displayed value")
+SaureksClosetConfigureCapePhysics=configure
+check(V:RestoreCapeDefaults() and VanityStudioCharacter.physics.capeWeight==1 and VanityStudioCharacter.physics.capeBags and not VanityStudioCharacter.physics.capeWeapons,"Defaults restore tuning without overriding collision choices")
+V:SetCapeOption("capeBags",false);V:SetCapeOption("capeWeapons",true)
+SaureksClosetConfigureCapePhysics=nil;V:RefreshPhysicsPage()
+check(not V.capeBagCollision.enabled and not V.capeTuningControls.capeWeight.plus.enabled and V.capePhysicsCheckbox.enabled,"Older DLL disables new settings but preserves enable control")
+SaureksClosetConfigureCapePhysics=configure;V:RefreshPhysicsPage()
+V.capePhysicsWindow.close.scripts.OnClick();check(not V.capePhysicsWindow:IsShown(),"Close dismisses the separate menu")
+V:OpenCapePhysics();p.scripts.OnHide();check(not V.capePhysicsWindow:IsShown(),"Leaving Physics dismisses its menu")
 check(V.capePhysicsCheckbox:GetChecked() and V.capePhysicsCheckbox.enabled,"Enabled preference appears checked")
 check(V.capePhysicsStatusLabel.text=="Waiting for a visible cape." and not V.resetCapePhysicsButton.enabled,"Waiting status disables reset until there is a cape")
 check(not V:ResetCapePhysics() and resets==0,"Reset does nothing without an active cape")
@@ -137,12 +166,12 @@ local function rect(n)
     local a=n.anchor;local x,y=rect(a and a[2] or n.parent)
     return x+(a and a[4] or 0),y-(a and a[5] or 0),n.width,n.height
 end
-local controls={V.physicsTitle,V.physicsCapePanel,V.physicsScopeLabel}
+local controls={V.physicsTitle,V.physicsScopeLabel}
 for _,widget in ipairs(controls) do
     local x,y,w,h=rect(widget)
     check(x>=30 and x+w<=334 and y>=80 and y+h<=392,"Physics content fits between wardrobe navigation without scrolling")
 end
-local textRegions={V.physicsCapeTitle,V.capePhysicsLabel,V.capePhysicsStatusLabel,V.physicsScopeLabel}
+local textRegions={V.capePhysicsLabel,V.capePhysicsStatusLabel,V.physicsScopeLabel}
 for _,region in ipairs(textRegions) do
     local columns=math.floor(region.width/6)
     local lines=math.max(1,math.ceil(string.len(region.text)/columns))

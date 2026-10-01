@@ -54,6 +54,7 @@ struct Config {
     // spring. This is a bending approximation, not a dihedral-angle solver.
     float bendCompliance=.03f;
     float density=.25f, damping=2.f, friction=.12f;
+    float clothBending=.2f, clothAir=.0002f;
     float maxSpeed=40.f, teleportDistance=3.f, maxFrameTime=.25f;
     bool selfCollision=true;
     bool fixedAttachment=false; // Authored shoulder/collar vertices cannot be displaced.

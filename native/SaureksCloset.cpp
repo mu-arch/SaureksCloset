@@ -367,6 +367,14 @@ static int __fastcall setCapePhysicsLua(void* L){
     if(value!=0&&value!=1)return result(L,0);
     capeSetEnabled(value==1);return result(L,1);
 }
+static int __fastcall configureCapePhysicsLua(void* L){
+    if(!capeBridgeReady)return result(L,0);
+    for(int i=1;i<=5;++i)if(!isNumber(L,i))return result(L,0);
+    const double bags=toNumber(L,1),weapons=toNumber(L,2),weight=toNumber(L,3),stiffness=toNumber(L,4),air=toNumber(L,5);
+    if((bags!=0&&bags!=1)||(weapons!=0&&weapons!=1)||!std::isfinite(weight)||weight<.25||weight>3||
+       !std::isfinite(stiffness)||stiffness<0||stiffness>1||!std::isfinite(air)||air<0||air>1)return result(L,0);
+    capeConfigure(bags==1,weapons==1,static_cast<float>(weight),static_cast<float>(stiffness),static_cast<float>(air));return result(L,1);
+}
 static int __fastcall resetCapePhysicsLua(void* L){
     if(!capeBridgeReady)return result(L,0);
     capeReset();return result(L,1);
@@ -407,6 +415,7 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
         registerOriginal("SaureksClosetSetBagFit",reinterpret_cast<std::uintptr_t>(&setBagFit));
         registerOriginal("SaureksClosetSetBags",reinterpret_cast<std::uintptr_t>(&setBags));
         registerOriginal("SaureksClosetSetCapePhysics",reinterpret_cast<std::uintptr_t>(&setCapePhysicsLua));
+        registerOriginal("SaureksClosetConfigureCapePhysics",reinterpret_cast<std::uintptr_t>(&configureCapePhysicsLua));
         registerOriginal("SaureksClosetResetCapePhysics",reinterpret_cast<std::uintptr_t>(&resetCapePhysicsLua));
         registerOriginal("SaureksClosetCapePhysicsStatus",reinterpret_cast<std::uintptr_t>(&capePhysicsStatusLua));
         registerOriginal("SaureksClosetInspectCapePhysics",reinterpret_cast<std::uintptr_t>(&inspectCapePhysicsLua));

@@ -6,6 +6,7 @@
 #include <NvCloth/PhaseConfig.h>
 #include <NvClothExt/ClothFabricCooker.h>
 #include <foundation/PxErrorCallback.h>
+#include <foundation/PxQuat.h>
 #include <cstdlib>
 #include <mutex>
 
@@ -63,11 +64,19 @@ NvClothSolver& NvClothSolver::operator=(NvClothSolver&&) noexcept=default;
 bool NvClothSolver::initialize(const std::vector<Vec3>& pose,const std::vector<Triangle>& faces,const std::vector<std::uint32_t>& pins,Config config){
     impl_.reset();positions_.clear();stats_={};config_=config;
     if(pose.size()<3||pose.size()>config.maxVertices||faces.empty()||faces.size()>config.maxTriangles||pins.empty()||!validPose(pose,pose.size()))return false;
-    if(!std::isfinite(config.fixedStep)||config.fixedStep<.001f||config.fixedStep>1.f/30||config.maxSubsteps==0||config.maxSubsteps>32||!finite(config.gravity)||!std::isfinite(config.poseLimit)||config.poseLimit<0||!std::isfinite(config.damping)||config.damping<0)return false;
+    if(!std::isfinite(config.fixedStep)||config.fixedStep<.001f||config.fixedStep>1.f/30||config.maxSubsteps==0||config.maxSubsteps>32||!finite(config.gravity)||!std::isfinite(config.poseLimit)||config.poseLimit<0||!std::isfinite(config.damping)||config.damping<0||!std::isfinite(config.density)||config.density<=0||!std::isfinite(config.maxSpeed)||config.maxSpeed<=0)return false;
+    if(!std::isfinite(config.clothBending)||config.clothBending<0||config.clothBending>1||!std::isfinite(config.clothAir)||config.clothAir<0||config.clothAir>1)return false;
     for(auto pin:pins)if(pin>=pose.size())return false;
     for(auto t:faces)if(t.a>=pose.size()||t.b>=pose.size()||t.c>=pose.size()||length(cross(pose[t.b]-pose[t.a],pose[t.c]-pose[t.a]))<1.e-9f)return false;
     initializeLibrary();failed=false;auto state=std::make_unique<Impl>();
-    state->pins=pins;state->masses.assign(pose.size(),1);for(auto pin:pins)state->masses[pin]=0;
+    state->pins=pins;state->masses.assign(pose.size(),0);
+    // NvCloth's aerodynamic forces use inverse mass. One kilogram per vertex
+    // made a small cape weigh tens of kilograms and barely respond to air.
+    for(auto face:faces){const float mass=length(cross(pose[face.b]-pose[face.a],pose[face.c]-pose[face.a]))*.5f*config.density/3;
+        for(auto id:{face.a,face.b,face.c})state->masses[id]+=mass;}
+    for(auto& mass:state->masses)mass=1.f/std::max(mass,.002f);
+    for(auto pin:pins)state->masses[pin]=0;
+    material_=pose;
     state->origin=pose[pins[0]];state->lastPose=pose;
     std::vector<PxVec3> points;std::vector<PxVec4> particles;
     for(unsigned i=0;i<pose.size();++i){points.push_back(nv(pose[i]-state->origin));particles.emplace_back(points.back(),state->masses[i]);}
@@ -84,14 +93,19 @@ bool NvClothSolver::initialize(const std::vector<Vec3>& pose,const std::vector<T
     auto& cloth=*state->cloth;
     std::vector<nv::cloth::PhaseConfig> phases;
     for(unsigned i=0;i<types.size();++i){nv::cloth::PhaseConfig phase(static_cast<std::uint16_t>(i));
-        phase.mStiffness=types[i]==nv::cloth::ClothFabricPhaseType::eBENDING?.25f:1.f;phases.push_back(phase);
+        phase.mStiffness=types[i]==nv::cloth::ClothFabricPhaseType::eBENDING?config.clothBending:1.f;phases.push_back(phase);
     }
     cloth.setPhaseConfig({phases.data(),phases.data()+phases.size()});
+    cloth.teleportToLocation(nv(state->origin),physx::PxQuat(physx::PxIdentity));
     cloth.setGravity(nv(config.gravity));cloth.setSolverFrequency(240);cloth.setStiffnessFrequency(60);
     cloth.setDamping(PxVec3(1.f-std::exp(-config.damping/60.f)));
+    cloth.setLinearDrag(PxVec3(0));cloth.setAngularDrag(PxVec3(0));
     cloth.setTetherConstraintStiffness(1);cloth.setTetherConstraintScale(1);
     cloth.setFriction(.25f);cloth.setMotionConstraintStiffness(1);cloth.setSleepThreshold(0);
-    cloth.setDragCoefficient(0);cloth.setLiftCoefficient(0); // No aerodynamic launch impulses.
+    // Air at rest in world space produces relative drag during movement.
+    // Keep lift disabled; it caused launches in the previous contact solver.
+    cloth.setDragCoefficient(config.clothAir);cloth.setLiftCoefficient(0);
+    cloth.setFluidDensity(1.225f);cloth.setWindVelocity(PxVec3(0));
     state->solver=state->factory->createSolver();if(!state->solver)return false;
     state->solver->addCloth(state->cloth);state->added=true;
     if(failed)return false;
@@ -102,6 +116,7 @@ void NvClothSolver::reset(const std::vector<Vec3>& pose){
     auto& s=*impl_;s.origin=pose[s.pins[0]];s.time=0;s.lastPose=pose;positions_=pose;
     auto current=s.cloth->getCurrentParticles();auto previous=s.cloth->getPreviousParticles();
     for(unsigned i=0;i<pose.size();++i)current[i]=previous[i]=PxVec4(nv(pose[i]-s.origin),s.masses[i]);
+    s.cloth->teleportToLocation(nv(s.origin),physx::PxQuat(physx::PxIdentity));
     s.cloth->clearMotionConstraints();s.cloth->clearSeparationConstraints();s.cloth->clearInterpolation();
     stats_.reset=true;
 }
@@ -114,37 +129,40 @@ bool NvClothSolver::step(float elapsed,const std::vector<Vec3>& pose,const std::
     auto& s=*impl_;bool teleport=elapsed>config_.maxFrameTime;
     for(auto pin:s.pins)if(length(pose[pin]-s.lastPose[pin])>config_.teleportDistance)teleport=true;
     if(teleport){reset(pose);elapsed=0;}
-    const Vec3 origin=pose[s.pins[0]],shift=s.origin-origin;s.origin=origin;
+    // Use NvCloth's moving frame rather than manually rebasing world-space
+    // velocity. Damping and the speed guard must act on motion relative to
+    // the player, otherwise they brake the entire running character.
+    const Vec3 origin=pose[s.pins[0]];s.origin=origin;
     {
         auto current=s.cloth->getCurrentParticles();auto previous=s.cloth->getPreviousParticles();
         for(unsigned i=0;i<pose.size();++i){
-            current[i]+=PxVec4(nv(shift),0);previous[i]+=PxVec4(nv(shift),0);
             if(s.masses[i]==0)current[i]=previous[i]=PxVec4(nv(pose[i]-origin),0);
         }
     }
-    // Native motion and backstop spheres share the authored fit. Conservative
-    // torso boxes only select nearby contacts; they never eject the neckline.
-    auto motion=s.cloth->getMotionConstraints();auto separation=s.cloth->getSeparationConstraints();
-    for(unsigned i=0;i<pose.size();++i){
-        const auto local=pose[i]-origin;const float radius=s.masses[i]==0?0:config_.poseLimit;
-        motion[i]=PxVec4(nv(local),radius);Vec3 normal{};float backstop=0;
-        if(s.masses[i]>0)for(const auto& box:boxes){++stats_.boundTests;
-            const auto delta=pose[i]-box.currentCenter;const float near=config_.poseLimit+config_.thickness;
-            if(std::fabs(dot(delta,box.currentAxes[0]))>box.currentHalf.x+near||std::fabs(dot(delta,box.currentAxes[1]))>box.currentHalf.y+near||std::fabs(dot(delta,box.currentAxes[2]))>box.currentHalf.z+near)continue;
-            normal=normalized(box.preferredDirection,{-1,0,0});backstop=.25f;break;
-        }
-        separation[i]=PxVec4(nv(local-normal*backstop),backstop);
-        if(backstop>0)++stats_.contacts;
+    // Free cloth has no targets sampled from the native cape animation.
+    // Only inverse-mass-zero shoulder/collar particles follow that pose.
+    s.cloth->clearMotionConstraints();s.cloth->clearSeparationConstraints();
+    // Query body contacts in the current attachment frame, not at last frame's
+    // world location while the player is running.
+    std::vector<Vec3> contactPose;contactPose.reserve(positions_.size());
+    {auto particles=s.cloth->getCurrentParticles();for(unsigned i=0;i<positions_.size();++i)contactPose.push_back(vec(particles[i])+origin);}
+    const auto contacts=skinCapeContacts(colliders_,contactPose);
+    auto separation=s.cloth->getSeparationConstraints();
+    for(unsigned i=0;i<positions_.size();++i){
+        const auto hit=s.masses[i]>0?capeMeshContact(contactPose[i],contacts):CapeContact{};
+        separation[i]=PxVec4(nv(hit.center-origin),hit.radius);if(hit.radius>0)++stats_.contacts;
     }
     std::vector<PxVec3> triangles;triangles.reserve(surfaces.size()*3);
     for(const auto& surface:surfaces)for(auto p:surface.current)triangles.push_back(nv(p-origin));
     s.cloth->setTriangles({triangles.data(),triangles.data()+triangles.size()},0,s.cloth->getNumTriangles());
-    // All constraints were rebased together; do not interpolate from the old
-    // coordinate origin (which otherwise creates phantom moving colliders).
+    // Constraints are supplied in the current moving frame. Their previous
+    // centers must not refer to a different captured skeletal pose.
     s.cloth->clearInterpolation();
     s.time+=elapsed;unsigned steps=static_cast<unsigned>((s.time+1.e-9)/config_.fixedStep);
     if(steps>config_.maxSubsteps){steps=config_.maxSubsteps;s.time=steps*config_.fixedStep;stats_.budgetExceeded=true;}
+    const auto start=s.cloth->getTranslation();
     for(unsigned step=0;step<steps;++step){
+        s.cloth->setTranslation(start+(nv(origin)-start)*(float(step+1)/steps));
         if(!s.solver->beginSimulation(config_.fixedStep))return false;
         const auto chunks=s.solver->getSimulationChunkCount();
         for(int chunk=0;chunk<chunks;++chunk)s.solver->simulateChunk(chunk);
@@ -155,7 +173,7 @@ bool NvClothSolver::step(float elapsed,const std::vector<Vec3>& pose,const std::
     for(unsigned i=0;i<pose.size();++i){
         if(s.masses[i]==0)current[i]=previous[i]=PxVec4(nv(pose[i]-origin),0);
         positions_[i]=vec(current[i])+origin;
-        auto velocity=vec(current[i])-vec(previous[i]);const float speed=length(velocity),maxDelta=config_.maxSpeed*config_.fixedStep;
+        auto velocity=vec(current[i])-vec(previous[i]);const float speed=length(velocity),maxDelta=config_.maxSpeed*std::max(s.cloth->getPreviousIterationDt(),1.e-5f);
         if(speed>maxDelta)previous[i]=PxVec4(nv(vec(current[i])-velocity*(maxDelta/speed)),s.masses[i]);
     }
     return !failed&&validPose(positions_,pose.size());

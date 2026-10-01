@@ -20,3 +20,18 @@ inline bool capePoseFits(const std::vector<cape::Vec3>& pose,const std::vector<c
     }
     return true;
 }
+
+inline bool capeFabricFits(const std::vector<cape::Vec3>& pose,const std::vector<cape::Vec3>& animated,const std::vector<cape::Vec3>& material,const std::vector<cape::Triangle>& faces,const std::vector<std::uint32_t>& pins){
+    if(pose.empty()||pose.size()!=animated.size()||pose.size()!=material.size())return false;
+    for(auto p:pose)if(!cape::finite(p))return false;
+    for(auto pin:pins)if(pin>=pose.size()||cape::length(pose[pin]-animated[pin])>.00001f)return false;
+    for(auto face:faces){unsigned ids[]={face.a,face.b,face.c};for(auto id:ids)if(id>=pose.size())return false;
+        for(unsigned k=0;k<3;++k){unsigned a=ids[k],b=ids[(k+1)%3];
+            // A severely elongated fabric is invalid; a folded/rotated face is
+            // valid cloth and must not be blended back into the game's pose.
+            float rest=cape::length(material[a]-material[b]);
+            if(cape::length(pose[a]-pose[b])>rest*1.25f+.003f)return false;
+        }
+    }
+    return true;
+}

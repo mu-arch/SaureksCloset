@@ -14,7 +14,7 @@ struct Job {
     std::uint64_t generation=0,serial=0;double time=0;Config config;
     Rotation frame=identityRotation();std::chrono::steady_clock::time_point sampled;
     std::vector<Vec3> pose;std::vector<Triangle> faces;std::vector<std::uint32_t> pins;
-    std::vector<ColliderTriangle> surfaces;std::vector<ColliderBox> boxes;
+    std::vector<ColliderTriangle> surfaces;std::vector<ColliderBox> boxes;std::vector<AnimatedCollider> colliders;
 };
 struct Result {
     std::uint64_t generation=0,serial=0;bool okay=false;Stats stats;
@@ -42,11 +42,12 @@ class Worker {
 #endif
             bool okay=true;
             if(generation!=job.generation){okay=solver.initialize(job.pose,job.faces,job.pins,job.config);generation=job.generation;previousTime=job.time;}
+            solver.setColliders(job.colliders);
             if(okay)okay=solver.step(static_cast<float>(std::max(0.,job.time-previousTime)),job.pose,job.surfaces,job.boxes,job.pose);
             previousTime=job.time;
-            if(okay)okay=solver.limitToFit(job.pose,[&](const auto& pose){return capePoseFits(pose,job.pose,job.faces,job.pins);});
+            if(okay)okay=capeFabricFits(solver.positions(),job.pose,solver.material(),job.faces,job.pins);
             Result out;out.generation=job.generation;out.serial=job.serial;out.okay=okay;out.stats=solver.stats();out.frame=job.frame;
-            if(okay){out.offsets.resize(job.pose.size());for(unsigned i=0;i<job.pose.size();++i)out.offsets[i]=solver.positions()[i]-job.pose[i];}
+            if(okay){out.offsets.resize(job.pose.size());for(unsigned i=0;i<job.pose.size();++i)out.offsets[i]=solver.positions()[i]-job.pose[job.pins[0]];}
             out.finished=job.sampled;
             {std::lock_guard<std::mutex> lock(mutex_);running_=false;
                 if(wanted_.load()==job.generation)result_=std::move(out);
@@ -103,7 +104,7 @@ bool AsyncCloth::initialize(const std::vector<Vec3>& pose,const std::vector<Tria
     for(auto p:pose)if(!finite(p))return false;
     for(auto pin:pins)if(pin>=pose.size())return false;
     for(auto t:faces)if(t.a>=pose.size()||t.b>=pose.size()||t.c>=pose.size())return false;
-    config_=config;faces_=faces;pins_=pins;initialized_=true;reset(pose);return true;
+    config_=config;material_=pose;faces_=faces;pins_=pins;initialized_=true;reset(pose);return true;
 }
 void AsyncCloth::reset(const std::vector<Vec3>& pose){
     if(!initialized_)return;
@@ -119,7 +120,7 @@ bool AsyncCloth::step(float elapsed,const std::vector<Vec3>& pose,const std::vec
     if(teleport)reset(pose);
     time_+=std::min(elapsed,config_.maxFrameTime);
     Job job;job.generation=generation_;job.time=time_;job.config=config_;job.frame=frame_;job.sampled=std::chrono::steady_clock::now();
-    job.pose=pose;job.faces=faces_;job.pins=pins_;job.surfaces=surfaces;job.boxes=boxes;
+    job.pose=pose;job.faces=faces_;job.pins=pins_;job.surfaces=surfaces;job.boxes=boxes;job.colliders=colliders_;
     Result result;worker().exchange(std::move(job),result);
     if(result.generation==generation_&&result.serial>received_){
         received_=result.serial;stats_=result.stats;
@@ -131,7 +132,7 @@ bool AsyncCloth::step(float elapsed,const std::vector<Vec3>& pose,const std::vec
     }
     if(hasResult_&&std::chrono::steady_clock::now()-resultTime_>=std::chrono::milliseconds(250)){hasResult_=false;resultOffsets_.clear();}
     positions_=pose;
-    if(hasResult_&&resultOffsets_.size()==pose.size())for(unsigned i=0;i<pose.size();++i)positions_[i]+=rotateDelta(resultOffsets_[i],resultFrame_,frame_);
+    if(hasResult_&&resultOffsets_.size()==pose.size())for(unsigned i=0;i<pose.size();++i)positions_[i]=pose[pins_[0]]+rotateDelta(resultOffsets_[i],resultFrame_,frame_);
     for(auto pin:pins_)positions_[pin]=pose[pin];
     return true;
 }
