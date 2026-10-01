@@ -15,9 +15,10 @@
 #include "../native/CapeCloth.h"
 using SIZE_T=std::size_t;
 static std::map<std::uintptr_t,std::vector<unsigned char>> memory;
+static unsigned geometryReads=0,worldQueries=0;
 static void* GetCurrentProcess(){return nullptr;}
 static bool ReadProcessMemory(void*,const void* address,void* out,SIZE_T size,SIZE_T* copied){
-    const auto at=reinterpret_cast<std::uintptr_t>(address);auto it=memory.upper_bound(at);
+    const auto at=reinterpret_cast<std::uintptr_t>(address);if(at==0x50000)++geometryReads;auto it=memory.upper_bound(at);
     while(it!=memory.begin()){
         --it;const auto offset=at-it->first;
         if(offset<=it->second.size()&&size<=it->second.size()-offset){std::memcpy(out,it->second.data()+offset,size);*copied=size;return true;}
@@ -37,7 +38,7 @@ static unsigned bagClockMilliseconds(){return now;}
 static unsigned worldClears=0;
 static bool worldAvailable=true;
 static void capeClearWorldCollision(){++worldClears;}
-static bool capeWorldColliders(const cape::Vec3& low,const cape::Vec3& high,std::vector<cape::ColliderTriangle>&){return worldAvailable&&high.x-low.x<=16&&high.y-low.y<=16&&high.z-low.z<=16;}
+static bool capeWorldColliders(const cape::Vec3& low,const cape::Vec3& high,std::vector<cape::ColliderTriangle>&){++worldQueries;return worldAvailable&&high.x-low.x<=16&&high.y-low.y<=16&&high.z-low.z<=16;}
 struct Buffer {unsigned stride=0,count=0;std::vector<unsigned char> bytes;};
 struct Pool {unsigned bytes=0;};
 static std::vector<std::unique_ptr<Buffer>> buffers;
@@ -86,6 +87,7 @@ static void fixture(bool gpu=true){
     player={model,17};
     put(model+0x10,1u);put(model+0x30,resource);put(model+0x94,std::uintptr_t(0x80000));put(model+0x98,std::uintptr_t(0x81000));
     put(model+0x2c,std::uintptr_t(0x82000));put(0x82000+0x9c,identity);put(model+0x1dc,std::uintptr_t(0));
+    put(model+0xFC,identity);
     put(resource+0x130,header);put(resource+0x138,view);put(resource+4,std::uintptr_t(0x83000));put(resource+0x15c,1u);put(0x83000+4,gpu?8u:0u);
     put(header,0x3032444du);put(header+4,256u);put(header+0x34,1u);put(0x80000,identity);
     // Nonidentity lookup verifies the GPU consumes view order, not source order.
@@ -125,9 +127,9 @@ static void drawAndCheck(bool gpu){
     // GPU output is inverse-skinned back to source coordinates; CPU output
     // already includes the translated render-space bone transform.
     assert(std::fabs(outputPoint(0,gpu?48:32).x-(gpu?0:50))<.001f);
-    now+=17;worldAvailable=false;
-    assert(!capeWriteDraw(0x90000,nullptr,1));assert(capeStatus()==3);
-    assert(!capeWriteDraw(0x90000,nullptr,1)); // No stale same-tick success.
+    now+=117;worldAvailable=false;
+    assert(capeWriteDraw(0x90000,nullptr,1));assert(capeStatus()==2);
+    assert(capeWriteDraw(0x90000,nullptr,1)); // Unavailable world cells cannot disable body safety.
     worldAvailable=true;now+=17;
     put(0xa0000+0x34,1u);assert(!capeWriteDraw(0x90000,nullptr,1));assert(capeStatus()==3);
     put(0xa0000+0x34,0u);put(0x66000,8u); // Tauren tail texture.
@@ -195,22 +197,47 @@ static void optimizedDraw(bool gpu,unsigned cpuFormat=3){
     capeSubmitHook(nullptr,1);assert(capeStatus()==3&&bound==&nativeBuffer);
     capeSetEnabled(false);
 }
-static void sweptEquipment(){
-    CapeState state;state.model=1;state.renderToWorld=identity;
-    CapeMesh mesh;mesh.model=2;mesh.header=3;mesh.view=4;mesh.lookup={0,1,2};mesh.triangles={0,1,2};mesh.vertices.resize(3);mesh.visible={1};mesh.capeSections={false};mesh.bones={identity};
-    CapeSection section;section.count=3;section.triangleCount=3;mesh.sections={section};
-    const cape::Vec3 p[]={{0,-1,-1},{0,1,-1},{0,0,1}};
-    for(unsigned i=0;i<3;++i){mesh.vertices[i].position=p[i];mesh.vertices[i].weights[0]=255;}
-    const cape::Vec3 low{-.1f,-.1f,-.1f},high{.1f,.1f,.1f};
-    std::vector<cape::ColliderTriangle> contacts;
-    std::unordered_map<std::uint64_t,std::array<cape::Vec3,3>> next;
-    mesh.bones[0][12]=-1;
-    assert(capeCollectSurface(state,mesh,low,high,contacts,next));assert(contacts.empty()&&next.size()==1);
-    state.previousSurfaces=next;next.clear();mesh.bones[0][12]=1;
-    assert(capeCollectSurface(state,mesh,low,high,contacts,next));assert(contacts.size()==1);
-    assert(contacts[0].previous[0].x==-1&&contacts[0].current[0].x==1);
-    contacts.clear();next.clear();++mesh.view;
-    assert(capeCollectSurface(state,mesh,low,high,contacts,next));assert(contacts.empty());
+static void cachedGeometry(){
+    fixture();assert(capeWriteDraw(0x90000,nullptr,1));
+    const unsigned copies=geometryReads,queries=worldQueries;
+    const auto* gpuData=capeState.gpuVertices.data();
+    for(unsigned frame=0;frame<4;++frame){now+=17;assert(capeWriteDraw(0x90000,nullptr,1));}
+    assert(geometryReads==copies&&worldQueries==queries);
+    assert(capeState.gpuVertices.data()==gpuData);
+    assert(capeState.cloth.config().fixedStep==1.f/60.f&&capeState.cloth.config().iterations==4);
+    assert(capeState.cloth.collisionSampleCount()==capeState.source.size());
+    assert(!capeState.cloth.config().selfCollision);
+    now+=101;assert(capeWriteDraw(0x90000,nullptr,1));assert(worldQueries==queries+1);
+    auto vertices=capeState.mesh.vertices;vertices[5].position.z+=.1f;
+    array(0x30044,0x51000,vertices);now+=17;
+    assert(capeWriteDraw(0x90000,nullptr,1));
+    assert(capeState.mesh.storage[0]==0x51000&&capeState.mesh.vertices[5].position.z==2.1f);
+    put(0x81000,0u);now+=17;assert(!capeWriteDraw(0x90000,nullptr,1));assert(capeStatus()==1);
+    capeSetEnabled(false);
+}
+static void firmBodyFrame(){
+    fixture();CapeMesh mesh;assert(capeReadMesh(player.model,mesh));
+    auto vertices=mesh.vertices;auto lookup=mesh.lookup;auto triangles=mesh.triangles;
+    for(unsigned i=0;i<8;++i){CapeSourceVertex vertex{};vertex.position={i&1?.2f:-.1f,i&2?.25f:-.25f,i&4?1.8f:.1f};vertex.weights[0]=255;vertex.normal={-1,0,0};vertices.push_back(vertex);lookup.push_back(6+i);}
+    const unsigned faces[]={0,1,3,0,3,2,4,6,7,4,7,5,0,4,5,0,5,1,2,3,7,2,7,6,0,2,6,0,6,4,1,5,7,1,7,3};
+    for(unsigned i:faces)triangles.push_back(6+i);
+    auto sections=mesh.sections;CapeSection body;body.count=8;body.first=6;body.triangleFirst=12;body.triangleCount=36;sections.push_back(body);
+    auto units=mesh.units;auto bodyUnit=units[0];bodyUnit.value[2]=1;units.push_back(bodyUnit);
+    array(0x30044,0x50000,vertices);array(0x40000,0x60000,lookup);array(0x40008,0x61000,triangles);
+    array(0x40010,0x62000,std::vector<std::uint32_t>(lookup.size()));array(0x40018,0x63000,sections);array(0x40020,0x64000,units);
+    put(0x81000,std::array<unsigned,2>{{1,1}});
+    assert(capeWriteDraw(0x90000,nullptr,1)&&capeStatus()==2);
+    assert(capeState.bounds.size()==1);
+    for(const auto& point:capeState.cloth.positions())assert(point.x<-.117f);
+    const unsigned copies=geometryReads;
+    for(unsigned frame=0;frame<30;++frame){now+=17;assert(capeWriteDraw(0x90000,nullptr,1));for(const auto& point:capeState.cloth.positions())assert(point.x<-.117f);}
+    assert(geometryReads==copies);
+    // An unsatisfied hard limit must never fall through to the unchecked
+    // original cape submission, including after the zero-time safety retry.
+    const_cast<cape::Config&>(capeState.cloth.config()).maxBoundTests=0;now+=17;
+    const unsigned before=submits;capeSubmitHook(nullptr,1);
+    assert(capeStatus()==3&&submits==before&&capeState.cloth.stats().boundsRejected);
+    capeSetEnabled(false);
 }
 static void disconnectedCollar(){
     fixture(false);CapeState state;assert(capeReadMesh(player.model,state.mesh));state.sections={0,1};
@@ -223,4 +250,4 @@ static void disconnectedCollar(){
     assert(capeBuildTopology(state));
     for(unsigned i=6;i<9;++i)assert(std::find(state.pins.begin(),state.pins.end(),i)!=state.pins.end());
 }
-int main(){optimizedDraw(true);optimizedDraw(false);optimizedDraw(false,5);drawAndCheck(true);drawAndCheck(false);invalidRetry();sweptEquipment();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: optimized GPU/CPU groups, UV/rebased indices, private output, binding restore, failure retry, swept equipment, LOD invalidation, collar attachment and tail exclusion passed\n";}
+int main(){optimizedDraw(true);optimizedDraw(false);optimizedDraw(false,5);drawAndCheck(true);drawAndCheck(false);invalidRetry();cachedGeometry();firmBodyFrame();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: optimized GPU/CPU groups, UV/rebased indices, private output, binding restore, failure retry, geometry/world caches, bounded fast configuration, solid body frames, LOD invalidation, collar attachment and tail exclusion passed\n";}

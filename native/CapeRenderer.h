@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 #include "CapeCloth.h"
+#include "CapeBodyBounds.h"
 
 // Build 5875 only. Included after WeaponRenderer.h and CapeWorldCollision.h.
 // The source MD20 and its GPU buffer are shared. Only a temporary draw buffer
@@ -95,6 +96,12 @@ struct CapeMesh {
     std::vector<CapeTextureUnit> units;
     std::vector<bool> capeSections;
     std::vector<BagMatrix> bones;
+    std::array<std::uintptr_t,6> storage{};
+};
+struct CapeEquipmentBounds {
+    CapeMesh mesh;
+    cape::BodyBounds fitted;
+    std::vector<std::uint32_t> visibility;
 };
 struct CapeState {
     std::uintptr_t model=0,header=0,view=0;
@@ -105,8 +112,16 @@ struct CapeState {
     std::vector<cape::Triangle> triangles;
     std::vector<cape::Vec3> rest,animated,normals;
     std::vector<std::uint32_t> pins;
-    std::unordered_map<std::uint64_t,std::array<cape::Vec3,3>> previousSurfaces;
-    std::unordered_map<std::uintptr_t,std::pair<std::uintptr_t,std::uintptr_t>> surfaceIdentities;
+    cape::BodyBounds bodyBounds;
+    std::vector<std::uint32_t> boundsVisibility;
+    std::unordered_map<std::uintptr_t,CapeEquipmentBounds> equipmentBounds;
+    std::vector<cape::ColliderBox> bounds;
+    std::vector<cape::ColliderTriangle> worldSurfaces;
+    cape::Vec3 worldLow{},worldHigh{};
+    cape::Vec3 backDirection{-1,0,0};
+    std::uint32_t worldUpdated=0;
+    bool worldValid=false;
+    std::vector<unsigned char> gpuVertices,drawVertices;
     BagMatrix worldToRender{},renderToWorld{};
     CapeMesh mesh;
     cape::Cloth cloth;
@@ -162,7 +177,25 @@ static bool capeReadMesh(std::uintptr_t model,CapeMesh& m){
     }
     for(const auto& s:m.sections)if(static_cast<unsigned>(s.first)+s.count>m.lookup.size()||
        static_cast<unsigned>(s.triangleFirst)+s.triangleCount>m.triangles.size()||s.triangleCount%3)return false;
+    if(!read(m.header+0x48,m.storage[0]))return false;
+    for(unsigned i=0;i<5;++i)if(!read(m.view+4+8*i,m.storage[i+1]))return false;
     return true;
+}
+// Original geometry is immutable for a loaded resource/view. Only the bone
+// palette and geoset visibility change with ordinary animation. Do not copy
+// the entire character (and every equipped mesh) for each cape material pass.
+static bool capeRefreshMesh(std::uintptr_t model,CapeMesh& mesh,bool& changed){
+    std::uintptr_t resource=0,header=0,view=0,config=0,palette=0,visibility=0;
+    unsigned loaded=0,flags=0;std::array<std::uintptr_t,6> storage{};
+    if(!read(model+0x10,loaded)||!loaded||!read(model+0x30,resource)||!resource||
+       !read(resource+0x130,header)||!header||!read(resource+0x138,view)||!view||
+       !read(resource+4,config)||!config||!read(config+4,flags)||!read(header+0x48,storage[0]))return false;
+    for(unsigned i=0;i<5;++i)if(!read(view+4+8*i,storage[i+1]))return false;
+    changed=mesh.model!=model||mesh.resource!=resource||mesh.header!=header||mesh.view!=view||
+        mesh.gpu!=((flags&8)!=0)||mesh.storage!=storage||mesh.vertices.empty();
+    if(changed)return capeReadMesh(model,mesh);
+    return read(model+0x98,visibility)&&capeReadArray(visibility,static_cast<unsigned>(mesh.sections.size()),512,mesh.visible)&&
+        read(model+0x94,palette)&&capeReadArray(palette,static_cast<unsigned>(mesh.bones.size()),2048,mesh.bones);
 }
 static bool capeSkinMatrix(const CapeMesh& m,unsigned source,BagMatrix& matrix){
     if(source>=m.vertices.size())return false;
@@ -256,132 +289,146 @@ static bool capeAnimate(CapeState& s){
     }
     return true;
 }
-static bool capeOverlap(const std::array<cape::Vec3,3>& triangle,const cape::Vec3& low,const cape::Vec3& high){
-    for(unsigned axis=0;axis<3;++axis){
-        const auto get=[axis](const cape::Vec3& p){return axis==0?p.x:axis==1?p.y:p.z;};
-        float a=get(triangle[0]),b=a;for(unsigned i=1;i<3;++i){a=std::min(a,get(triangle[i]));b=std::max(b,get(triangle[i]));}
-        if(b<get(low)||a>get(high))return false;
-    }
-    return true;
-}
-static bool capeSweptOverlap(const std::array<cape::Vec3,3>& before,const std::array<cape::Vec3,3>& after,
-                             const cape::Vec3& low,const cape::Vec3& high){
-    std::array<cape::Vec3,3> bounds{};bounds[0]=bounds[1]=before[0];
-    for(const auto* triangle:{&before,&after})for(const auto& p:*triangle){
-        bounds[0].x=std::min(bounds[0].x,p.x);bounds[0].y=std::min(bounds[0].y,p.y);bounds[0].z=std::min(bounds[0].z,p.z);
-        bounds[1].x=std::max(bounds[1].x,p.x);bounds[1].y=std::max(bounds[1].y,p.y);bounds[1].z=std::max(bounds[1].z,p.z);
-    }
-    bounds[2]=bounds[0];return capeOverlap(bounds,low,high);
-}
-static bool capeCollectSurface(CapeState& s,const CapeMesh& mesh,const cape::Vec3& low,const cape::Vec3& high,
-                               std::vector<cape::ColliderTriangle>& colliders,
-                               std::unordered_map<std::uint64_t,std::array<cape::Vec3,3>>& next){
-    std::vector<cape::Vec3> points(mesh.lookup.size());std::vector<bool> sampled(mesh.lookup.size(),false);
-    const auto identity=std::make_pair(mesh.header,mesh.view);
-    const auto oldIdentity=s.surfaceIdentities.find(mesh.model);
-    const bool sameMesh=oldIdentity!=s.surfaceIdentities.end()&&oldIdentity->second==identity;
-    if(oldIdentity==s.surfaceIdentities.end()&&s.surfaceIdentities.size()>=65)return false;
-    if(!sameMesh)for(auto it=s.previousSurfaces.begin();it!=s.previousSurfaces.end();){
-        if((it->first>>32)==mesh.model)it=s.previousSurfaces.erase(it);else ++it;
-    }
-    s.surfaceIdentities[mesh.model]=identity;
-    for(unsigned sectionIndex=0;sectionIndex<mesh.sections.size();++sectionIndex){
-        if(!mesh.visible[sectionIndex]||(mesh.model==s.model&&mesh.capeSections[sectionIndex]))continue;
-        const auto& section=mesh.sections[sectionIndex];
+static bool capeFitBounds(const CapeMesh& mesh,cape::BodyBounds& fitted,bool body){
+    std::vector<cape::Triangle> triangles;
+    for(unsigned index=0;index<mesh.sections.size();++index){
+        if(!mesh.visible[index]||(body&&mesh.capeSections[index]))continue;
+        const auto& section=mesh.sections[index];
         for(unsigned i=section.triangleFirst;i<static_cast<unsigned>(section.triangleFirst)+section.triangleCount;i+=3){
-            std::array<cape::Vec3,3> t{};
-            for(unsigned k=0;k<3;++k){
-                const unsigned at=mesh.triangles[i+k];if(at>=mesh.lookup.size())return false;
-                if(!sampled[at]){const unsigned source=capeSource(mesh,at);BagMatrix matrix;
-                    if(!capeSkinMatrix(mesh,source,matrix))return false;
-                    points[at]=capeTransform(s.renderToWorld,capeTransform(matrix,mesh.vertices[source].position));
-                    if(!capeFinite(points[at]))return false;
-                    sampled[at]=true;
-                }
-                t[k]=points[at];
-            }
-            const std::uint64_t key=(static_cast<std::uint64_t>(mesh.model)<<32)|i;
-            const auto previous=s.previousSurfaces.find(key);
-            const auto& before=sameMesh&&previous!=s.previousSurfaces.end()?previous->second:t;
-            // Retain bounded history even when the final triangle is outside
-            // the cape. A fast weapon can cross it and end on the other side.
-            if(next.size()>=65536)return false;
-            next.emplace(key,t);
-            if(!capeSweptOverlap(before,t,low,high))continue;
-            if(colliders.size()>=8192)return false;
-            cape::ColliderTriangle collider;
-            for(unsigned k=0;k<3;++k){collider.current[k]=t[k];collider.previous[k]=before[k];}
-            colliders.push_back(collider);
+            cape::Triangle triangle;unsigned* ids[]={&triangle.a,&triangle.b,&triangle.c};
+            for(unsigned k=0;k<3;++k){const unsigned lookup=mesh.triangles[i+k];if(lookup>=mesh.lookup.size())return false;*ids[k]=capeSource(mesh,lookup);}
+            triangles.push_back(triangle);
         }
     }
+    return fitted.fit(mesh.vertices,triangles,body?32:4);
+}
+static bool capeBoundsOverlap(const cape::ColliderBox& box,cape::Vec3 low,cape::Vec3 high){
+    // A swept AABB only culls clearly unrelated volumes. Hard contact uses the
+    // oriented box and whole cape triangles, not this broad-phase box.
+    cape::Vec3 a{1.e30f,1.e30f,1.e30f},b{-1.e30f,-1.e30f,-1.e30f};
+    for(unsigned old=0;old<2;++old){
+        const auto center=old?box.previousCenter:box.currentCenter;
+        const auto half=old?box.previousHalf:box.currentHalf;
+        const auto* axes=old?box.previousAxes:box.currentAxes;
+        cape::Vec3 extent{};
+        for(unsigned k=0;k<3;++k){const float h=k==0?half.x:k==1?half.y:half.z;
+            extent.x+=std::fabs(axes[k].x)*h;extent.y+=std::fabs(axes[k].y)*h;extent.z+=std::fabs(axes[k].z)*h;}
+        const auto lo=center-extent,hi=center+extent;
+        a={std::min(a.x,lo.x),std::min(a.y,lo.y),std::min(a.z,lo.z)};
+        b={std::max(b.x,hi.x),std::max(b.y,hi.y),std::max(b.z,hi.z)};
+    }
+    return a.x<=high.x&&b.x>=low.x&&a.y<=high.y&&b.y>=low.y&&a.z<=high.z&&b.z>=low.z;
+}
+static bool capePoseBounds(CapeState& s,cape::BodyBounds& fitted,const CapeMesh& mesh,
+                           cape::Vec3 low,cape::Vec3 high,bool reset,bool body){
+    std::vector<cape::ColliderBox> boxes;
+    if(!fitted.pose(mesh.bones,s.renderToWorld,boxes,reset))return false;
+    for(unsigned index=0;index<boxes.size();++index){auto& box=boxes[index];
+        // The torso keeps cloth behind the player. Off-center arm/leg bounds
+        // choose their nearest safe side instead of forcing a large backshift.
+        if(body&&fitted.central(index))box.preferredDirection=s.backDirection;
+        if(!capeBoundsOverlap(box,low,high))continue;
+        if(s.bounds.size()>=64)return false;
+        s.bounds.push_back(box);
+    }
     return true;
 }
+static bool capeRefreshWorld(CapeState& s,cape::Vec3 low,cape::Vec3 high,std::uint32_t now){
+    const bool inside=low.x>=s.worldLow.x&&low.y>=s.worldLow.y&&low.z>=s.worldLow.z&&
+        high.x<=s.worldHigh.x&&high.y<=s.worldHigh.y&&high.z<=s.worldHigh.z;
+    if(s.worldUpdated&&inside&&static_cast<std::uint32_t>(now-s.worldUpdated)<100)return s.worldValid;
+    const cape::Vec3 margin{.5f,.5f,.5f};
+    s.worldLow=low-margin;s.worldHigh=high+margin;s.worldUpdated=now;s.worldValid=false;
+    s.worldSurfaces.clear();
+    if(!capeWorldColliders(s.worldLow,s.worldHigh,s.worldSurfaces))return false;
+    // Keep detailed world contact a small, independent budget. Body and gear
+    // exclusion bounds are never dropped to satisfy this scenery budget.
+    if(s.worldSurfaces.size()>128){
+        const auto center=(low+high)*.5f;
+        const auto distance=[&](const cape::ColliderTriangle& t){auto p=(t.current[0]+t.current[1]+t.current[2])/3.f-center;return cape::dot(p,p);};
+        std::nth_element(s.worldSurfaces.begin(),s.worldSurfaces.begin()+128,s.worldSurfaces.end(),[&](const auto& a,const auto& b){return distance(a)<distance(b);});
+        s.worldSurfaces.resize(128);
+    }
+    s.worldValid=true;return true;
+}
 static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
-    const auto now=bagClockMilliseconds();
-    CapeMesh mesh;if(!capeReadMesh(model,mesh))return false;
+    const auto now=bagClockMilliseconds();bool geometryChanged=true;
+    if(!s.cloth.ready()){if(!capeReadMesh(model,s.mesh))return false;}
+    else if(!capeRefreshMesh(model,s.mesh,geometryChanged))return false;
     std::vector<unsigned> sections;
-    for(unsigned i=0;i<mesh.sections.size();++i)if(mesh.visible[i]&&mesh.capeSections[i])sections.push_back(i);
+    for(unsigned i=0;i<s.mesh.sections.size();++i)if(s.mesh.visible[i]&&s.mesh.capeSections[i])sections.push_back(i);
     if(sections.empty()){s={};capeRuntimeStatus=1;return false;}
-    const bool rebuild=!s.cloth.ready()||s.model!=model||s.guid!=guid||s.header!=mesh.header||s.view!=mesh.view||s.sections!=sections||s.mesh.gpu!=mesh.gpu;
-    if(rebuild){s={};s.model=model;s.guid=guid;s.header=mesh.header;s.view=mesh.view;s.sections=sections;}
-    s.mesh=std::move(mesh);
-    std::uintptr_t scene=0;
-    if(!read(model+0x2c,scene)||!scene||!read(scene+0x9c,s.worldToRender)||!bagAffineInverse(s.worldToRender,s.renderToWorld))return false;
+    const bool rebuild=!s.cloth.ready()||geometryChanged||s.model!=model||s.guid!=guid||s.sections!=sections;
+    if(rebuild){auto mesh=std::move(s.mesh);s={};s.mesh=std::move(mesh);s.model=model;s.guid=guid;s.header=s.mesh.header;s.view=s.mesh.view;s.sections=sections;}
+    std::uintptr_t scene=0;BagMatrix modelToRender;
+    if(!read(model+0x2c,scene)||!scene||!read(scene+0x9c,s.worldToRender)||!bagAffineInverse(s.worldToRender,s.renderToWorld)||!read(model+0xFC,modelToRender))return false;
+    s.backDirection=capeNormal(capeTransform(s.renderToWorld,capeTransform(modelToRender,{-1,0,0},true),true));
     if(rebuild&&!capeBuildTopology(s))return false;
-    if(!capeAnimate(s))return false;
-    if(s.animated.empty())return false;
-    if(rebuild&&!s.cloth.initialize(s.animated,s.triangles,s.pins))return false;
+    if(!capeAnimate(s)||s.animated.empty())return false;
+    cape::Config config;
+    config.fixedStep=1.f/60.f;config.maxSubsteps=3;config.iterations=4;
+    config.maxContactSamples=0;config.selfCollision=false;config.maxColliderTriangles=128;
+    config.maxCollisionTests=6000;config.maxColliderBoxes=64;config.maxBoundTests=100000;
+    if(rebuild&&!s.cloth.initialize(s.animated,s.triangles,s.pins,config))return false;
     bool resetPose=false;
     if(!rebuild){
-        const cape::Config limits;
-        resetPose=static_cast<std::uint32_t>(now-s.updated)*.001f>limits.maxFrameTime;
+        resetPose=static_cast<std::uint32_t>(now-s.updated)*.001f>config.maxFrameTime;
         for(unsigned pin:s.pins)if(pin>=s.cloth.positions().size()||
-            cape::length(s.animated[pin]-s.cloth.positions()[pin])>limits.teleportDistance)resetPose=true;
-        if(resetPose){s.cloth.reset(s.animated);s.previousSurfaces.clear();s.surfaceIdentities.clear();}
+            cape::length(s.animated[pin]-s.cloth.positions()[pin])>config.teleportDistance)resetPose=true;
+        if(resetPose){s.cloth.reset(s.animated);s.worldValid=false;}
     }
-    // The pose/camera are refreshed for every submission. Multiple material
-    // passes at the same native clock tick reuse just the simulation result.
+    // Camera/palette refresh is still needed by each GPU material submission.
+    // Reuse simulation and collision results for duplicate submissions.
     if(!rebuild&&!resetPose&&now==s.updated)return s.frameValid;
     s.frameValid=false;
     cape::Vec3 low=s.animated[0],high=low;
-    const auto bounds=[&](const auto& values){for(const auto& p:values){low.x=std::min(low.x,p.x);low.y=std::min(low.y,p.y);low.z=std::min(low.z,p.z);high.x=std::max(high.x,p.x);high.y=std::max(high.y,p.y);high.z=std::max(high.z,p.z);}};
-    bounds(s.animated);bounds(s.cloth.positions());
-    low.x-=.35f;low.y-=.35f;low.z-=.35f;high.x+=.35f;high.y+=.35f;high.z+=.35f;
-    std::vector<cape::ColliderTriangle> colliders;
-    std::unordered_map<std::uint64_t,std::array<cape::Vec3,3>> next;
-    if(!capeCollectSurface(s,s.mesh,low,high,colliders,next))return false;
-    std::uintptr_t child=0;std::array<std::uintptr_t,64> seen{};
+    const auto grow=[&](const auto& values){for(const auto& p:values){low.x=std::min(low.x,p.x);low.y=std::min(low.y,p.y);low.z=std::min(low.z,p.z);high.x=std::max(high.x,p.x);high.y=std::max(high.y,p.y);high.z=std::max(high.z,p.z);}};
+    grow(s.animated);grow(s.cloth.positions());
+    low-=cape::Vec3{.15f,.15f,.15f};high+=cape::Vec3{.15f,.15f,.15f};
+    s.bounds.clear();
+    if(!s.bodyBounds.ready()||s.boundsVisibility!=s.mesh.visible){
+        if(!capeFitBounds(s.mesh,s.bodyBounds,true))return false;
+        s.boundsVisibility=s.mesh.visible;
+    }
+    if(!capePoseBounds(s,s.bodyBounds,s.mesh,low,high,rebuild||resetPose,true))return false;
+    std::uintptr_t child=0;std::array<std::uintptr_t,64> seen{};unsigned count=0;
     if(!read(model+0x1dc,child))return false;
-    for(unsigned i=0;child&&i<seen.size();++i){
-        for(unsigned j=0;j<i;++j)if(seen[j]==child)return false;
-        seen[i]=child;std::uintptr_t parent=0,following=0;unsigned point=0;
+    for(;child&&count<seen.size();++count){
+        for(unsigned j=0;j<count;++j)if(seen[j]==child)return false;
+        seen[count]=child;std::uintptr_t parent=0,following=0;unsigned point=0;
         if(!read(child+0x1cc,parent)||parent!=model||!read(child+0x1e4,following)||!read(child+0x1d0,point))return false;
-        // Body/equipment attachment points, including owned bags. Spell emitters
-        // and unrelated scene models are not character collision surfaces.
         if(point<=33){
             unsigned loaded=0;if(!read(child+0x10,loaded))return false;
-            if(loaded){CapeMesh equipment;
-                // Missing geometry on a loaded equipment child is a missing
-                // contact surface. Leave the original cape for that frame.
-                if(!capeReadMesh(child,equipment)||!capeCollectSurface(s,equipment,low,high,colliders,next))return false;
+            if(loaded){auto& entry=s.equipmentBounds[child];bool changed=false;
+                if(!capeRefreshMesh(child,entry.mesh,changed))return false;
+                if(changed||!entry.fitted.ready()||entry.visibility!=entry.mesh.visible){
+                    if(!capeFitBounds(entry.mesh,entry.fitted,false))return false;
+                    entry.visibility=entry.mesh.visible;
+                }
+                if(!capePoseBounds(s,entry.fitted,entry.mesh,low,high,changed||resetPose,false))return false;
             }
         }
         child=following;
     }
-    if(child||!capeWorldColliders(low,high,colliders)||colliders.size()>8192)return false;
-    s.previousSurfaces=std::move(next);
+    if(child)return false;
+    for(auto it=s.equipmentBounds.begin();it!=s.equipmentBounds.end();){
+        if(std::find(seen.begin(),seen.begin()+count,it->first)==seen.begin()+count)it=s.equipmentBounds.erase(it);else ++it;
+    }
+    // Scenery queries can be unavailable while cells load. Solid body/gear
+    // limits stay active independently of that optional detailed contact.
+    if(!capeRefreshWorld(s,low,high,now))s.worldSurfaces.clear();
     const float elapsed=rebuild||resetPose?0.f:static_cast<std::uint32_t>(now-s.updated)*.001f;s.updated=now;
-    if(!s.cloth.step(elapsed,s.animated,colliders))return false;
+    if(!s.cloth.step(elapsed,s.animated,s.worldSurfaces,s.bounds)){
+        s.cloth.reset(s.animated);
+        if(!s.cloth.step(0,s.animated,{},s.bounds))return false;
+    }
     s.normals.assign(s.source.size(),{});const auto& positions=s.cloth.positions();
     for(const auto& t:s.triangles){
-        const auto& a=positions[t.a];const auto& b=positions[t.b];const auto& c=positions[t.c];
-        const cape::Vec3 ab{b.x-a.x,b.y-a.y,b.z-a.z},ac{c.x-a.x,c.y-a.y,c.z-a.z};
-        const cape::Vec3 n{ab.y*ac.z-ab.z*ac.y,ab.z*ac.x-ab.x*ac.z,ab.x*ac.y-ab.y*ac.x};
-        for(unsigned i:{t.a,t.b,t.c}){s.normals[i].x+=n.x;s.normals[i].y+=n.y;s.normals[i].z+=n.z;}
+        const auto n=cape::cross(positions[t.b]-positions[t.a],positions[t.c]-positions[t.a]);
+        for(unsigned i:{t.a,t.b,t.c})s.normals[i]+=n;
     }
     for(auto& normal:s.normals)normal=capeNormal(normal);
-    s.frameValid=true;
-    return true;
+    s.frameValid=true;return true;
 }
 static void capeReset(){
     for(auto& storage:capeVertexStorage)capeReleaseStorage(storage);
@@ -394,10 +441,7 @@ static unsigned capeStatus(){
 }
 static void capeForgetModel(std::uintptr_t model){
     if(capeState.model==model){capeReset();return;}
-    capeState.surfaceIdentities.erase(model);
-    for(auto it=capeState.previousSurfaces.begin();it!=capeState.previousSurfaces.end();){
-        if((it->first>>32)==model)it=capeState.previousSurfaces.erase(it);else ++it;
-    }
+    capeState.equipmentBounds.erase(model);
     if(capePlayerModel==model){capePlayerModel=0;capePlayerChecked=0;}
 }
 static void __fastcall capeBindHook(void* buffer,unsigned format){
@@ -450,24 +494,31 @@ static bool capeWriteDraw(std::uintptr_t renderer,const void* description,unsign
     if(!read(renderer+0x3310,model)||!read(renderer+0x3300,batch)||!batch||
        !read(batch+0x30,drawSection)||!drawSection||!read(batch+0x2c,unit)||!unit||
        !read(batch+0x34,merged)||!read(renderer+0x32f0,gpu))return false;
-    Player player;if(!snapshot(player)||player.model!=model||!player.guid)return false;
     CapeTextureUnit textureUnit;CapeSection section;
     if(!read(unit,textureUnit)||!read(drawSection,section))return false;
     if((!merged&&(section.geoset<1500||section.geoset>=1600))||!capeDrawIsCape(model,textureUnit))return false;
+    Player player;if(!snapshot(player)||player.model!=model||!player.guid)return false;
     capeRuntimeStatus=3;
     if(indexed!=1||!capeBoundBuffer)return false;
-    if(!capeUpdate(capeState,model,player.guid))return false;
+    if(!capeUpdate(capeState,model,player.guid)){
+        // Never replace a rejected solid-bound frame with the unbounded
+        // native pose. Keep other draws intact and retry on the next frame.
+        if(capeState.cloth.stats().boundsRejected)return true;
+        return false;
+    }
     auto& s=capeState;std::vector<CapeDrawSpan> spans;
     if(!capeDrawSpans(s.mesh,textureUnit,section,unit,drawSection,merged,spans)||!section.count||section.count>2048)return false;
     const unsigned stride=gpu?48:capeBoundFormat==5?40:32;
     unsigned vertices=section.count;
     if(gpu){unsigned copies=0;if(capeBoundFormat!=12||!s.mesh.gpu||!read(s.mesh.resource+0x15c,copies)||copies!=1||s.mesh.properties.size()!=s.mesh.lookup.size())return false;vertices=static_cast<unsigned>(s.mesh.lookup.size());}
     else if(s.mesh.gpu||(capeBoundFormat!=3&&capeBoundFormat!=5))return false;
-    std::vector<unsigned char> data(static_cast<std::size_t>(vertices)*stride);
-    if(gpu){
+    auto& data=gpu?s.gpuVertices:s.drawVertices;
+    const bool prepare=data.size()!=static_cast<std::size_t>(vertices)*stride;
+    data.resize(static_cast<std::size_t>(vertices)*stride);
+    if(gpu&&prepare){
         for(unsigned i=0;i<vertices;++i){const unsigned source=s.mesh.lookup[i];if(source>=s.mesh.vertices.size())return false;
             auto vertex=s.mesh.vertices[source];std::memcpy(vertex.bones.data(),&s.mesh.properties[i],4);std::memcpy(data.data()+48*i,&vertex,48);}
-    }else{
+    }else if(!gpu){
         CapeSkin skin=nullptr;
         if(stride==40)skin=capeFunction<CapeSkin>(0x71A460);
         else {

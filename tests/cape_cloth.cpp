@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdio>
 #include <limits>
+#include <chrono>
 
 using cape::Vec3;
 using cape::Triangle;
@@ -134,4 +135,59 @@ static void validationAndReset(){
     assert(!cloth.step(1.f/60,mesh.vertices,surfaces));assert(cloth.stats().budgetExceeded&&cloth.stats().reset);assert(cloth.stats().collisionTests<=1);
     config.maxColliderTriangles=1;assert(cloth.initialize(mesh.vertices,mesh.triangles,mesh.pins,config));assert(!cloth.step(.01f,mesh.vertices,surfaces));assert(cloth.stats().budgetExceeded);
 }
-int main(){hangingAndTopology();movingPinsAndInertia();frameRates();staticCollision();sweptAndTwoSidedCollision();movingCollider();sparseEdgeCollision();sparseFaceCollision();wallFloorCorner();rotatingTriangle();substepColliderAndDegeneracy();validationAndReset();std::puts("cape cloth tests passed");}
+static cape::ColliderBox solidBox(Vec3 center={},Vec3 half={.1f,.1f,.1f}){
+    cape::ColliderBox box;box.previousCenter=box.currentCenter=center;box.previousHalf=box.currentHalf=half;return box;
+}
+static void assertFacesClear(const cape::Cloth& cloth,const std::vector<Triangle>& faces,const cape::ColliderBox& box){
+    // Independent dense barycentric check also inspects edges/interiors, not
+    // just particles. Solver production validation uses exact triangle SAT.
+    const float thickness=cloth.config().thickness-.00001f;
+    for(const auto face:faces)for(unsigned u=0;u<=32;++u)for(unsigned v=0;u+v<=32;++v){const float a=float(u)/32,b=float(v)/32;const Vec3 point=cloth.positions()[face.a]*a+cloth.positions()[face.b]*b+cloth.positions()[face.c]*(1-a-b)-box.currentCenter;const bool inside=std::fabs(cape::dot(point,box.currentAxes[0]))<box.currentHalf.x+thickness&&std::fabs(cape::dot(point,box.currentAxes[1]))<box.currentHalf.y+thickness&&std::fabs(cape::dot(point,box.currentAxes[2]))<box.currentHalf.z+thickness;assert(!inside);}
+}
+static void wholeFaceBoundsAndPinnedSeam(){
+    const std::vector<Vec3> pose={{-1,-1,0},{1,-1,0},{0,1,0}};const std::vector<Triangle> faces={{0,1,2}};
+    auto config=unconstrained();config.maxContactSamples=0;cape::Cloth cloth;assert(cloth.initialize(pose,faces,{0},config));
+    auto box=solidBox();box.preferredDirection={0,0,1};assert(cloth.step(0,pose,{}, {box}));
+    assert(cloth.stats().substeps==0&&cloth.stats().contacts>0);assertFacesClear(cloth,faces,box);
+    for(const auto p:cloth.positions())assert(p.z>=.115f);
+    // Even an authored seam inside the bound cannot override final clearance.
+    assert(cloth.positions()[0].z>pose[0].z);
+    for(unsigned i=0;i<20;++i){assert(cloth.step(1.f/60,pose,{}, {box}));assertFacesClear(cloth,faces,box);}
+}
+static void movingAndRotatingSolidBounds(){
+    const std::vector<Vec3> pose={{-.5f,-.5f,0},{.5f,-.5f,0},{0,.5f,0}};const std::vector<Triangle> faces={{0,1,2}};
+    auto config=unconstrained();config.maxContactSamples=0;cape::Cloth cloth;assert(cloth.initialize(pose,faces,{0},config));
+    auto box=solidBox({0,0,.5f});box.previousCenter.z=-.5f;
+    // The small bound passes through the triangle interior, away from every
+    // original vertex. A sub-tick display frame still retains the entry side.
+    assert(cloth.step(1.f/480,pose,{}, {box}));assert(cloth.stats().substeps==0);assertFacesClear(cloth,faces,box);
+    for(const auto p:cloth.positions())assert(p.z>=.615f);
+    assert(cloth.initialize(pose,faces,{0},config));box=solidBox({}, {.5f,.2f,.03f});box.currentAxes[0]={0,0,1};box.currentAxes[2]={-1,0,0};box.preferredDirection={1,0,0};
+    assert(cloth.step(1.f/60,pose,{}, {box}));assertFacesClear(cloth,faces,box);
+}
+static void solidBoundsResetValidationAndBudget(){
+    const std::vector<Vec3> pose={{-.5f,-.5f,0},{.5f,-.5f,0},{0,.5f,0}};const std::vector<Triangle> faces={{0,1,2}};auto box=solidBox();box.preferredDirection={0,0,1};
+    auto config=unconstrained();config.fixedStep=1.f/60;config.maxSubsteps=4;cape::Cloth cloth;assert(cloth.initialize(pose,faces,{0},config));
+    assert(cloth.step(3,pose,{}, {box}));assert(cloth.stats().reset);assertFacesClear(cloth,faces,box);
+    assert(cloth.step(.1f,pose,{}, {box}));assert(cloth.stats().reset&&cloth.stats().budgetExceeded);assertFacesClear(cloth,faces,box);
+    auto overlapping=box;overlapping.currentCenter.x=overlapping.previousCenter.x=.1f;assert(cloth.step(0,pose,{}, {box,overlapping}));assertFacesClear(cloth,faces,box);assertFacesClear(cloth,faces,overlapping);
+    auto invalid=box;invalid.currentAxes[1]=invalid.currentAxes[0];assert(!cloth.step(0,pose,{}, {invalid}));assert(cloth.stats().invalidInput);
+    config.maxCollisionTests=0;assert(cloth.initialize(pose,faces,{0},config));assert(cloth.step(1.f/60,pose,plane(0,0),{box}));assert(cloth.stats().reset&&cloth.stats().budgetExceeded&&!cloth.stats().boundsRejected);assertFacesClear(cloth,faces,box);
+    config.maxColliderTriangles=0;assert(cloth.initialize(pose,faces,{0},config));assert(cloth.step(1.f/60,pose,plane(0,0),{box}));assert(cloth.stats().reset&&cloth.stats().budgetExceeded);assertFacesClear(cloth,faces,box);
+    config.maxColliderTriangles=8192;config.maxCollisionTests=400000;assert(cloth.initialize(pose,faces,{0},config));auto conflict=solidBox({0,0,.1f},{.2f,.2f,.2f});conflict.preferredDirection={0,0,-1};auto deep=solidBox({},{.2f,.2f,.2f});deep.preferredDirection={0,0,1};assert(!cloth.step(0,pose,{}, {deep,conflict}));assert(cloth.stats().boundsRejected);
+    config.maxBoundTests=1;assert(cloth.initialize(pose,faces,{0},config));assert(!cloth.step(0,pose,{}, {box}));assert(cloth.stats().budgetExceeded&&cloth.stats().boundsRejected&&cloth.stats().boundTests==1);
+}
+static void solidBoundsCost(){
+    const auto mesh=grid(9,13,.03f);cape::Config bounded;bounded.fixedStep=1.f/60;bounded.maxSubsteps=4;bounded.iterations=4;bounded.selfCollision=false;bounded.maxContactSamples=0;
+    cape::Cloth fast;assert(fast.initialize(mesh.vertices,mesh.triangles,mesh.pins,bounded));const auto box=solidBox({0,0,-.5f},{4,4,.5f});
+    const auto begin=std::chrono::steady_clock::now();unsigned tests=0;
+    for(unsigned frame=0;frame<90;++frame){assert(fast.step(1.f/60,mesh.vertices,{}, {box}));tests+=fast.stats().boundTests;assert(fast.stats().boundTests<=(bounded.boundIterations+1)*mesh.triangles.size()+bounded.boundIterations*mesh.pins.size());assert(fast.stats().collisionTests==0&&fast.stats().selfPairs==0);}
+    const auto fastEnd=std::chrono::steady_clock::now();
+    std::vector<cape::ColliderTriangle> surface;const unsigned side=32;
+    for(unsigned x=0;x<side;++x)for(unsigned y=0;y<side;++y){const float a=-4+8.f*x/side,b=-4+8.f*y/side,c=-4+8.f*(x+1)/side,d=-4+8.f*(y+1)/side;surface.push_back({{{a,b,0},{c,b,0},{a,d,0}},{{a,b,0},{c,b,0},{a,d,0}}});surface.push_back({{{c,b,0},{c,d,0},{a,d,0}},{{c,b,0},{c,d,0},{a,d,0}}});}
+    cape::Cloth legacy;assert(legacy.initialize(mesh.vertices,mesh.triangles,mesh.pins));const auto oldBegin=std::chrono::steady_clock::now();
+    for(unsigned frame=0;frame<90;++frame)assert(legacy.step(1.f/60,mesh.vertices,surface));
+    const auto end=std::chrono::steady_clock::now();
+    std::printf("solid bound benchmark: %.3f ms/frame, %u exact bound tests/frame; legacy 2048-surface sample path %.3f ms/frame\n",std::chrono::duration<double,std::milli>(fastEnd-begin).count()/90,tests/90,std::chrono::duration<double,std::milli>(end-oldBegin).count()/90);
+}
+int main(){hangingAndTopology();movingPinsAndInertia();frameRates();staticCollision();sweptAndTwoSidedCollision();movingCollider();sparseEdgeCollision();sparseFaceCollision();wallFloorCorner();rotatingTriangle();substepColliderAndDegeneracy();validationAndReset();wholeFaceBoundsAndPinnedSeam();movingAndRotatingSolidBounds();solidBoundsResetValidationAndBudget();solidBoundsCost();std::puts("cape cloth tests passed");}

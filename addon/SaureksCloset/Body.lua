@@ -151,7 +151,7 @@ function V:Diagnose()
         table.insert(lines,"Renderer inspection: "..table.concat(result,","))
     end
     if type(SaureksClosetInspectCapePhysics)=="function" then
-        table.insert(lines,"Cape fields: ok,schema,bridge,enabled,status,player,mesh readable,visible cape sections,simulation ready,vertices,triangles,GPU,optimized groups,contacts,budget exceeded")
+        table.insert(lines,"Cape fields: ok,schema,bridge,enabled,status,player,mesh readable,visible cape sections,simulation ready,vertices,triangles,GPU,optimized groups,contacts,budget exceeded,solid bounds,bound tests,world tests,bounds rejected")
         local details={pcall(SaureksClosetInspectCapePhysics)}
         for i=1,table.getn(details) do details[i]=tostring(details[i]) end
         table.insert(lines,"Cape inspection: "..table.concat(details,","))

@@ -380,10 +380,11 @@ static int __fastcall inspectCapePhysicsLua(void* L){
     if(readable)for(unsigned i=0;i<mesh.sections.size();++i)if(mesh.visible[i]&&mesh.capeSections[i])++visible;
     if(hasPlayer)read(player.model+0x3F8,groups);
     const auto stats=capeState.cloth.stats();
-    const double values[]={1,double(capeBridgeReady),double(capeEnabled),double(capeBridgeReady?capeStatus():3),
+    const double values[]={2,double(capeBridgeReady),double(capeEnabled),double(capeBridgeReady?capeStatus():3),
         double(hasPlayer),double(readable),double(visible),double(capeState.cloth.ready()),
         double(capeState.source.size()),double(capeState.triangles.size()),double(mesh.gpu),double(groups),
-        double(stats.contacts),double(stats.budgetExceeded)};
+        double(stats.contacts),double(stats.budgetExceeded),double(capeState.bounds.size()),
+        double(stats.boundTests),double(stats.collisionTests),double(stats.boundsRejected)};
     for(double value:values)pushNumber(L,value);
     return sizeof(values)/sizeof(values[0]);
 }

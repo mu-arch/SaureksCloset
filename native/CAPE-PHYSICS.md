@@ -25,17 +25,37 @@ their view positions; CPU batches concatenate the visible original sections
 and rebase their indices. Simulation vertices are mapped to those draw spans.
 This path is regression-tested separately from parsing the original M2 files.
 
-`CapeCloth.h` integrates world-space gravity and inertia with a fixed 120 Hz
-step, compliant edge-length and triangle-area constraints, and approximate
+The runtime uses `CapeCloth.h` at a fixed 60 Hz, at most three substeps and
+four constraint iterations, with world-space gravity and inertia, compliant
+edge-length and triangle-area constraints, and approximate
 bending constraints across adjacent triangles. Free motion therefore reacts to
 the real shoulder movement and contact geometry. The solver does not generate
 a replacement rectangular plane or periodic sway animation.
 
-Visible body and loaded attachment meshes supply animated collision triangles.
-The world query supplies nearby terrain, WMO and M2 collision triangles. Contact
-is two-sided, has finite thickness and friction, and sweeps moving character
-triangles between samples. Additional barycentric surface samples improve
-coverage between the original low-poly cape vertices. Normals are rebuilt from
+`CapeBodyBounds.h` fits conservative oriented boxes to complete visible body
+and equipment triangles when their geometry/visibility changes. Weighted joint
+faces remain inside one bound: cached per-influence intervals enclose their
+skinned vertices, and a convex bound encloses the complete triangle. Spatial
+splits tighten the fit. Animation updates pose these compact intervals instead
+of skinning and traversing the full body mesh. The body uses at most 32 boxes,
+each attachment at most four, with at most 64 relevant boxes in the solver.
+
+Solid contacts use whole-triangle separating-axis checks and supporting-plane
+projection. Previously separated sides are retained during crossings; the
+player's back direction comes from `model+0xFC`, independent of root-bone
+animation. Seam targets are cleared before spring solves. Final projection and
+validation run after all constraints and pin updates, including zero-tick frames
+and resets. An unresolved hard-bound frame is not submitted as ordinary native
+cloth. Conservative bounds can hold the cloth slightly outside the rendered
+skin; they approximate the body rather than matching every surface crease.
+
+Immutable mesh arrays and prepared GPU bytes are cached. Only visibility,
+bone palettes and camera transforms refresh for ordinary animation. Detailed
+world contact is separate: nearby terrain/WMO/M2 triangles are cached for up to
+100 ms in an expanded region, refreshed immediately when the cape leaves it,
+and limited to 128 nearby faces. The runtime disables the old auxiliary contact
+sample cloud and particle self-contact. Unavailable scenery or an exhausted
+scenery budget cannot disable the solid body limits. Normals are rebuilt from
 the resulting cloth triangles.
 
 Both CPU-skinned and GPU-skinned native draws use a private owned vertex
@@ -55,7 +75,7 @@ rest of the addon.
 | Address | Purpose |
 | --- | --- |
 | `0x70CB30` | Native model-batch draw scope (`thiscall`) |
-| `0x58A830` | Primitive submission (`fastcall`, descriptor and count) |
+| `0x58A830` | Primitive submission (`fastcall`, descriptor and indexed flag) |
 | `0x58A7C0` | Vertex-buffer binding (`fastcall`, buffer and format) |
 | `0x58A160`, `0x589F80` | Private graphics pool and vertex-buffer allocation |
 | `0x58A080`, `0x58A0A0` | Map and unmap the owned buffer |
@@ -87,22 +107,26 @@ whose default-buffer check itself mutates that shared temporary descriptor.
 - `/closet diagnose` includes `SaureksClosetInspectCapePhysics()` output:
   schema, bridge ready, enabled, status, player available, mesh readable,
   visible authored cape sections, simulation ready, vertex and triangle counts,
-  GPU mode, optimized group count, contact count, and collision-budget status.
+  GPU mode, optimized group count, contact count, collision-budget status,
+  active bound count, bound tests, world tests and rejected-bound status (schema 2).
   These counts distinguish a genuinely hidden cape from a render-path problem;
   the report contains no native pointers or player identifiers.
 - Teleports, model changes and long frame gaps reset the simulation. Invalid
-  geometry, unsupported batches or exceeded work limits use the original cape
-  draw instead of publishing partial or non-finite cloth state.
+  geometry and unsupported draw batches use the original cape. Physics work
+  limits first recover to a pose projected outside the body. A frame rejected
+  by the final hard-bound validation is skipped, never replaced with an unchecked
+  animated pose; the next frame retries.
 - Collision work, cape size, attachment traversal and query bounds are bounded.
   This is a one-player simulation, not scene-wide cloth on every character.
 - World collisions follow the client's collision mesh, which can differ from
   visible artwork. Non-collidable scenery is not automatically a surface.
-  World triangles are refreshed each update; unlike character attachments,
-  they currently have no stable face IDs for swept moving-platform contact.
-- Surface sampling reduces gaps but is not an exact continuous mesh/mesh
-  collision guarantee. Self-contact separates particles; it is not full
-  triangle/triangle untangling. Very thin objects and tight folds remain cases
-  to test in-game.
+  Cached world geometry is approximate for moving platforms and other moving
+  scenery; it has no stable native face IDs for continuous motion tracking.
+- Exact final whole-face clearance applies to the fitted body/equipment bounds.
+  Swept detection conservatively tests relative bounds; it is not a general
+  continuous deforming-mesh proof. Detailed world contact remains vertex-based,
+  so thin scenery can pass between coarse cape vertices. Self-collision and
+  fabric untangling are disabled in this cheaper runtime mode.
 - Original cape meshes are coarse (roughly 42–49 vertices in the inspected main
   panels). They can bend at their authored vertices; this does not add visual
   tessellation or high-resolution fabric wrinkles.
@@ -122,6 +146,14 @@ client's optimized batches exercised all 80 variants in GPU and CPU mode (160
 paths, 320 draws), verifying output triangle indices, UVs and binding restoration.
 This reproduces native descriptors offline; it is not a live-frame capture. Raw
 game assets are not included in the repository.
+
+The cheaper path was additionally checked against all 80 actual capes with
+body bounds for 120 simulation steps each, plus GPU48/CPU32/CPU40 optimized
+submissions (240 paths, 480 draws). A static HumanFemale benchmark measured
+0.432 ms/frame for the previous solver and 0.134 ms/frame for the bounded solver;
+posing/caching plus two mocked GPU draws measured 0.165 ms/frame. These host
+measurements exclude live graphics-driver and native world-query time and are
+not an in-game FPS claim.
 
 Initial engine navigation references:
 [client collision research](https://github.com/samwhosung/wow-1121-client-internals)

@@ -1,6 +1,7 @@
 #pragma once
 // Bounded CPU cloth for the player's original cape triangles. Coordinates and
-// gravity are in WORLD space; only the explicitly supplied seam is kinematic.
+// gravity are in WORLD space; the supplied seam is kinematic, with a final
+// solid-body clearance adjustment when its authored position is obstructed.
 // No skeleton, cape dimensions, procedural waveform, or replacement mesh lives
 // here. Animated positions are used for pins and safe resets, never as springs
 // pulling free cloth back to an animation.
@@ -31,6 +32,14 @@ struct Triangle { std::uint32_t a=0,b=0,c=0; };
 struct ColliderTriangle {
     Vec3 previous[3]{},current[3]{};
 };
+// Solid, animated exclusion bounds. Unlike sampled surface triangles these
+// also reject cloth already inside the body, and cover entire cape faces.
+struct ColliderBox {
+    Vec3 previousCenter{},currentCenter{};
+    Vec3 previousAxes[3]{{1,0,0},{0,1,0},{0,0,1}},currentAxes[3]{{1,0,0},{0,1,0},{0,0,1}};
+    Vec3 previousHalf{},currentHalf{};
+    Vec3 preferredDirection{};
+};
 struct Config {
     Vec3 gravity{0,0,-9.81f};
     float fixedStep=1.f/120.f;
@@ -49,10 +58,13 @@ struct Config {
     bool selfCollision=true;
     unsigned maxVertices=2048, maxTriangles=4096, maxColliderTriangles=8192;
     unsigned maxCollisionTests=400000, maxSelfPairs=100000;
+    unsigned maxColliderBoxes=32, boundIterations=4, maxBoundTests=100000;
 };
 struct Stats {
     unsigned substeps=0, collisionTests=0, contacts=0, selfPairs=0;
+    unsigned boundTests=0;
     bool reset=false, invalidInput=false, budgetExceeded=false;
+    bool boundsRejected=false;
 };
 
 class Cloth {
@@ -68,7 +80,7 @@ class Cloth {
     Stats stats_{};
     bool ready_=false;
     double accumulator_=0;
-    std::vector<Vec3> x_,velocity_,old_,lastPose_,contactNormal_,contactVelocity_;
+    std::vector<Vec3> x_,velocity_,old_,lastPose_,contactNormal_,contactVelocity_,boundPrevious_,pinPose_;
     std::vector<float> invMass_;
     std::vector<std::uint32_t> pins_;
     std::vector<Spring> stretch_,bend_;
@@ -79,6 +91,7 @@ class Cloth {
     std::vector<Node> nodes_;
     std::vector<Cell> cells_;
     std::vector<Sample> samples_;
+    std::vector<ColliderBox> boxes_;
     static std::uint64_t pair(std::uint32_t a,std::uint32_t b){if(a>b)std::swap(a,b);return (std::uint64_t(a)<<32)|b;}
     static void grow(Box& b,Vec3 p){b.lo={std::min(b.lo.x,p.x),std::min(b.lo.y,p.y),std::min(b.lo.z,p.z)};b.hi={std::max(b.hi.x,p.x),std::max(b.hi.y,p.y),std::max(b.hi.z,p.z)};}
     static void grow(Box& b,const Box& a){grow(b,a.lo);grow(b,a.hi);}
@@ -248,6 +261,87 @@ class Cloth {
             }
         }
     }
+    static Vec3 localPoint(Vec3 point,Vec3 center,const Vec3 (&axes)[3]){
+        const Vec3 d=point-center;return {dot(d,axes[0]),dot(d,axes[1]),dot(d,axes[2])};
+    }
+    static bool separated(Vec3 axis,const Vec3 (&v)[3],Vec3 half){
+        if(dot(axis,axis)<1.e-16f)return false;
+        const float p0=dot(axis,v[0]),p1=dot(axis,v[1]),p2=dot(axis,v[2]);
+        const float radius=std::fabs(axis.x)*half.x+std::fabs(axis.y)*half.y+std::fabs(axis.z)*half.z;
+        return std::min(p0,std::min(p1,p2))>=radius||std::max(p0,std::max(p1,p2))<=-radius;
+    }
+    static bool triangleIntersectsBox(const Vec3 (&v)[3],Vec3 half){
+        // Thirteen-axis SAT covers the complete triangle, including interiors
+        // and long edges whose endpoints are all outside the solid volume.
+        const Vec3 axes[3]={{1,0,0},{0,1,0},{0,0,1}};
+        for(const auto axis:axes)if(separated(axis,v,half))return false;
+        const Vec3 edges[3]={v[1]-v[0],v[2]-v[1],v[0]-v[2]};
+        if(separated(cross(edges[0],edges[1]),v,half))return false;
+        for(const auto edge:edges)for(const auto axis:axes)if(separated(cross(edge,axis),v,half))return false;
+        return true;
+    }
+    bool boxContact(const Face& face,const ColliderBox& box,bool sweep,bool project){
+        if(stats_.boundTests>=config_.maxBoundTests){stats_.budgetExceeded=true;stats_.boundsRejected=true;return true;}
+        ++stats_.boundTests;
+        const auto t=face.tri;const std::uint32_t ids[3]={t.a,t.b,t.c};Vec3 current[3],previous[3];
+        const Vec3 padding{config_.thickness,config_.thickness,config_.thickness};
+        const Vec3 half=box.currentHalf+padding,oldHalf=box.previousHalf+padding;
+        for(unsigned k=0;k<3;++k){current[k]=localPoint(x_[ids[k]],box.currentCenter,box.currentAxes);previous[k]=localPoint(boundPrevious_[ids[k]],box.previousCenter,box.previousAxes);}
+        const bool intersection=triangleIntersectsBox(current,half);
+        int side=-1;
+        if(sweep){
+            // A conservative relative swept interval catches a moving body
+            // crossing sparse face interiors as well as individual vertices.
+            // Preserve a previously separated supporting face when crossed.
+            bool overlapsSweep=true;
+            for(unsigned axis=0;axis<3;++axis){float lo=1.e30f,hi=-1.e30f;for(unsigned k=0;k<3;++k){lo=std::min(lo,std::min(component(previous[k],axis),component(current[k],axis)));hi=std::max(hi,std::max(component(previous[k],axis),component(current[k],axis)));}const float bound=std::max(component(oldHalf,axis),component(half,axis));if(lo>bound||hi<-bound)overlapsSweep=false;}
+            float bestGap=-1.e30f;
+            if(overlapsSweep)for(unsigned axis=0;axis<3;++axis)for(unsigned signIndex=0;signIndex<2;++signIndex){const float sign=signIndex?1.f:-1.f;float oldGap=1.e30f,newGap=1.e30f;for(unsigned k=0;k<3;++k){oldGap=std::min(oldGap,component(previous[k],axis)*sign-component(oldHalf,axis));newGap=std::min(newGap,component(current[k],axis)*sign-component(half,axis));}if(oldGap>=0&&newGap<0&&oldGap>bestGap){bestGap=oldGap;side=static_cast<int>(axis*2+signIndex);}}
+        }
+        if(!intersection&&side<0)return false;
+        if(!project)return true;
+        if(side<0&&dot(box.preferredDirection,box.preferredDirection)>1.e-10f){float best=-1.e30f;for(unsigned axis=0;axis<3;++axis)for(unsigned signIndex=0;signIndex<2;++signIndex){const float alignment=dot(box.currentAxes[axis],box.preferredDirection)*(signIndex?1.f:-1.f);if(alignment>best){best=alignment;side=static_cast<int>(axis*2+signIndex);}}}
+        if(side<0){
+            // Pick the least displacement common supporting face. Projecting
+            // its three vertices into the same half-space proves the entire
+            // face outside, rather than merely checking particle distances.
+            float best=1.e30f;
+            for(unsigned axis=0;axis<3;++axis)for(unsigned signIndex=0;signIndex<2;++signIndex){const float sign=signIndex?1.f:-1.f;float cost=0;for(unsigned k=0;k<3;++k){const float d=std::max(0.f,component(half,axis)-component(current[k],axis)*sign);cost+=d*d*(invMass_[ids[k]]==0?4.f:1.f);}if(cost<best){best=cost;side=static_cast<int>(axis*2+signIndex);}}
+        }
+        const unsigned axis=static_cast<unsigned>(side)/2;const float sign=(side&1)?1.f:-1.f;const Vec3 normal=box.currentAxes[axis]*sign;
+        const Vec3 surfaceVelocity=(box.currentCenter-box.previousCenter)/std::max(config_.fixedStep,1.e-5f);
+        for(unsigned k=0;k<3;++k){const float distance=component(half,axis)+.0001f-component(current[k],axis)*sign;if(distance<=0)continue;const auto id=ids[k];x_[id]+=normal*distance;contactNormal_[id]=normalized(contactNormal_[id]+normal,normal);contactVelocity_[id]=surfaceVelocity;}
+        ++stats_.contacts;return true;
+    }
+    bool solidBounds(bool sweep){
+        if(boxes_.empty())return true;
+        for(unsigned iteration=0;iteration<config_.boundIterations;++iteration){
+            bool changed=false;
+            for(const auto& box:boxes_)for(const auto& face:faces_)if(boxContact(face,box,sweep&&iteration==0,true))changed=true;
+            if(stats_.budgetExceeded&&stats_.boundsRejected)return false;
+            if(!changed)break;
+        }
+        // Constraint solves, neighboring-face corrections, and pinned seams
+        // are all finished before validation. An unresolved solid intersection
+        // is never handed back as a successful renderable physics frame.
+        for(const auto& box:boxes_)for(const auto& face:faces_)if(boxContact(face,box,false,false)){stats_.boundsRejected=true;return false;}
+        return true;
+    }
+    bool pinTargets(const std::vector<Vec3>& pose){
+        pinPose_=pose;
+        for(unsigned iteration=0;iteration<config_.boundIterations;++iteration){bool changed=false;
+            for(const auto& box:boxes_)for(auto pin:pins_){
+                if(stats_.boundTests>=config_.maxBoundTests){stats_.budgetExceeded=true;stats_.boundsRejected=true;return false;}++stats_.boundTests;
+                const auto p=localPoint(pinPose_[pin],box.currentCenter,box.currentAxes);const Vec3 half=box.currentHalf+Vec3{config_.thickness,config_.thickness,config_.thickness};
+                if(std::fabs(p.x)>=half.x||std::fabs(p.y)>=half.y||std::fabs(p.z)>=half.z)continue;
+                unsigned side=0;float best=-1.e30f;const bool preferred=dot(box.preferredDirection,box.preferredDirection)>1.e-10f;
+                for(unsigned axis=0;axis<3;++axis)for(unsigned signIndex=0;signIndex<2;++signIndex){const float sign=signIndex?1.f:-1.f;const float score=preferred?dot(box.currentAxes[axis],box.preferredDirection)*sign:component(p,axis)*sign-component(half,axis);if(score>best){best=score;side=axis*2+signIndex;}}
+                const auto axis=side/2;const float sign=(side&1)?1.f:-1.f;pinPose_[pin]+=box.currentAxes[axis]*(sign*(component(half,axis)+.0001f-component(p,axis)*sign));changed=true;
+            }
+            if(!changed)break;
+        }
+        return true;
+    }
     static bool validPosition(Vec3 p){
         // Bound intermediate float products and preserve useful local precision.
         // Callers operating beyond this world range must use a floating origin.
@@ -275,18 +369,19 @@ class Cloth {
         return true;
     }
     void resetState(const std::vector<Vec3>& pose){x_=pose;old_=pose;lastPose_=pose;std::fill(velocity_.begin(),velocity_.end(),Vec3{});accumulator_=0;stats_.reset=true;}
+    bool recoverBounded(const std::vector<Vec3>& pose){resetState(pose);return !boxes_.empty()&&solidBounds(false);}
 public:
     bool initialize(const std::vector<Vec3>& worldPositions,const std::vector<Triangle>& topology,const std::vector<std::uint32_t>& seamIndices,Config config={}){
         ready_=false;stats_={};config_=config;
         if(worldPositions.size()<3||worldPositions.size()>config.maxVertices||topology.empty()||topology.size()>config.maxTriangles||seamIndices.empty())return false;
-        if(!finite(config.gravity)||!std::isfinite(config.fixedStep)||config.fixedStep<1.f/1000.f||config.fixedStep>1.f/30.f||config.maxSubsteps==0||config.maxSubsteps>32||config.iterations==0||config.iterations>32||config.maxVertices>65536||config.maxTriangles>131072||config.maxColliderTriangles>131072||config.maxContactSamples>8192)return false;
+        if(!finite(config.gravity)||!std::isfinite(config.fixedStep)||config.fixedStep<1.f/1000.f||config.fixedStep>1.f/30.f||config.maxSubsteps==0||config.maxSubsteps>32||config.iterations==0||config.iterations>32||config.maxVertices>65536||config.maxTriangles>131072||config.maxColliderTriangles>131072||config.maxContactSamples>8192||config.maxColliderBoxes>64||config.boundIterations==0||config.boundIterations>16)return false;
         const float positive[]={config.thickness,config.density,config.maxSpeed,config.teleportDistance,config.maxFrameTime,config.contactSpacing};for(float n:positive)if(!std::isfinite(n)||n<=0)return false;
         const float nonnegative[]={config.selfThickness,config.stretchCompliance,config.areaCompliance,config.bendCompliance,config.damping,config.friction};for(float n:nonnegative)if(!std::isfinite(n)||n<0)return false;
         for(auto p:worldPositions)if(!validPosition(p))return false;
         for(auto pin:seamIndices)if(pin>=worldPositions.size())return false;
-        x_=worldPositions;old_=x_;lastPose_=x_;velocity_.assign(x_.size(),{});contactNormal_.resize(x_.size());contactVelocity_.resize(x_.size());invMass_.assign(x_.size(),0);
+        x_=worldPositions;old_=x_;lastPose_=x_;boundPrevious_=x_;velocity_.assign(x_.size(),{});contactNormal_.resize(x_.size());contactVelocity_.resize(x_.size());invMass_.assign(x_.size(),0);
         pins_=seamIndices;std::sort(pins_.begin(),pins_.end());pins_.erase(std::unique(pins_.begin(),pins_.end()),pins_.end());
-        stretch_.clear();bend_.clear();faces_.clear();adjacent_.clear();nodes_.clear();colliders_.clear();samples_.clear();cells_.reserve(x_.size());
+        stretch_.clear();bend_.clear();faces_.clear();adjacent_.clear();nodes_.clear();colliders_.clear();boxes_.clear();samples_.clear();cells_.reserve(x_.size());
         std::vector<Edge> edges;edges.reserve(topology.size()*3);
         for(auto t:topology){
             if(t.a>=x_.size()||t.b>=x_.size()||t.c>=x_.size()||t.a==t.b||t.b==t.c||t.c==t.a)return false;
@@ -322,22 +417,30 @@ public:
         for(const auto& face:faces_){const auto t=face.tri;const float longest=std::max(length(x_[t.a]-x_[t.b]),std::max(length(x_[t.b]-x_[t.c]),length(x_[t.c]-x_[t.a])));const unsigned n=static_cast<unsigned>(clamp(std::ceil(longest/config.contactSpacing),1,8));for(unsigned i=1;i+1<n;++i)for(unsigned j=1;i+j<n;++j){const float u=float(i)/n,v=float(j)/n;appendSample({{t.a,t.b,t.c},{u,v,1-u-v}});}}
         accumulator_=0;ready_=true;return true;
     }
-    // Returns false on invalid input or collision-budget exhaustion. A caller
-    // can use its original animated cape for that frame; no bad state escapes.
+    // Returns false on invalid input or unresolved solid-bound intersections.
+    // Surface-budget exhaustion can reset safely against supplied solid bounds.
+    // A false result must not be rendered as successfully colliding cloth.
     // Collider triangles must retain their vertex identities between previous
     // and current. They may be two-sided body, equipment, or world triangles.
-    bool step(float elapsedSeconds,const std::vector<Vec3>& animatedWorldPositions,const std::vector<ColliderTriangle>& colliders){
+    bool step(float elapsedSeconds,const std::vector<Vec3>& animatedWorldPositions,const std::vector<ColliderTriangle>& colliders,const std::vector<ColliderBox>& boxes={}){
         stats_={};if(!ready_)return false;
         if(!validPose(animatedWorldPositions)||!std::isfinite(elapsedSeconds)||elapsedSeconds<0){stats_.invalidInput=true;resetState(lastPose_);return false;}
+        if(boxes.size()>config_.maxColliderBoxes){stats_.budgetExceeded=true;stats_.boundsRejected=true;resetState(animatedWorldPositions);return false;}
+        for(const auto& box:boxes){
+            if(!validPosition(box.previousCenter)||!validPosition(box.currentCenter)||!finite(box.previousHalf)||!finite(box.currentHalf)||!finite(box.preferredDirection)){stats_.invalidInput=true;resetState(animatedWorldPositions);return false;}
+            for(unsigned axis=0;axis<3;++axis){if(component(box.previousHalf,axis)<0||component(box.currentHalf,axis)<0||component(box.previousHalf,axis)>100||component(box.currentHalf,axis)>100||!finite(box.previousAxes[axis])||!finite(box.currentAxes[axis])||std::fabs(dot(box.previousAxes[axis],box.previousAxes[axis])-1)>.002f||std::fabs(dot(box.currentAxes[axis],box.currentAxes[axis])-1)>.002f){stats_.invalidInput=true;resetState(animatedWorldPositions);return false;}for(unsigned other=0;other<axis;++other)if(std::fabs(dot(box.previousAxes[axis],box.previousAxes[other]))>.002f||std::fabs(dot(box.currentAxes[axis],box.currentAxes[other]))>.002f){stats_.invalidInput=true;resetState(animatedWorldPositions);return false;}}
+        }
+        boxes_=boxes;boundPrevious_=x_;
         bool teleported=elapsedSeconds>config_.maxFrameTime;
         for(auto pin:pins_)if(length(animatedWorldPositions[pin]-lastPose_[pin])>config_.teleportDistance)teleported=true;
-        if(teleported){resetState(animatedWorldPositions);return true;}
-        if(colliders.size()>config_.maxColliderTriangles){stats_.budgetExceeded=true;resetState(animatedWorldPositions);return false;}
+        if(teleported){resetState(animatedWorldPositions);return solidBounds(false);}
+        if(colliders.size()>config_.maxColliderTriangles){stats_.budgetExceeded=true;return recoverBounded(animatedWorldPositions);}
         for(const auto& triangle:colliders)for(unsigned i=0;i<3;++i)if(!validPosition(triangle.previous[i])||!validPosition(triangle.current[i])){stats_.invalidInput=true;resetState(animatedWorldPositions);return false;}
         colliders_=colliders;order_.resize(colliders_.size());for(unsigned i=0;i<order_.size();++i)order_[i]=i;nodes_.clear();nodes_.reserve(colliders_.size()*2);if(!colliders_.empty())buildNode(0,static_cast<unsigned>(colliders_.size()));
         const double before=accumulator_;accumulator_+=elapsedSeconds;
         const double requestedSteps=std::floor((accumulator_+1.e-9)/config_.fixedStep);
-        if(requestedSteps>config_.maxSubsteps){stats_.budgetExceeded=true;resetState(animatedWorldPositions);return false;}
+        if(requestedSteps>config_.maxSubsteps){stats_.budgetExceeded=true;return recoverBounded(animatedWorldPositions);}
+        if(!boxes_.empty()&&!pinTargets(animatedWorldPositions)){resetState(animatedWorldPositions);return false;}
         const unsigned steps=static_cast<unsigned>(requestedSteps);
         const float h=config_.fixedStep,decay=std::exp(-config_.damping*h);
         for(unsigned stepIndex=0;stepIndex<steps;++stepIndex){
@@ -345,7 +448,7 @@ public:
             const float to=elapsedSeconds>0?clamp(static_cast<float>((stepIndex+1)*h-before)/elapsedSeconds,0,1):1;
             old_=x_;std::fill(contactNormal_.begin(),contactNormal_.end(),Vec3{});std::fill(contactVelocity_.begin(),contactVelocity_.end(),Vec3{});
             for(std::size_t i=0;i<x_.size();++i)if(invMass_[i]>0){velocity_[i]=(velocity_[i]+config_.gravity*h)*decay;x_[i]+=velocity_[i]*h;}
-            for(auto pin:pins_)x_[pin]=lerp(lastPose_[pin],animatedWorldPositions[pin],to);
+            for(auto pin:pins_)x_[pin]=boxes_.empty()?lerp(lastPose_[pin],animatedWorldPositions[pin],to):lerp(boundPrevious_[pin],pinPose_[pin],to);
             for(auto& spring:stretch_)spring.lambda=0;
             for(auto& spring:bend_)spring.lambda=0;
             for(auto& face:faces_)face.lambda=0;
@@ -354,7 +457,7 @@ public:
                 for(auto& face:faces_)solveArea(face,h);
                 for(auto& spring:bend_)solveSpring(spring,h);
                 if(iteration+1==config_.iterations)selfContacts();
-                if(iteration==0||iteration+1==config_.iterations)if(!collisions(from,to,h)){resetState(animatedWorldPositions);return false;}
+                if(iteration==0||iteration+1==config_.iterations)if(!collisions(from,to,h))return recoverBounded(animatedWorldPositions);
             }
             if(!finishVelocities(h)){stats_.invalidInput=true;resetState(animatedWorldPositions);return false;}
             ++stats_.substeps;
@@ -369,13 +472,19 @@ public:
             const float tailTime=(1-from)*elapsedSeconds;
             if(tailTime>1.e-8f){
                 old_=x_;std::fill(contactNormal_.begin(),contactNormal_.end(),Vec3{});std::fill(contactVelocity_.begin(),contactVelocity_.end(),Vec3{});
-                if(!collisions(from,1,tailTime)){resetState(animatedWorldPositions);return false;}
+                if(!collisions(from,1,tailTime))return recoverBounded(animatedWorldPositions);
                 if(!finishVelocities(tailTime,true)){stats_.invalidInput=true;resetState(animatedWorldPositions);return false;}
             }
         }
         // The visible seam follows every display frame, including frames which
-        // do not accumulate a full physics tick.
-        for(auto pin:pins_)x_[pin]=animatedWorldPositions[pin];
+        // do not accumulate a full physics tick. Solid body bounds may offset
+        // the seam outward: exact animated pins cannot override body clearance.
+        for(auto pin:pins_)x_[pin]=boxes_.empty()?animatedWorldPositions[pin]:pinPose_[pin];
+        if(!boxes_.empty()){
+            old_=x_;std::fill(contactNormal_.begin(),contactNormal_.end(),Vec3{});std::fill(contactVelocity_.begin(),contactVelocity_.end(),Vec3{});
+            if(!solidBounds(true)){resetState(animatedWorldPositions);return false;}
+            if(!finishVelocities(std::max(elapsedSeconds,config_.fixedStep),true)){stats_.invalidInput=true;resetState(animatedWorldPositions);return false;}
+        }
         lastPose_=animatedWorldPositions;return true;
     }
     void reset(const std::vector<Vec3>& animatedWorldPositions){if(ready_&&validPose(animatedWorldPositions))resetState(animatedWorldPositions);}
