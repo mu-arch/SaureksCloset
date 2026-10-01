@@ -18,6 +18,9 @@ maintainer at https://github.com/mu-arch/SaureksCloset.
 - MinHook retains its upstream license in native/vendor/minhook/LICENSE.txt
   in the source repository and Installation instructions/MINHOOK-LICENSE.txt
   in the addon download.
+- NvCloth and PxShared retain the NVIDIA Source Code License in
+  native/vendor/nvcloth/NvCloth/license.txt and PxShared/license.txt. The addon
+  includes it as Installation instructions/NVCLOTH-LICENSE.txt.
 - Blizzard material and any other third-party contributions remain subject
   to their respective owners' rights and licenses. No additional rights to
   that material are claimed or granted here.

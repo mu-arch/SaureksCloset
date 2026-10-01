@@ -63,7 +63,7 @@ for p in addon.rglob('*'):
     if include:
         payload['SaureksCloset/' + relative.as_posix()] = p
 assert 'SaureksCloset/README.md' in payload
-for name in ['LICENSE', 'LICENSING.md', 'Installation instructions/LICENSE.txt', 'Installation instructions/MINHOOK-LICENSE.txt', 'CATALOG-LICENSE.md', 'CATALOG-COPYRIGHT.md', 'ASSETS-LICENSE', 'Textures/ASSETS-LICENSE', 'Screenshots/ASSETS-LICENSE']:
+for name in ['LICENSE', 'LICENSING.md', 'Installation instructions/LICENSE.txt', 'Installation instructions/MINHOOK-LICENSE.txt', 'Installation instructions/NVCLOTH-LICENSE.txt', 'CATALOG-LICENSE.md', 'CATALOG-COPYRIGHT.md', 'ASSETS-LICENSE', 'Textures/ASSETS-LICENSE', 'Screenshots/ASSETS-LICENSE']:
     assert 'SaureksCloset/' + name in payload
 for line in (addon / 'SaureksCloset.toc').read_text().splitlines():
     if line.strip() and not line.startswith('#'):

@@ -11,3 +11,10 @@ The Lua functions are SaureksClosetSetAppearance(race,sex,skin,face,hairStyle,ha
 `/closet diagnose` includes an explicit inspection. Following the pcall success flag, its 18 values are: schema 3, override enabled, override applicable, requested revision, composed revision, full reload count, detail refresh count, real display, real native display, real object scale, component race, component sex, component hair color, component skin, component face, component facial feature, component hairstyle, visual scale ratio. Zero component values when no component exists are not appearance defaults. No pointers, GUIDs or names are returned.
 
 The bridge has been compiled and checked locally, but has not been run in a WoW process here. Read RESEARCH.md for implementation boundaries and remaining runtime validation.
+
+Cape physics now statically links the CPU-only NvCloth source pinned in
+`vendor/nvcloth/PROVENANCE.md`, under its separate NVIDIA license. The build
+requires Python 3 and an x86 Windows C++ toolchain; `tools/build_nvcloth.py`
+builds the dependency locally without downloads. `CapeNvCloth.cpp` and
+`CapeWorker.cpp` implement the solver and asynchronous handoff. See
+`CAPE-PHYSICS.md` for threading, renderer integration and validation limits.

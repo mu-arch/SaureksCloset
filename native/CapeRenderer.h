@@ -7,6 +7,13 @@
 #include <unordered_map>
 #include <vector>
 #include "CapeCloth.h"
+#include "CapeFit.h"
+#include "CapeWorker.h"
+#ifdef SAUREKS_CAPE_SYNC_TEST
+using CapeSimulation=cape::NvClothSolver;
+#else
+using CapeSimulation=cape::AsyncCloth;
+#endif
 #include "CapeBodyBounds.h"
 
 // Build 5875 only. Included after WeaponRenderer.h and CapeWorldCollision.h.
@@ -40,7 +47,7 @@ static thread_local std::uintptr_t capeDrawScope=0;
 static thread_local void* capeBoundBuffer=nullptr;
 static thread_local unsigned capeBoundFormat=0;
 static bool capeEnabled=false;
-static unsigned capeRuntimeStatus=0; // 0 off, 1 waiting, 2 active, 3 unsupported, 4 native fit fallback.
+static unsigned capeRuntimeStatus=0; // 0 off, 1 waiting, 2 active, 3 unsupported, 4 native fit fallback, 5 worker preparing.
 static std::uint32_t capeLastDraw=0;
 static std::uintptr_t capePlayerModel=0;
 static std::uint32_t capePlayerChecked=0;
@@ -124,7 +131,7 @@ struct CapeState {
     std::vector<unsigned char> gpuVertices,drawVertices;
     BagMatrix worldToRender{},renderToWorld{};
     CapeMesh mesh;
-    cape::Cloth cloth;
+    CapeSimulation cloth;
 };
 static CapeState capeState;
 static bool capeFinite(const cape::Vec3& p){return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);}
@@ -351,26 +358,6 @@ static bool capeRefreshWorld(CapeState& s,cape::Vec3 low,cape::Vec3 high,std::ui
     }
     s.worldValid=true;return true;
 }
-// Rendering a collision solution is conditional on preserving the actual
-// current garment fit. These checks apply AFTER every contact and fallback.
-static bool capePoseFits(const std::vector<cape::Vec3>& pose,const std::vector<cape::Vec3>& animated,
-                         const std::vector<cape::Triangle>& triangles,const std::vector<std::uint32_t>& pins){
-    if(pose.size()!=animated.size()||pose.empty())return false;
-    for(unsigned i=0;i<pose.size();++i)if(!capeFinite(pose[i])||cape::length(pose[i]-animated[i])>.18f)return false;
-    for(unsigned pin:pins)if(pin>=pose.size()||cape::length(pose[pin]-animated[pin])>.00001f)return false;
-    for(const auto& t:triangles){const unsigned ids[]={t.a,t.b,t.c};
-        for(unsigned i:ids)if(i>=pose.size())return false;
-        for(unsigned j=0;j<3;++j){const unsigned a=ids[j],b=ids[(j+1)%3];
-            const float original=cape::length(animated[a]-animated[b]),actual=cape::length(pose[a]-pose[b]);
-            if(std::fabs(actual-original)>std::max(.001f,original*.05f))return false;
-        }
-        const auto before=cape::cross(animated[t.b]-animated[t.a],animated[t.c]-animated[t.a]);
-        const auto after=cape::cross(pose[t.b]-pose[t.a],pose[t.c]-pose[t.a]);
-        const float area=cape::length(before),changed=cape::length(after);
-        if(area>1.e-7f&&(changed<area*.85f||changed>area*1.15f||cape::dot(before,after)<=0))return false;
-    }
-    return true;
-}
 static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
     const auto now=bagClockMilliseconds();bool geometryChanged=true;
     if(!s.cloth.ready()){if(!capeReadMesh(model,s.mesh))return false;}
@@ -402,7 +389,8 @@ static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
     }
     // Camera/palette refresh is still needed by each GPU material submission.
     // Reuse simulation and collision results for duplicate submissions.
-    if(s.fitFallback)return false;
+    if(s.fitFallback&&static_cast<std::uint32_t>(now-s.updated)<250)return false;
+    s.fitFallback=false;
     if(!rebuild&&!resetPose&&now==s.updated)return s.frameValid;
     s.frameValid=false;
     cape::Vec3 low=s.animated[0],high=low;
@@ -441,14 +429,19 @@ static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
     // Scenery queries can be unavailable while cells load. Solid body/gear
     // limits stay active independently of that optional detailed contact.
     if(!capeRefreshWorld(s,low,high,now))s.worldSurfaces.clear();
+    cape::Rotation frame;
+    for(unsigned i=0;i<3;++i){cape::Vec3 axis{};if(i==0)axis.x=1;else if(i==1)axis.y=1;else axis.z=1;
+        frame[i]=capeNormal(capeTransform(s.renderToWorld,capeTransform(modelToRender,axis,true),true));}
+    s.cloth.setFrame(frame);
     const float elapsed=rebuild||resetPose?0.f:static_cast<std::uint32_t>(now-s.updated)*.001f;s.updated=now;
     if(!s.cloth.step(elapsed,s.animated,s.worldSurfaces,s.bounds,s.reference)){
         s.cloth.reset(s.animated);
         if(!s.cloth.step(0,s.animated,{},s.bounds,s.reference)){s.fitFallback=true;return false;}
     }
-    if(!capePoseFits(s.cloth.positions(),s.animated,s.triangles,s.pins)){
+    if(!s.cloth.limitToFit(s.animated,[&](const auto& pose){return capePoseFits(pose,s.animated,s.triangles,s.pins);})){
         s.fitFallback=true;s.cloth.reset(s.animated);return false;
     }
+    if(!s.cloth.hasResult()){capeRuntimeStatus=5;capeLastDraw=now;return false;}
     s.normals.assign(s.source.size(),{});const auto& positions=s.cloth.positions();
     for(const auto& t:s.triangles){
         const auto n=cape::cross(positions[t.b]-positions[t.a],positions[t.c]-positions[t.a]);
@@ -463,7 +456,7 @@ static void capeReset(){
 }
 static void capeSetEnabled(bool enabled){if(capeEnabled!=enabled){capeEnabled=enabled;capeReset();}}
 static unsigned capeStatus(){
-    if((capeRuntimeStatus==2||capeRuntimeStatus==4)&&static_cast<std::uint32_t>(bagClockMilliseconds()-capeLastDraw)>250)capeRuntimeStatus=1;
+    if((capeRuntimeStatus==2||capeRuntimeStatus==4||capeRuntimeStatus==5)&&static_cast<std::uint32_t>(bagClockMilliseconds()-capeLastDraw)>250)capeRuntimeStatus=1;
     return capeRuntimeStatus;
 }
 static void capeForgetModel(std::uintptr_t model){
@@ -529,9 +522,10 @@ static bool capeWriteDraw(std::uintptr_t renderer,const void* description,unsign
     if(indexed!=1||!capeBoundBuffer)return false;
     if(!capeUpdate(capeState,model,player.guid)){
         // A fit conflict must draw the ordinary attached cape, not hide it or
-        // publish a displaced/stretched collision solution. Latch until reset
-        // or model/cape change so the two paths cannot alternate each frame.
+        // publish a displaced/stretched collision solution. Temporary failures
+        // retry at a bounded rate instead of latching for the whole session.
         if(capeState.fitFallback){capeRuntimeStatus=4;capeLastDraw=bagClockMilliseconds();}
+        else if(capeState.cloth.ready()&&!capeState.cloth.hasResult()){capeRuntimeStatus=5;capeLastDraw=bagClockMilliseconds();}
         return false;
     }
     auto& s=capeState;std::vector<CapeDrawSpan> spans;

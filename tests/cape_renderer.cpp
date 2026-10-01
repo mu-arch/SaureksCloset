@@ -2,6 +2,9 @@
 // checks data flow and isolation, not the client's ABI or live appearance.
 #define __fastcall
 #define __thiscall
+#ifndef SAUREKS_CAPE_ASYNC_TEST
+#define SAUREKS_CAPE_SYNC_TEST
+#endif
 #define SAUREKS_CAPE_TEST
 #include <cassert>
 #include <cmath>
@@ -118,7 +121,7 @@ static void drawAndCheck(bool gpu){
     assert(capeState.pins.size()==2&&capeState.triangles.size()==4);
     const auto first=outputPoint(4,gpu?48:32);now+=17;
     assert(capeWriteDraw(0x90000,nullptr,1));
-    assert(outputPoint(4,gpu?48:32).z<first.z); // Genuine integrated gravity.
+    assert(std::fabs(outputPoint(4,gpu?48:32).z-first.z)<.001f&&capeState.cloth.stats().substeps>0); // NvCloth tethers resist gravity stretch.
     assert(std::fabs(outputPoint(0,gpu?48:32).z-2)<1e-5f); // Shoulder seam.
     assert(memory==pristine&&bound==&nativeBuffer);
     BagMatrix moved=identity;moved[12]=50;put(0x80000,moved);now+=17;
@@ -187,7 +190,8 @@ static void optimizedDraw(bool gpu,unsigned cpuFormat=3){
         std::memcpy(&uv,submitted.data()+stride*(gpu?original:j)+(gpu?32:24),4);assert(uv==float(original)/18);
     }
     now+=17;capeSubmitHook(nullptr,1);assert(capeStatus()==2);
-    assert(outputPoint(a+4,stride).z<0&&outputPoint(b+4,stride).z<0);
+    assert(std::fabs(outputPoint(a+4,stride).z)<.01f&&std::fabs(outputPoint(b+4,stride).z)<.01f);
+    assert(capeState.cloth.stats().substeps>0);
     assert(memory==pristine&&bound==&nativeBuffer);
     // A visible noncape member must keep the untouched native batch and
     // explicitly report unsupported; a stale group ID must do the same.
@@ -227,19 +231,28 @@ static void firmBodyFrame(bool obstructed=true){
     array(0x40010,0x62000,std::vector<std::uint32_t>(lookup.size()));array(0x40018,0x63000,sections);array(0x40020,0x64000,units);
     put(0x81000,std::array<unsigned,2>{{1,1}});
     const unsigned before=submits;capeSubmitHook(nullptr,1);
-    if(!obstructed){
-        assert(capeStatus()==2&&submits==before+1);
+    assert(capeStatus()==2&&!capeState.fitFallback&&submits==before+1);
+    // An overly broad torso proxy may already enclose the authored cape. It
+    // must not relocate it or permanently disable physics, even after motion.
+    const unsigned copies=geometryReads;float motion=0;
+    for(unsigned frame=0;frame<180;++frame){
+        BagMatrix transform=identity;const float t=frame/60.f;
+        transform[12]=std::sin(t*3)*.03f;transform[14]=std::sin(t*4)*.02f;
+        put(0x80000,transform);put(0x100fc,transform);
+        now+=frame%31==0?80:17;const unsigned calls=submits;capeSubmitHook(nullptr,1);
+        assert(capeStatus()==2&&!capeState.fitFallback&&submits==calls+1&&bound==&nativeBuffer);
         assert(capePoseFits(capeState.cloth.positions(),capeState.animated,capeState.triangles,capeState.pins));
         for(unsigned pin:capeState.pins)assert(cape::length(capeState.cloth.positions()[pin]-capeState.animated[pin])<.00001f);
-        capeSetEnabled(false);return;
+        for(unsigned i=0;i<capeState.animated.size();++i)motion=std::max(motion,cape::length(capeState.cloth.positions()[i]-capeState.animated[i]));
     }
-    assert(capeStatus()==4&&capeState.fitFallback&&submits==before+1&&bound==&nativeBuffer);
-    // Deliberately incompatible body volume may not displace shoulder anchors
-    // or emit elongated triangles. Every material keeps native rendering.
-    const unsigned copies=geometryReads;
-    for(unsigned frame=0;frame<30;++frame){now+=17;const unsigned calls=submits;capeSubmitHook(nullptr,1);
-        assert(capeStatus()==4&&submits==calls+1&&bound==&nativeBuffer);}
-    assert(geometryReads==copies);capeReset();assert(!capeState.fitFallback);
+    assert(motion>.005f); // Active cannot merely mean passing native motion through.
+    assert(geometryReads==copies);
+    // A transient safety fallback retries automatically; it is not latched
+    // for the rest of a session when the player's pose changes.
+    capeState.fitFallback=true;capeState.frameValid=false;capeState.updated=now;
+    now+=17;capeSubmitHook(nullptr,1);assert(capeStatus()==4);
+    now+=260;capeSubmitHook(nullptr,1);assert(capeStatus()==2&&!capeState.fitFallback);
+    capeReset();capeSubmitHook(nullptr,1);assert(capeStatus()==2);
     capeSetEnabled(false);
 }
 static void garmentFitGuard(){
