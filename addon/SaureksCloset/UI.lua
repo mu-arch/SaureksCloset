@@ -275,7 +275,7 @@ function V:SetTab(tab)
     if tab~="weaponry" then self:CloseWeaponOptions() end
     self:CloseOutfitMenu();self:CloseOutfitDetails();self:CloseBrowser();self.tab=tab
     self.selectedOutfit=nil;self.confirmDelete=nil
-    local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="exposure"
+    local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="exposure" or tab=="physics"
     local modelPage=tab=="armor" or tab=="body" or tab=="exposure"
     local sideControls=tab=="body" or tab=="exposure"
     local leftPane=tab=="body"
@@ -290,7 +290,7 @@ function V:SetTab(tab)
     if character then
         self.wardrobeSelectorBox:Show()
         -- Weaponry uses the space normally occupied by the swivel buttons.
-        local wide=tab=="weaponry" or tab=="bags"
+        local wide=tab=="weaponry" or tab=="bags" or tab=="physics"
         self.wardrobeSelectorBox:ClearAllPoints()
         self.wardrobeSelectorBox:SetPoint("TOP",self.frame,"TOP",wide and -12 or -44,-392)
         self.wardrobeSelectorBox:SetWidth(wide and 176 or 106)
@@ -299,7 +299,7 @@ function V:SetTab(tab)
         for _,tile in ipairs(self.weaponSelectorFill) do
             if wide then tile:Show() else tile:Hide() end
         end
-        self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags",exposure="Exposure"})[tab])
+        self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags",exposure="Exposure",physics="Physics"})[tab])
     else self.wardrobeSelectorBox:Hide() end
     if self.leftPaneFrameOverlay then
         if leftPane then self.leftPaneFrameOverlay:Show() else self.leftPaneFrameOverlay:Hide() end
@@ -443,7 +443,7 @@ function V:CreateUI()
     self.outfitMenu=CreateFrame("Frame","SaureksClosetOutfitMenu",f)
     self.outfitMenu.displayMode="MENU";self.outfitMenu:Hide()
     self.outfitMenu.initialize=function(level) V:BuildOutfitMenu(level) end
-    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),exposure=page(f),outfits=page(f),settings=page(f)}
+    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),exposure=page(f),physics=page(f),outfits=page(f),settings=page(f)}
     self.tabButtons={}
     local function fitTab(b)
         local text=getglobal(b:GetName().."Text")
@@ -472,6 +472,7 @@ function V:CreateUI()
     self:CreateWeaponryPage(self.pagesByName.weaponry)
     self:CreateBagsPage(self.pagesByName.bags)
     self:CreateExposurePage(self.pagesByName.exposure)
+    self:CreatePhysicsPage(self.pagesByName.physics)
     self:CreateOutfitPage(self.pagesByName.outfits)
     self:CreateSettingsPage(self.pagesByName.settings)
     self:CreateBrowser()
@@ -519,7 +520,7 @@ function V:CreateWardrobeSelector()
             UIDropDownMenu_AddButton({text=text,checked=V.tab==page and 1 or nil,
                 func=function() V:SetTab(page) end})
         end
-        choice("Outfit","armor");choice("Weaponry","weaponry");choice("Body","body");choice("Bags","bags");choice("Exposure","exposure")
+        choice("Outfit","armor");choice("Weaponry","weaponry");choice("Body","body");choice("Bags","bags");choice("Exposure","exposure");choice("Physics","physics")
     end
     b:SetScript("OnClick",function() ToggleDropDownMenu(1,nil,menu,b:GetName(),0,0) end)
 end
@@ -1641,6 +1642,51 @@ function V:RefreshPortraits()
         if frame and frame:IsVisible() then frame.portrait:SetTexture(art.."Logo.tga") end
     end
 end
+function V:CreatePhysicsPage(p)
+    self.physicsBackground=texture(p,art.."Main.blp",19,75,323,355)
+    self.physicsBackground:SetVertexColor(.6,.6,.6)
+    self.physicsBorder,self.physicsShadowFrame=createWardrobeViewFrame(p,"SaureksClosetPhysicsViewBorder",self.frame)
+    self.physicsTitle=label(p,"Physics",38,94,284,20)
+    local panel=section(p,34,125,293,181,false)
+    self.physicsCapePanel=panel
+    self.physicsCapeTitle=label(panel,"Cape",14,13,263,18)
+    local toggle=CreateFrame("CheckButton","SaureksClosetCapePhysics",panel,"UICheckButtonTemplate")
+    toggle:SetPoint("TOPLEFT",panel,"TOPLEFT",11,-38);toggle:SetWidth(24);toggle:SetHeight(24)
+    self.capePhysicsCheckbox=toggle
+    self.capePhysicsLabel=label(panel,"Enable cape physics",38,43,238,18,true)
+    toggle:SetScript("OnClick",function() V:SetCapePhysics(this:GetChecked()) end)
+    self.capePhysicsStatusLabel=label(panel,"",14,77,263,43,true)
+    self.resetCapePhysicsButton=button(panel,"Reset cape motion",14,137,265,function() V:ResetCapePhysics() end)
+    self.resetCapePhysicsButton:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Reset cape motion")
+        GameTooltip:AddLine("Restart your active cape simulation from its current pose.",1,1,1,true);GameTooltip:Show()
+    end)
+    self.resetCapePhysicsButton:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    self.physicsScopeLabel=label(p,"Cape physics affects only your character in the world. This preference is saved for this character, separately from saved looks.",41,321,278,55,true)
+    self:RefreshPhysicsPage()
+end
+
+function V:RefreshPhysicsPage()
+    if not self.capePhysicsCheckbox then return end
+    local available=self.CapePhysicsAvailable and self:CapePhysicsAvailable()
+    local selected=self.CapePhysicsEnabled and self:CapePhysicsEnabled()
+    local status=available and self:CapePhysicsStatus() or nil
+    self.capePhysicsCheckbox:SetChecked(selected and 1 or nil)
+    enabled(self.capePhysicsCheckbox,available)
+    enabled(self.resetCapePhysicsButton,available and selected and VanityStudioCharacter.enabled and status==2)
+    local text
+    if not available then text="Update SaureksCloset.dll and restart WoW to use cape physics."
+    elseif not VanityStudioCharacter.enabled then text="Addon is off. Your cape preference is saved."
+    elseif not selected then text="Off"
+    elseif status==3 then text="Cape physics is unavailable for the current model or renderer."
+    elseif self.capePhysicsError then text=self.capePhysicsError
+    elseif status==1 then text="Waiting for a visible cape."
+    elseif status==2 then text="Active on your character."
+    elseif status==0 then text="Starting cape physics..."
+    else text="Cape physics status is unavailable." end
+    self.capePhysicsStatusLabel:SetText(text)
+end
+
 function V:CreateSettingsPage(p)
     -- Share the wardrobe's existing texture and framing without another background asset.
     self.settingsBackground=texture(p,art.."Main.blp",19,75,323,355)
@@ -2022,6 +2068,7 @@ function V:Refresh()
     end
     self.activeOutfitLabel:SetText(self:ActiveOutfitText())
     self:RefreshBagsPage()
+    if self.tab=="physics" then self:RefreshPhysicsPage() end
     for slot,b in pairs(self.slotButtons) do
         local id=self:SlotSelection(slot);local icon
         if id and id>0 then local n,l,q,lev,typ,sub,stack,loc,path=GetItemInfo(id);icon=path or self:CatalogIcon(id)

@@ -14,6 +14,10 @@ def at(va):
 # Preserve verified entries introduced outside this generator's original list.
 import re
 addresses.extend([0x5f0d60,0x4c8423,0x4c843c,0x4c8449,0x533314,0x533422,0x478960,0x478ad0,0x478cb0,0x478dc0,0x479d10,0x4799a0,0x477860])
-addresses=list(dict.fromkeys(addresses+[int(value,16) for value in re.findall(r'\{(0x[0-9a-f]+),\{', (r/'native/BuildSignatures.h').read_text())]))
+addresses=list(dict.fromkeys([int(value,16) for value in re.findall(r'\{(0x[0-9a-f]+),\{', (r/'native/BuildSignatures.h').read_text())]+addresses))
 (r/'native/BuildSignatures.h').write_text('// Verified executable prefixes. Incompatible clients leave the bridge inactive.\n#pragma once\nstruct BuildSignature { unsigned address; unsigned char bytes[12]; };\nstatic const BuildSignature signatures[] = {\n'+''.join('{0x%x,{%s}},\n'%(a,','.join('0x%02x'%x for x in at(a))) for a in addresses)+'};\n')
-(r/'native/CLIENT-BUILD.json').write_text(json.dumps({'build':5875,'sha256':hashlib.sha256(b).hexdigest(),'image_base':base,'functions':[hex(a) for a in addresses]},indent=2))
+# Cape support is independently gated; a changed graphics hook must not disable
+# wardrobe features that do not use this optional renderer.
+cape_addresses=[0x70cb30,0x58a830,0x58a7c0,0x58a160,0x589f80,0x594550,0x58a1a0,0x58a080,0x58a0a0,0x6721b0,0x646430,0x71a460,0x71a720,0x71a9e0]
+(r/'native/CapeBuildSignatures.h').write_text('// Optional cape renderer, verified only for the executable in CLIENT-BUILD.json.\n#pragma once\n#include "BuildSignatures.h"\nstatic const BuildSignature capeSignatures[] = {\n'+''.join('{0x%x,{%s}},\n'%(a,','.join('0x%02x'%x for x in at(a))) for a in cape_addresses)+'};\n')
+(r/'native/CLIENT-BUILD.json').write_text(json.dumps({'build':5875,'sha256':hashlib.sha256(b).hexdigest(),'image_base':base,'functions':[hex(a) for a in addresses],'optional_cape_functions':[hex(a) for a in cape_addresses]},indent=2))

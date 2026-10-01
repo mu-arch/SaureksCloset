@@ -74,7 +74,7 @@ local function click(frame)
     script(frame,"OnClick")
 end
 local syncs=0
-for _,name in ipairs({"CreateArmorPage","CreateBodyPage","CreateWeaponryPage","CreateBagsPage","CreateExposurePage","CreateSettingsPage","CreateBrowser","CreateOutfitDetails","CreateWardrobeSelector","InvalidatePreviewModel","RefreshOutfitDetails","CloseOutfitMenu","CloseOutfitDetails","CloseBrowser","CloseBagModelPicker","CloseWeaponOptions","DiscardBagDrafts"}) do V[name]=noop end
+for _,name in ipairs({"CreateArmorPage","CreateBodyPage","CreateWeaponryPage","CreateBagsPage","CreateExposurePage","CreatePhysicsPage","CreateSettingsPage","CreateBrowser","CreateOutfitDetails","CreateWardrobeSelector","InvalidatePreviewModel","RefreshOutfitDetails","CloseOutfitMenu","CloseOutfitDetails","CloseBrowser","CloseBagModelPicker","CloseWeaponOptions","DiscardBagDrafts"}) do V[name]=noop end
 function V:NativeBody() return {race=1,sex=0} end
 function V:NormalizeBody(body) return copy(body) end
 function V:BodyAvailable() return true end

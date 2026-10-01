@@ -2,7 +2,9 @@ function UnitRace() return "Human", "Human" end
 function UnitSex() return 2 end
 local playerLevel=15
 local playerDeadOrGhost=false
+local playerGhost=false
 function UnitIsDeadOrGhost(unit) return unit=="player" and playerDeadOrGhost end
+function UnitIsGhost(unit) return unit=="player" and playerGhost end
 function UnitLevel(unit) if unit=="player" then return playerLevel end end
 -- Run with the actual Lua 5.0.3 interpreter, from the VanityStudio directory.
 local passed = 0
@@ -17,6 +19,7 @@ for _,name in ipairs({"SetFont","SetTextColor","SetJustifyH","SetBackdrop","SetB
 function methods:SetFont(path,size) self.fontPath=path;self.fontSize=size end
 function methods:RegisterEvent(name) self.events=self.events or {};self.events[name]=true end
 function methods:SetJustifyV(v) self.justifyV=v end
+function methods:SetSpacing(v) self.spacing=v end
 function methods:SetAlpha(v) self.alpha=v end
 function methods:SetBlendMode(v) self.blend=v end
 function methods:SetWidth(v) self.width=v end
@@ -55,7 +58,10 @@ function methods:GetEffectiveScale() return 1 end
 function SetPortraitToTexture(texture,path) texture.portrait=true;texture.portraitUpdates=(texture.portraitUpdates or 0)+1;texture:SetTexture(path) end
 function methods:GetText() return self.textValue or "" end
 function methods:GetTextWidth() return string.len(self:GetText())*6 end
-function methods:SetTexture(v) check(type(v)=="string","Texture must be a path") self.texture=v end
+function methods:SetTexture(v,g,b,a)
+    check(type(v)=="string" or (type(v)=="number" and type(g)=="number" and type(b)=="number" and (a==nil or type(a)=="number")),"Texture must be a path or a solid color")
+    self.texture=v
+end
 function methods:SetScript(name,func) self.scripts[name]=func end
 function methods:GetScript(name) return self.scripts[name] end
 function methods:Show()
@@ -91,6 +97,7 @@ function methods:IsShown() return self.shown end
 function methods:Disable() self.disabled=true end
 function methods:Enable() self.disabled=false end
 function methods:SetHyperlink(link) self.link=link end
+function methods:SetInventoryItem(unit,slot) return GetInventoryItemLink(unit,slot)~=nil,false,0 end
 function methods:SetFacing(v) self.facing=v end
 function methods:SetPosition(x,y,z) self.position={x,y,z} end
 function methods:SetUnit(unit)
@@ -100,7 +107,7 @@ function methods:Undress() self.tried={} end
 function methods:TryOn(link) check(type(link)=="string" and tonumber(link),"1.12 TryOn receives numeric ID string");table.insert(self.tried,link) end
 function CreateFrame(kind,name,parent,template)
     local f=setmetatable({kind=kind,name=name,parent=parent,template=template,scripts={},shown=true}, {__index=function(t,k)
-        if not methods[k] and string.find(k,"^[A-Z]") then error("Unexpected frame method: "..k) end
+        if not methods[k] and k~="UpdateBodyGlyph" and string.find(k,"^[A-Z]") then error("Unexpected frame method: "..k) end
         return methods[k]
     end})
     table.insert(frames,f); if name then _G[name]=f end
@@ -219,6 +226,7 @@ dofile("addon/SaureksCloset/ItemIcons.lua")
 dofile("addon/SaureksCloset/BodyData.lua")
 dofile("addon/SaureksCloset/WeaponData.lua")
 dofile("addon/SaureksCloset/Core.lua")
+dofile("addon/SaureksCloset/Physics.lua")
 dofile("addon/SaureksCloset/Updates.lua")
 dofile("addon/SaureksCloset/Weaponry.lua")
 dofile("addon/SaureksCloset/BagCatalog.lua")
@@ -350,7 +358,7 @@ local initialTabWidth=savedTab:GetWidth()
 for i=1,3 do savedTab:Hide();savedTab:Show() end
 check(savedTab:GetWidth()==initialTabWidth and getglobal(savedTab:GetName().."Text"):GetWidth()>=savedTab:GetTextWidth()+12,"Saved Looks retains full single-line text width and padding across repeated shows")
 click(V.wardrobeSelector)
-check(table.getn(menuEntries)==5 and menuEntries[5].text=="Exposure" and menuEntries[2].text=="Weaponry" and menuEntries[4].text=="Bags" and not menuEntries[1].isTitle and menuEntries[1].text=="Outfit" and menuEntries[1].checked and menuEntries[3].text=="Body","Wardrobe selector orders Outfit, Weaponry, Body, Bags, Exposure with the active choice checked")
+check(table.getn(menuEntries)==6 and menuEntries[6].text=="Physics" and menuEntries[5].text=="Exposure" and menuEntries[2].text=="Weaponry" and menuEntries[4].text=="Bags" and not menuEntries[1].isTitle and menuEntries[1].text=="Outfit" and menuEntries[1].checked and menuEntries[3].text=="Body","Wardrobe selector orders Outfit, Weaponry, Body, Bags, Exposure, Physics with the active choice checked")
 click(getglobal("DropDownList1Button3"))
 check(V.tab=="body" and V.pagesByName.body:IsVisible() and V.wardrobeSelectorLabel:GetText()=="Body" and not DropDownList1:IsShown(),"Race selection switches pages and closes the menu")
 click(V.tabButtons.outfits)

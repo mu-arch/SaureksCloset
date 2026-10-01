@@ -93,6 +93,7 @@ function V:Initialize()
     c.selected = c.selected or {}
     c.managed = c.managed or {}
     if c.enabled == nil then c.enabled = true end
+    if self.InitializePhysics then self:InitializePhysics() end
     c.useRaceVoice = nil -- Voice now follows the active body automatically.
     for _,slot in ipairs(self.slotOrder) do self.slots[slot] = {} end
     for _,item in ipairs(VanityStudioCatalog) do
@@ -148,6 +149,7 @@ end
 
 function V:Sync()
     if not self.ready then return end
+    if self.SyncCapePhysics then self:SyncCapePhysics() end
     -- Appearance setters can synchronously emit model/inventory events.
     -- Those notifications must not schedule another recovery of our own work.
     self.syncingAppearance = true
@@ -825,6 +827,7 @@ V.events:SetScript("OnEvent", function()
         V:RefreshPortraits();V:RefreshPreviewForModelEvent()
     elseif V.ready and (event == "PLAYER_ENTERING_WORLD" or (event == "UNIT_INVENTORY_CHANGED" and arg1 == "player")) then
         if event == "PLAYER_ENTERING_WORLD" then
+            if V.SyncCapePhysics then V:SyncCapePhysics(true) end
             V:CheckArmorRepairs()
             V.appliedRace = nil;V.bagTunerSynced={};V:RefreshTrueBody();V:RefreshBody()
             V:RefreshPortraits();V:InvalidatePreviewModel(.25,true)
@@ -847,6 +850,8 @@ V.events:SetScript("OnUpdate", function()
     elapsed = elapsed + arg1
     if elapsed < .5 then return end
     elapsed = 0
+    if V.SyncCapePhysics then V:SyncCapePhysics() end
+    if V.pagesByName and V.pagesByName.physics and V.pagesByName.physics:IsVisible() then V:RefreshPhysicsPage() end
     if V.armorRepairCheckPending then
         V.armorRepairCheckPending=nil
         V:CheckArmorRepairs()
