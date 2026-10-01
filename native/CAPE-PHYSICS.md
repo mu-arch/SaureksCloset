@@ -41,12 +41,15 @@ of skinning and traversing the full body mesh. The body uses at most 32 boxes,
 each attachment at most four, with at most 64 relevant boxes in the solver.
 
 Solid contacts use whole-triangle separating-axis checks and supporting-plane
-projection. Previously separated sides are retained during crossings; the
-player's back direction comes from `model+0xFC`, independent of root-bone
-animation. Seam targets are cleared before spring solves. Final projection and
+projection. Runtime contacts share one continuous rear supporting direction, avoiding
+opposing local box-face corrections. The player's back direction comes from
+`model+0xFC`, independent of root-bone animation. Positional collision correction
+is not added to velocity. Stronger damping, a lower speed limit and a 0.30-unit
+rest-frame excursion limit restrain free flight; body clearance has final priority. Seam targets are cleared before spring solves. Final projection and
 validation run after all constraints and pin updates, including zero-tick frames
-and resets. An unresolved hard-bound frame is not submitted as ordinary native
-cloth. Conservative bounds can hold the cloth slightly outside the rendered
+and resets. If iterative contacts exhaust their budget, the current cloth is cleared
+behind a common supporting plane instead of dropping the cape draw. Slow frames
+discard excess catch-up time without resetting the pose. Conservative bounds can hold the cloth slightly outside the rendered
 skin; they approximate the body rather than matching every surface crease.
 
 Immutable mesh arrays and prepared GPU bytes are cached. Only visibility,
@@ -114,8 +117,9 @@ whose default-buffer check itself mutates that shared temporary descriptor.
 - Teleports, model changes and long frame gaps reset the simulation. Invalid
   geometry and unsupported draw batches use the original cape. Physics work
   limits first recover to a pose projected outside the body. A frame rejected
-  by the final hard-bound validation is skipped, never replaced with an unchecked
-  animated pose; the next frame retries.
+  by iterative contacts is cleared against a common rear support plane. Truly
+  invalid bounds cannot be rendered as valid physics; unsupported data still
+  needs in-game diagnosis.
 - Collision work, cape size, attachment traversal and query bounds are bounded.
   This is a one-player simulation, not scene-wide cloth on every character.
 - World collisions follow the client's collision mesh, which can differ from
@@ -160,3 +164,10 @@ Initial engine navigation references:
 and [model research](https://github.com/samwhosung/wow-1121-client-internals/blob/main/docs/models.md).
 Function addresses and calling conventions above were independently checked
 against the supported local executable.
+
+Stability regressions cover collision corrections without launch impulses,
+overlapping bounds, continuous drawing on budget exhaustion, bounded motion,
+and slow frames without authored-pose resets. An offline sequence of root turns,
+translations, vertical movement and frame stalls exercised 240 actual-model
+render paths for 120 updates each. This does not reproduce live limb animations
+or establish that all in-game scenery clipping is eliminated.

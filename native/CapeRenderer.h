@@ -110,7 +110,7 @@ struct CapeState {
     bool frameValid=false;
     std::vector<unsigned> sections,source,nodeForLookup;
     std::vector<cape::Triangle> triangles;
-    std::vector<cape::Vec3> rest,animated,normals;
+    std::vector<cape::Vec3> rest,animated,normals,reference;
     std::vector<std::uint32_t> pins;
     cape::BodyBounds bodyBounds;
     std::vector<std::uint32_t> boundsVisibility;
@@ -324,10 +324,10 @@ static bool capePoseBounds(CapeState& s,cape::BodyBounds& fitted,const CapeMesh&
     std::vector<cape::ColliderBox> boxes;
     if(!fitted.pose(mesh.bones,s.renderToWorld,boxes,reset))return false;
     for(unsigned index=0;index<boxes.size();++index){auto& box=boxes[index];
-        // The torso keeps cloth behind the player. Off-center arm/leg bounds
-        // choose their nearest safe side instead of forcing a large backshift.
-        if(body&&fitted.central(index))box.preferredDirection=s.backDirection;
-        if(!capeBoundsOverlap(box,low,high))continue;
+        // All contacts share a continuous rear direction; opposing local
+        // box faces must not pump the cape between incompatible corrections.
+        box.preferredDirection=s.backDirection;
+        if(!body&&!capeBoundsOverlap(box,low,high))continue;
         if(s.bounds.size()>=64)return false;
         s.bounds.push_back(box);
     }
@@ -365,9 +365,12 @@ static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
     s.backDirection=capeNormal(capeTransform(s.renderToWorld,capeTransform(modelToRender,{-1,0,0},true),true));
     if(rebuild&&!capeBuildTopology(s))return false;
     if(!capeAnimate(s)||s.animated.empty())return false;
+    s.reference.resize(s.source.size());
+    for(unsigned i=0;i<s.source.size();++i)s.reference[i]=capeTransform(s.renderToWorld,capeTransform(modelToRender,s.mesh.vertices[s.source[i]].position));
     cape::Config config;
     config.fixedStep=1.f/60.f;config.maxSubsteps=3;config.iterations=4;
     config.maxContactSamples=0;config.selfCollision=false;config.maxColliderTriangles=128;
+    config.damping=9.f;config.maxSpeed=3.f;config.stableBounds=true;config.poseLimit=.30f;
     config.maxCollisionTests=6000;config.maxColliderBoxes=64;config.maxBoundTests=100000;
     if(rebuild&&!s.cloth.initialize(s.animated,s.triangles,s.pins,config))return false;
     bool resetPose=false;
@@ -418,9 +421,9 @@ static bool capeUpdate(CapeState& s,std::uintptr_t model,std::uint64_t guid){
     // limits stay active independently of that optional detailed contact.
     if(!capeRefreshWorld(s,low,high,now))s.worldSurfaces.clear();
     const float elapsed=rebuild||resetPose?0.f:static_cast<std::uint32_t>(now-s.updated)*.001f;s.updated=now;
-    if(!s.cloth.step(elapsed,s.animated,s.worldSurfaces,s.bounds)){
+    if(!s.cloth.step(elapsed,s.animated,s.worldSurfaces,s.bounds,s.reference)){
         s.cloth.reset(s.animated);
-        if(!s.cloth.step(0,s.animated,{},s.bounds))return false;
+        if(!s.cloth.step(0,s.animated,{},s.bounds,s.reference))return false;
     }
     s.normals.assign(s.source.size(),{});const auto& positions=s.cloth.positions();
     for(const auto& t:s.triangles){

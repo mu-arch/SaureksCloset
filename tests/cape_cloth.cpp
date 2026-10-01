@@ -177,6 +177,33 @@ static void solidBoundsResetValidationAndBudget(){
     config.maxColliderTriangles=8192;config.maxCollisionTests=400000;assert(cloth.initialize(pose,faces,{0},config));auto conflict=solidBox({0,0,.1f},{.2f,.2f,.2f});conflict.preferredDirection={0,0,-1};auto deep=solidBox({},{.2f,.2f,.2f});deep.preferredDirection={0,0,1};assert(!cloth.step(0,pose,{}, {deep,conflict}));assert(cloth.stats().boundsRejected);
     config.maxBoundTests=1;assert(cloth.initialize(pose,faces,{0},config));assert(!cloth.step(0,pose,{}, {box}));assert(cloth.stats().budgetExceeded&&cloth.stats().boundsRejected&&cloth.stats().boundTests==1);
 }
+static void contactCorrectionDoesNotLaunch(){
+    const std::vector<Vec3> pose={{-.5f,-.5f,0},{.5f,-.5f,0},{0,.5f,0}};
+    const std::vector<Triangle> faces={{0,1,2}};auto config=unconstrained();config.fixedStep=1.f/60;
+    cape::Cloth cloth;assert(cloth.initialize(pose,faces,{0},config));auto box=solidBox();box.preferredDirection={0,0,1};
+    assert(cloth.step(0,pose,{}, {box}));const auto cleared=cloth.positions();
+    for(unsigned frame=0;frame<60;++frame)assert(cloth.step(1.f/60,pose,{}));
+    // A positional clearance correction is not a launch impulse once the
+    // obstruction disappears. This failed with the old correction/h velocity.
+    for(unsigned i=1;i<pose.size();++i)assert(cape::length(cloth.positions()[i]-cleared[i])<.001f);
+}
+static void stableOverlapsAndMotion(){
+    auto mesh=grid(5,7,0);auto config=unconstrained();config.fixedStep=1.f/60;config.stableBounds=true;
+    config.damping=9;config.maxSpeed=3;config.poseLimit=.3f;config.maxSubsteps=3;
+    cape::Cloth cloth;assert(cloth.initialize(mesh.vertices,mesh.triangles,mesh.pins,config));
+    auto a=solidBox({0,.3f,0},{.3f,.5f,.1f}),b=solidBox({.1f,.3f,.05f},{.3f,.5f,.1f});
+    a.preferredDirection=b.preferredDirection={0,0,1};
+    for(unsigned frame=0;frame<240;++frame){auto pose=mesh.vertices;
+        const float t=frame/60.f;for(auto& p:pose){p.x+=std::sin(t*3)*.12f;p.z+=std::max(0.f,std::sin(t*2))*.15f;}
+        assert(cloth.step(frame%23==0?.08f:1.f/60,pose,{}, {a,b},pose));
+        assert(!cloth.stats().reset); // Slow frames drop catch-up time, not the current pose.
+        assertFacesClear(cloth,mesh.triangles,a);assertFacesClear(cloth,mesh.triangles,b);
+        for(unsigned i=0;i<pose.size();++i)assert(cape::length(cloth.positions()[i]-pose[i])<.5f);
+    }
+    config.maxBoundTests=0;assert(cloth.initialize(mesh.vertices,mesh.triangles,mesh.pins,config));
+    assert(cloth.step(0,mesh.vertices,{}, {a,b},mesh.vertices));
+    assert(!cloth.stats().boundsRejected);assertFacesClear(cloth,mesh.triangles,a);assertFacesClear(cloth,mesh.triangles,b);
+}
 static void solidBoundsCost(){
     const auto mesh=grid(9,13,.03f);cape::Config bounded;bounded.fixedStep=1.f/60;bounded.maxSubsteps=4;bounded.iterations=4;bounded.selfCollision=false;bounded.maxContactSamples=0;
     cape::Cloth fast;assert(fast.initialize(mesh.vertices,mesh.triangles,mesh.pins,bounded));const auto box=solidBox({0,0,-.5f},{4,4,.5f});
@@ -190,4 +217,4 @@ static void solidBoundsCost(){
     const auto end=std::chrono::steady_clock::now();
     std::printf("solid bound benchmark: %.3f ms/frame, %u exact bound tests/frame; legacy 2048-surface sample path %.3f ms/frame\n",std::chrono::duration<double,std::milli>(fastEnd-begin).count()/90,tests/90,std::chrono::duration<double,std::milli>(end-oldBegin).count()/90);
 }
-int main(){hangingAndTopology();movingPinsAndInertia();frameRates();staticCollision();sweptAndTwoSidedCollision();movingCollider();sparseEdgeCollision();sparseFaceCollision();wallFloorCorner();rotatingTriangle();substepColliderAndDegeneracy();validationAndReset();wholeFaceBoundsAndPinnedSeam();movingAndRotatingSolidBounds();solidBoundsResetValidationAndBudget();solidBoundsCost();std::puts("cape cloth tests passed");}
+int main(){hangingAndTopology();movingPinsAndInertia();frameRates();staticCollision();sweptAndTwoSidedCollision();movingCollider();sparseEdgeCollision();sparseFaceCollision();wallFloorCorner();rotatingTriangle();substepColliderAndDegeneracy();validationAndReset();wholeFaceBoundsAndPinnedSeam();movingAndRotatingSolidBounds();solidBoundsResetValidationAndBudget();contactCorrectionDoesNotLaunch();stableOverlapsAndMotion();solidBoundsCost();std::puts("cape cloth tests passed");}

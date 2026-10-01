@@ -232,11 +232,12 @@ static void firmBodyFrame(){
     const unsigned copies=geometryReads;
     for(unsigned frame=0;frame<30;++frame){now+=17;assert(capeWriteDraw(0x90000,nullptr,1));for(const auto& point:capeState.cloth.positions())assert(point.x<-.117f);}
     assert(geometryReads==copies);
-    // An unsatisfied hard limit must never fall through to the unchecked
-    // original cape submission, including after the zero-time safety retry.
+    // Even budget exhaustion must draw a cleared cape, not skip a material
+    // and flicker or fall through to the unchecked original cape.
     const_cast<cape::Config&>(capeState.cloth.config()).maxBoundTests=0;now+=17;
     const unsigned before=submits;capeSubmitHook(nullptr,1);
-    assert(capeStatus()==3&&submits==before&&capeState.cloth.stats().boundsRejected);
+    assert(capeStatus()==2&&submits==before+1&&!capeState.cloth.stats().boundsRejected);
+    for(const auto& point:capeState.cloth.positions())assert(point.x<-.117f);
     capeSetEnabled(false);
 }
 static void disconnectedCollar(){
