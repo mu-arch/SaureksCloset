@@ -144,6 +144,57 @@ static void invalidRetry(){
     player.model=0xb0000;assert(!capeWriteDraw(0x90000,nullptr,1));
     capeSetEnabled(false);
 }
+static void optimizedDraw(bool gpu,unsigned cpuFormat=3){
+    fixture(gpu);CapeMesh mesh;assert(capeReadMesh(player.model,mesh));
+    if(!gpu)capeBindHook(&nativeBuffer,cpuFormat);
+    std::vector<CapeSourceVertex> vertices(18);std::vector<std::uint16_t> lookup(18);
+    for(unsigned i=0;i<18;++i){lookup[i]=gpu?17-i:i;auto& vertex=vertices[lookup[i]];
+        vertex.weights[0]=255;vertex.normal={1,0,0};vertex.position={5,float(i%3),float(i%2)};vertex.uv[0]=float(i)/18;
+    }
+    for(unsigned start:{3u,12u})for(unsigned i=0;i<6;++i){auto& vertex=vertices[lookup[start+i]];
+        vertex=mesh.vertices[capeSource(mesh,i)];vertex.position.x=start==3?0:.1f;vertex.uv[0]=float(start+i)/18;
+    }
+    std::vector<CapeSection> sections(4);sections[0].geoset=0;sections[0].count=3;sections[0].triangleCount=3;
+    sections[1]=mesh.sections[0];sections[1].first=3;sections[1].triangleFirst=3;
+    sections[2]=sections[0];sections[2].first=9;sections[2].triangleFirst=15;
+    sections[3]=mesh.sections[0];sections[3].first=12;sections[3].triangleFirst=18;
+    std::vector<std::uint16_t> triangles{0,1,2};
+    for(auto i:mesh.triangles)triangles.push_back(i+3);
+    triangles.insert(triangles.end(),{9,10,11});for(auto i:mesh.triangles)triangles.push_back(i+12);
+    std::vector<CapeTextureUnit> units(4,mesh.units[0]);for(unsigned i=0;i<4;++i)units[i].value[2]=i;
+    array(0x30000+0x44,0x50000,vertices);array(0x40000,0x60000,lookup);
+    array(0x40000+8,0x61000,triangles);array(0x40000+16,0x62000,std::vector<std::uint32_t>(18));
+    array(0x40000+24,0x63000,sections);array(0x40000+32,0x64000,units);
+    const std::array<unsigned,4> visible{{1,1,0,1}};put(0x81000,visible);
+    // Reproduce 711230's compact ID rewrite and CPU first=0 rebase. Source
+    // range [1,3] crosses a hidden noncape section, which native skips.
+    auto copied=sections[1];copied.geoset=1;copied.first=gpu?3:0;copied.count=gpu?15:12;copied.triangleCount=24;
+    std::vector<CapeTextureUnit> compactUnits{units[0],units[1]};
+    std::vector<CapeSection> compactSections{sections[0],copied};
+    array(0x10000+0x3e8,0x87000,compactUnits); // Set exact native pointer/count field order below.
+    put(0x10000+0x3ec,std::uintptr_t(0x87000));put(0x10000+0x3f0,2u);
+    array(0x10000+0x3f0,0x88000,compactSections);
+    put(0x10000+0x3f4,std::uintptr_t(0x88000));put(0x10000+0x3f8,2u);
+    put(0x10000+0x3fc,std::uintptr_t(0x89000));put(0x89000+8,std::array<unsigned,2>{{1,3}});
+    put(0xa0000+0x2c,std::uintptr_t(0x87000+24));put(0xa0000+0x30,std::uintptr_t(0x88000+32));put(0xa0000+0x34,1u);
+    const auto pristine=memory;const unsigned before=submits;
+    capeSubmitHook(nullptr,1);assert(capeStatus()==2&&submits==before+1);
+    const unsigned stride=gpu?48:cpuFormat==5?40:32;const unsigned a=gpu?3:0,b=gpu?12:6;
+    assert(std::fabs(outputPoint(a,stride).z-2)<1e-5f&&std::fabs(outputPoint(b,stride).z-2)<1e-5f);
+    for(unsigned j=0;j<12;++j){const unsigned original=(j<6?3:12)+j%6;float uv=0;
+        std::memcpy(&uv,submitted.data()+stride*(gpu?original:j)+(gpu?32:24),4);assert(uv==float(original)/18);
+    }
+    now+=17;capeSubmitHook(nullptr,1);assert(capeStatus()==2);
+    assert(outputPoint(a+4,stride).z<0&&outputPoint(b+4,stride).z<0);
+    assert(memory==pristine&&bound==&nativeBuffer);
+    // A visible noncape member must keep the untouched native batch and
+    // explicitly report unsupported; a stale group ID must do the same.
+    put(0x81000,std::array<unsigned,4>{{1,1,1,1}});now+=17;const unsigned rejected=submits;
+    capeSubmitHook(nullptr,1);assert(capeStatus()==3&&submits==rejected+1&&bound==&nativeBuffer);
+    put(0x81000,visible);put(0x89000+8,std::array<unsigned,2>{{1,99}});
+    capeSubmitHook(nullptr,1);assert(capeStatus()==3&&bound==&nativeBuffer);
+    capeSetEnabled(false);
+}
 static void sweptEquipment(){
     CapeState state;state.model=1;state.renderToWorld=identity;
     CapeMesh mesh;mesh.model=2;mesh.header=3;mesh.view=4;mesh.lookup={0,1,2};mesh.triangles={0,1,2};mesh.vertices.resize(3);mesh.visible={1};mesh.capeSections={false};mesh.bones={identity};
@@ -172,4 +223,4 @@ static void disconnectedCollar(){
     assert(capeBuildTopology(state));
     for(unsigned i=6;i<9;++i)assert(std::find(state.pins.begin(),state.pins.end(),i)!=state.pins.end());
 }
-int main(){drawAndCheck(true);drawAndCheck(false);invalidRetry();sweptEquipment();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: GPU/CPU private output, binding restore, failure retry, swept equipment, LOD invalidation, collar attachment and tail exclusion passed\n";}
+int main(){optimizedDraw(true);optimizedDraw(false);optimizedDraw(false,5);drawAndCheck(true);drawAndCheck(false);invalidRetry();sweptEquipment();disconnectedCollar();capeReset();assert(worldClears>0&&pools==0&&releases>=3);std::cout<<"cape renderer: optimized GPU/CPU groups, UV/rebased indices, private output, binding restore, failure retry, swept equipment, LOD invalidation, collar attachment and tail exclusion passed\n";}

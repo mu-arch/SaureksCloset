@@ -372,6 +372,21 @@ static int __fastcall resetCapePhysicsLua(void* L){
     capeReset();return result(L,1);
 }
 static int __fastcall capePhysicsStatusLua(void* L){return result(L,capeBridgeReady?capeStatus():3);}
+static int __fastcall inspectCapePhysicsLua(void* L){
+    Player player;CapeMesh mesh;
+    const bool hasPlayer=capeBridgeReady&&snapshot(player)&&player.model;
+    const bool readable=hasPlayer&&capeReadMesh(player.model,mesh);
+    unsigned visible=0,groups=0;
+    if(readable)for(unsigned i=0;i<mesh.sections.size();++i)if(mesh.visible[i]&&mesh.capeSections[i])++visible;
+    if(hasPlayer)read(player.model+0x3F8,groups);
+    const auto stats=capeState.cloth.stats();
+    const double values[]={1,double(capeBridgeReady),double(capeEnabled),double(capeBridgeReady?capeStatus():3),
+        double(hasPlayer),double(readable),double(visible),double(capeState.cloth.ready()),
+        double(capeState.source.size()),double(capeState.triangles.size()),double(mesh.gpu),double(groups),
+        double(stats.contacts),double(stats.budgetExceeded)};
+    for(double value:values)pushNumber(L,value);
+    return sizeof(values)/sizeof(values[0]);
+}
 static int __fastcall version(void* L){return result(L,40011);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
@@ -393,6 +408,7 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
         registerOriginal("SaureksClosetSetCapePhysics",reinterpret_cast<std::uintptr_t>(&setCapePhysicsLua));
         registerOriginal("SaureksClosetResetCapePhysics",reinterpret_cast<std::uintptr_t>(&resetCapePhysicsLua));
         registerOriginal("SaureksClosetCapePhysicsStatus",reinterpret_cast<std::uintptr_t>(&capePhysicsStatusLua));
+        registerOriginal("SaureksClosetInspectCapePhysics",reinterpret_cast<std::uintptr_t>(&inspectCapePhysicsLua));
         registerOriginal("SaureksClosetSetBagInstanceFit",reinterpret_cast<std::uintptr_t>(&setBagInstanceFit));
         registerOriginal("SaureksClosetWeaponryProbe",reinterpret_cast<std::uintptr_t>(&weaponryProbe));
         registerOriginal("SaureksClosetSetUpdateChecks",reinterpret_cast<std::uintptr_t>(&setUpdateChecks));

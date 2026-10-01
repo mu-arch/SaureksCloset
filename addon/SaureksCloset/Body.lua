@@ -150,6 +150,12 @@ function V:Diagnose()
         for i=1,table.getn(result) do result[i]=tostring(result[i]) end
         table.insert(lines,"Renderer inspection: "..table.concat(result,","))
     end
+    if type(SaureksClosetInspectCapePhysics)=="function" then
+        table.insert(lines,"Cape fields: ok,schema,bridge,enabled,status,player,mesh readable,visible cape sections,simulation ready,vertices,triangles,GPU,optimized groups,contacts,budget exceeded")
+        local details={pcall(SaureksClosetInspectCapePhysics)}
+        for i=1,table.getn(details) do details[i]=tostring(details[i]) end
+        table.insert(lines,"Cape inspection: "..table.concat(details,","))
+    end
     if type(SaureksClosetInspectPreview)=="function" then
         table.insert(lines,"Preview fields: ok,status,copied appearance,race,sex,skin,face,hair style,hair color,facial,dirty textures")
         for _,name in ipairs({"model","previewBuffer","outfitModel","outfitBuffer"}) do

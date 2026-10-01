@@ -16,6 +16,15 @@ welded for simulation and mapped back to the original draw vertices. The top
 seam and short collar sections follow the animated skeleton; free vertices are
 not pulled toward a prerecorded cape animation.
 
+Native optimized draw sections do not retain their authored geoset IDs. The
+client copies texture units/sections into `model+0x3EC`/`model+0x3F4` and replaces
+section IDs with compact group numbers. `model+0x3FC` maps each group to an
+inclusive range of original texture units. Cape detection resolves that range
+before checking original cape materials and visibility. GPU indices retain
+their view positions; CPU batches concatenate the visible original sections
+and rebase their indices. Simulation vertices are mapped to those draw spans.
+This path is regression-tested separately from parsing the original M2 files.
+
 `CapeCloth.h` integrates world-space gravity and inertia with a fixed 120 Hz
 step, compliant edge-length and triangle-area constraints, and approximate
 bending constraints across adjacent triangles. Free motion therefore reacts to
@@ -75,6 +84,12 @@ whose default-buffer check itself mutates that shared temporary descriptor.
   1 on acceptance, 0 if unavailable or invalid.
 - `SaureksClosetCapePhysicsStatus()` returns 0 disabled, 1 waiting for a visible
   cape, 2 active, or 3 unavailable for the current model/rendering path.
+- `/closet diagnose` includes `SaureksClosetInspectCapePhysics()` output:
+  schema, bridge ready, enabled, status, player available, mesh readable,
+  visible authored cape sections, simulation ready, vertex and triangle counts,
+  GPU mode, optimized group count, contact count, and collision-budget status.
+  These counts distinguish a genuinely hidden cape from a render-path problem;
+  the report contains no native pointers or player identifiers.
 - Teleports, model changes and long frame gaps reset the simulation. Invalid
   geometry, unsupported batches or exceeded work limits use the original cape
   draw instead of publishing partial or non-finite cloth state.
@@ -102,8 +117,11 @@ variants (eight races, both sexes, five lengths), using the real renderer's mesh
 selection, topology and skin weights, then 120 solver steps for each. It found
 and fixed disconnected short-cape collar pieces on Tauren females. All variants
 then passed with matching CPU/GPU topology and no orphan vertices, duplicate or
-degenerate triangles, or unanchored components. Raw game assets are not included
-in the repository.
+degenerate triangles, or unanchored components. A separate reconstruction of the
+client's optimized batches exercised all 80 variants in GPU and CPU mode (160
+paths, 320 draws), verifying output triangle indices, UVs and binding restoration.
+This reproduces native descriptors offline; it is not a live-frame capture. Raw
+game assets are not included in the repository.
 
 Initial engine navigation references:
 [client collision research](https://github.com/samwhosung/wow-1121-client-internals)

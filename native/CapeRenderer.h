@@ -12,6 +12,8 @@
 // The source MD20 and its GPU buffer are shared. Only a temporary draw buffer
 // is changed; the exact native binding is restored before returning to CM2.
 using CapeBatchDraw=void (__thiscall *)(void*);
+// 58A830 submits one primitive descriptor; EDX is the indexed-draw flag.
+// 58A810 passes it as argument 3; D3D 5A1042 chooses indexed/nonindexed.
 using CapeSubmit=void (__fastcall *)(const void*,unsigned);
 using CapeBind=void (__fastcall *)(void*,unsigned);
 using CapeCreatePool=void* (__fastcall *)(unsigned,unsigned,unsigned,unsigned,const char*);
@@ -401,7 +403,49 @@ static void capeForgetModel(std::uintptr_t model){
 static void __fastcall capeBindHook(void* buffer,unsigned format){
     capeBindOriginal(buffer,format);capeBoundBuffer=buffer;capeBoundFormat=format;
 }
-static bool capeWriteDraw(std::uintptr_t renderer,const void* description,unsigned count){
+struct CapeDrawSpan {unsigned section=0,output=0;};
+static bool capeDrawSpans(const CapeMesh& mesh,const CapeTextureUnit& unit,const CapeSection& section,
+                          std::uintptr_t unitAddress,std::uintptr_t sectionAddress,unsigned optimized,
+                          std::vector<CapeDrawSpan>& spans){
+    spans.clear();unsigned firstUnit=0,lastUnit=0;
+    if(optimized){
+        // 707A1E/707C8C: batch+34 is model+404 != 0. 711230 replaces
+        // section.geoset and unit.section with a compact group index. The
+        // inclusive range at model+3FC refers to ORIGINAL texture units.
+        std::uintptr_t units=0,sections=0,ranges=0;unsigned unitCount=0,sectionCount=0;
+        const unsigned group=unit.value[2];
+        if(optimized!=1||section.geoset!=group||!read(mesh.model+0x3ec,units)||!units||
+           !read(mesh.model+0x3f0,unitCount)||unitCount>2048||group>=unitCount||
+           !read(mesh.model+0x3f4,sections)||!sections||!read(mesh.model+0x3f8,sectionCount)||
+           sectionCount>2048||group>=sectionCount||unitAddress!=units+24*group||sectionAddress!=sections+32*group||
+           !read(mesh.model+0x3fc,ranges)||!ranges||!read(ranges+8*group,firstUnit)||
+           !read(ranges+8*group+4,lastUnit)||firstUnit>lastUnit||lastUnit>=mesh.units.size())return false;
+    }else{
+        const unsigned index=unit.value[2];
+        if(index>=mesh.sections.size()||!mesh.visible[index]||!mesh.capeSections[index])return false;
+        const auto& source=mesh.sections[index];
+        if(section.geoset!=source.geoset||section.first!=source.first||section.count!=source.count||
+           section.triangleCount!=source.triangleCount)return false;
+        spans.push_back({index,0});return source.count!=0;
+    }
+    unsigned vertices=0,triangles=0,low=65536,high=0;
+    for(unsigned i=firstUnit;i<=lastUnit;++i){
+        const auto& sourceUnit=mesh.units[i];const unsigned index=sourceUnit.value[2];
+        if(index>=mesh.sections.size())return false;
+        if(!mesh.visible[index])continue;
+        const auto& source=mesh.sections[index];
+        // A group containing other visible geometry cannot be replaced by a
+        // cape-only buffer. Hidden units inside the range are skipped exactly
+        // as 719930 (indices) and 719B20 (CPU vertices) skip them.
+        if(!mesh.capeSections[index]||!capeDrawIsCape(mesh.model,sourceUnit)||!source.count)return false;
+        spans.push_back({index,vertices});vertices+=source.count;triangles+=source.triangleCount;
+        low=std::min(low,static_cast<unsigned>(source.first));
+        high=std::max(high,static_cast<unsigned>(source.first)+source.count);
+    }
+    return !spans.empty()&&triangles==section.triangleCount&&
+           (mesh.gpu?(section.first==low&&section.count==high-low):(section.first==0&&section.count==vertices));
+}
+static bool capeWriteDraw(std::uintptr_t renderer,const void* description,unsigned indexed){
     std::uintptr_t model=0,batch=0,drawSection=0,unit=0;unsigned gpu=0,merged=0;
     if(!read(renderer+0x3310,model)||!read(renderer+0x3300,batch)||!batch||
        !read(batch+0x30,drawSection)||!drawSection||!read(batch+0x2c,unit)||!unit||
@@ -409,14 +453,12 @@ static bool capeWriteDraw(std::uintptr_t renderer,const void* description,unsign
     Player player;if(!snapshot(player)||player.model!=model||!player.guid)return false;
     CapeTextureUnit textureUnit;CapeSection section;
     if(!read(unit,textureUnit)||!read(drawSection,section))return false;
-    if(section.geoset<1500||section.geoset>=1600||!capeDrawIsCape(model,textureUnit))return false;
+    if((!merged&&(section.geoset<1500||section.geoset>=1600))||!capeDrawIsCape(model,textureUnit))return false;
     capeRuntimeStatus=3;
-    if(count!=1||!capeBoundBuffer||merged)return false;
+    if(indexed!=1||!capeBoundBuffer)return false;
     if(!capeUpdate(capeState,model,player.guid))return false;
-    auto& s=capeState;const unsigned sectionIndex=textureUnit.value[2];
-    if(sectionIndex>=s.mesh.sections.size()||!s.mesh.capeSections[sectionIndex]||!s.mesh.visible[sectionIndex])return false;
-    const auto& authored=s.mesh.sections[sectionIndex];
-    if(section.first!=authored.first||section.count!=authored.count||!section.count||section.count>2048)return false;
+    auto& s=capeState;std::vector<CapeDrawSpan> spans;
+    if(!capeDrawSpans(s.mesh,textureUnit,section,unit,drawSection,merged,spans)||!section.count||section.count>2048)return false;
     const unsigned stride=gpu?48:capeBoundFormat==5?40:32;
     unsigned vertices=section.count;
     if(gpu){unsigned copies=0;if(capeBoundFormat!=12||!s.mesh.gpu||!read(s.mesh.resource+0x15c,copies)||copies!=1||s.mesh.properties.size()!=s.mesh.lookup.size())return false;vertices=static_cast<unsigned>(s.mesh.lookup.size());}
@@ -433,9 +475,14 @@ static bool capeWriteDraw(std::uintptr_t renderer,const void* description,unsign
             if(!read(0xCF04C8,dispatch)||(dispatch!=0x71A720&&dispatch!=0x71A9E0))return false;
             skin=capeFunction<CapeSkin>(dispatch);
         }
-        skin(reinterpret_cast<void*>(model),reinterpret_cast<void*>(drawSection),data.data());
+        std::uintptr_t sourceSections=0;if(!read(s.mesh.view+28,sourceSections)||!sourceSections)return false;
+        // The optimized CPU index buffer concatenates each original section
+        // after subtracting its authored first vertex. Skin the same ordered
+        // spans so UVs and every node use that exact rebased index mapping.
+        for(const auto& span:spans)skin(reinterpret_cast<void*>(model),reinterpret_cast<void*>(sourceSections+32*span.section),data.data()+stride*span.output);
     }
-    for(unsigned i=section.first;i<static_cast<unsigned>(section.first)+section.count;++i){
+    for(const auto& span:spans){const auto& authored=s.mesh.sections[span.section];
+      for(unsigned offset=0;offset<authored.count;++offset){const unsigned i=authored.first+offset;
         if(i>=s.nodeForLookup.size())return false;
         const unsigned node=s.nodeForLookup[i];
         if(node>=s.cloth.positions().size())return false;
@@ -446,22 +493,23 @@ static bool capeWriteDraw(std::uintptr_t renderer,const void* description,unsign
             position=capeTransform(inverse,position);normal=capeNormal(capeTransform(inverse,normal,true));
         }
         if(!capeFinite(position)||!capeFinite(normal))return false;
-        unsigned char* output=data.data()+stride*(gpu?i:i-section.first);
+        unsigned char* output=data.data()+stride*(gpu?i:span.output+offset);
         std::memcpy(output,&position,12);std::memcpy(output+(gpu?20:12),&normal,12);
+      }
     }
-    void* buffer=capePrivateBuffer(stride,static_cast<unsigned>(s.mesh.lookup.size()));if(!buffer)return false;
+    void* buffer=capePrivateBuffer(stride,std::max(vertices,static_cast<unsigned>(s.mesh.lookup.size())));if(!buffer)return false;
     void* mapped=capeMap(buffer);if(!mapped)return false;
     std::memcpy(mapped,data.data(),data.size());capeUnmap(buffer,0);
     capeBindOriginal(buffer,capeBoundFormat);
-    capeSubmitOriginal(description,count);
+    capeSubmitOriginal(description,indexed);
     capeBindOriginal(capeBoundBuffer,capeBoundFormat);
     capeRuntimeStatus=2;capeLastDraw=bagClockMilliseconds();return true;
 }
-static void __fastcall capeSubmitHook(const void* description,unsigned count){
+static void __fastcall capeSubmitHook(const void* description,unsigned indexed){
     if(capeEnabled&&capeDrawScope){
-        if(capeWriteDraw(capeDrawScope,description,count))return;
+        if(capeWriteDraw(capeDrawScope,description,indexed))return;
     }
-    capeSubmitOriginal(description,count);
+    capeSubmitOriginal(description,indexed);
 }
 static void __fastcall capeDrawHook(void* renderer,void*){
     const auto previous=capeDrawScope;capeDrawScope=0;
