@@ -57,11 +57,21 @@ int main(){
     assert(bagModelMass(&mageweave)<1.01f);
     assert(bagModelMass(&ranger)>1.4f&&bagModelMass(&ranger)<1.6f);
     assert(bagModelMass(&broad)==2.f);
+    for(float size:{25.f,35.f,45.f}){
+        assert(bagModelMass(&broad,.45f*size/100.f)==1.f);
+        assert(bagModelMass(&ranger,.45f*size/100.f)==1.f);
+    }
+    float previousMass=1.f;
+    for(unsigned percent=45;percent<=125;++percent){
+        const float mass=bagModelMass(&broad,.45f*percent/100.f);
+        assert(mass>=previousMass&&mass-previousMass<.04f&&mass<=2.f);
+        previousMass=mass;
+    }
     const auto light=running(slim),heavy=running(ranger);
     assert(light.bob>.0001f&&light.angle>.0001f&&light.flop>.0001f);
     assert(heavy.bob<light.bob*.85f&&heavy.bob>light.bob*.25f);
     assert(heavy.angle<light.angle*.85f&&heavy.angle>light.angle*.2f);
     assert(heavy.flop<light.flop*.9f&&heavy.flop>0);
     assert(heavy.step<light.step*.9f);
-    std::cout<<"PASS: actual bag footprint adds mass without fitted-scale coupling; ranger gait is slower and restrained\n";
+    std::cout<<"PASS: authored footprint restrains full backpacks; compact fits retain light motion with a smooth mass transition\n";
 }

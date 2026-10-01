@@ -4,9 +4,14 @@
 #include "../native/BagPlacement.h"
 static const BagMatrix identity{{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};
 static void near(float a,float b,float e=.000004f){assert(std::isfinite(a)&&std::fabs(a-b)<e);}
-static float exercise(float percent,float yaw,unsigned dt,float amplitude,bool running=true){
+static float exercise(float percent,float yaw,unsigned dt,float amplitude,bool running=true,bool broadModel=false){
     const float scale=.45f*percent/100,c=std::cos(yaw),s=std::sin(yaw);
-    const auto profile=bagResponseProfile("leather");
+    auto profile=bagResponseProfile("leather");
+    if(broadModel){
+        // Shipped Amber Traveler bounds, also used as a 35% waist bag.
+        profile.low={{-.6902362f,-.688162f,-.6195f}};
+        profile.high={{0,.688162f,.6195f}};profile.measuredBounds=true;
+    }
     std::array<BagTuningEntry,16> fits{};fits[1].enabled=true;fits[1].values.scale=percent;
     std::array<BagMotion,3> motions{};std::array<BagResponse,3> responses{};
     float peak=0,last=0,largestStep=0;
@@ -64,6 +69,14 @@ int main(){
         const float small=exercise(35,1.57f,dt,.0337f,false);
         const float large=exercise(85,1.57f,dt,.0337f,false);
         assert(small>4.f*.01745329252f&&small>large*1.15f);
+        for(bool running:{false,true})for(float size:{25.f,35.f,45.f}){
+            const float previous=exercise(size,-.925f,dt,.0337f,running);
+            const float compact=exercise(size,-.925f,dt,.0337f,running,true);
+            near(compact,previous); // Authored breadth must not suppress a compact fit.
+            assert(compact>4.f*.01745329252f);
+        }
+        const float fullBackpack=exercise(85,1.57f,dt,.0337f,false,true);
+        assert(fullBackpack>0&&fullBackpack<large*.6f);
     }
     near(exercise(35,1.57f,8,0,false),0);
     near(exercise(35,1.57f,8,0),0);

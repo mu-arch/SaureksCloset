@@ -33,14 +33,19 @@ static BagResponseProfile bagResponseProfile(const char* material,float bottom=-
     return profile;
 }
 // The model catalogue normalizes height, but not width or depth. Use the
-// authored footprint to distinguish a full backpack from a narrow pouch;
-// changing the user's fitted scale must not change its apparent weight.
-static float bagModelMass(const BagResponseProfile* profile){
+// authored footprint to distinguish a full backpack from a narrow pouch.
+// A broad model fitted as a compact waist bag must retain its light flap.
+// Fade only the extra backpack damping in across medium-to-full-size fits;
+// the existing size response still controls the base motion and travel.
+static float bagModelMass(const BagResponseProfile* profile,float fittedScale=.45f*.85f){
     if(!profile||!profile->measuredBounds)return 1.f;
     const float width=profile->high[1]-profile->low[1];
     const float depth=profile->high[0]-profile->low[0];
     if(!std::isfinite(width)||!std::isfinite(depth)||width<=0||depth<=0)return 1.f;
-    return 1.f+std::fmax(0.f,std::fmin(1.f,(width*depth-.52f)*3.f));
+    if(!std::isfinite(fittedScale)||fittedScale<=0)return 1.f;
+    const float sizeBlend=std::fmax(0.f,std::fmin(1.f,(fittedScale-.45f*.45f)/(.45f*.40f)));
+    const float weight=sizeBlend*sizeBlend*(3.f-2.f*sizeBlend);
+    return 1.f+std::fmax(0.f,std::fmin(1.f,(width*depth-.52f)*3.f))*weight;
 }
 struct BagResponseStep { float decay=1,dtDecay=0,driverBlend=0; };
 struct BagResponse {

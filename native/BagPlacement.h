@@ -119,7 +119,7 @@ static bool bagPlacement(const std::array<float,16>& renderedBack,const std::arr
         // lift. Local fabric controls are sampled from the unmodified mount
         // above, so this rigid secondary movement cannot feed back into itself.
         if(tuning.motion&&directionReady){
-            const float mass=bagModelMass(responseProfile);
+            const float mass=bagModelMass(responseProfile,size);
             const auto fitted=target;
             const float contactTop=responseProfile?responseProfile->top:.6195f;
             const float pivot=(fittedOverride||baseMount)?contactTop:mount.raisedOrigin;
