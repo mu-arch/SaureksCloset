@@ -36,7 +36,10 @@ function V:RefreshAnimationsPage()
         row.amount:SetText("Amplitude: "..self:BagPhysicsAmount(bag).."%")
         row.enable(row.toggle,bag and available)
         row.enable(row.reset,bag and available)
-        row.enable(row.slider,bag and available and bag.physics~=false)
+        -- Vanilla Slider inherits Frame, not Button; Enable/Disable are absent.
+        row.slider.closetEnabled=bag and available and bag.physics~=false and true or false
+        row.slider:EnableMouse(row.slider.closetEnabled)
+        row.slider:SetAlpha(row.slider.closetEnabled and 1 or .4)
     end
     self.animationEnable(self.bagAnimationDefault,available)
     self.animationEnable(self.capeAnimationDefault,available)
@@ -82,7 +85,7 @@ function V:CreateAnimationsPage(p,sheet,section,label,settingsButton,enable)
         for _,suffix in ipairs({"Low","High","Text"}) do local t=getglobal(row.slider:GetName()..suffix);if t then t:Hide() end end
         row.slider:SetScript("OnValueChanged",function()
             local amount=math.floor(this:GetValue()+.5);row.amount:SetText("Amplitude: "..amount.."%")
-            if not V.animationsRefreshing and row.bagID then V:SetBagPhysics(row.bagID,true,amount) end
+            if not V.animationsRefreshing and this.closetEnabled and row.bagID then V:SetBagPhysics(row.bagID,true,amount) end
         end)
         row.reset=section(row,232,29,66,22,true,"Button",.75)
         local caption=label(row.reset,"Default",3,2,60,18,true);caption:SetFont("Fonts\\FRIZQT__.TTF",10);caption:SetJustifyH("CENTER");caption:SetJustifyV("MIDDLE")

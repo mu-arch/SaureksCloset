@@ -10,6 +10,13 @@ local originalCreateFrame=CreateFrame
 function CreateFrame(kind,name,parent,template)
     local f=originalCreateFrame(kind,name,parent,template)
     if kind=='Slider' then
+        -- Vanilla sliders are Frames, not Buttons: no Enable/Disable methods.
+        local base=getmetatable(f).__index
+        setmetatable(f,{__index=function(_,key)
+            if key=='Enable' or key=='Disable' then return nil end
+            return base[key]
+        end})
+        function f:EnableMouse(on) self.mouseEnabled=on and true or false end
         function f:SetMinMaxValues(low,high) self.min=low;self.max=high end
         function f:SetValueStep(step) self.step=step end
         function f:GetValue() return self.value end
@@ -33,8 +40,12 @@ assert(V:SetBagPhysics(bag.id,false,65));V:RefreshAnimationsPage()
 local normalized=V:NormalizeBags(VanityStudioCharacter.weapons);local saved
 for _,b in ipairs(normalized) do if b.id==bag.id then saved=b end end
 assert(saved.physics==false and saved.amplitude==65,'Per-bag settings survive save normalization')
-assert(not V.animationBagRows[1].slider.enabled and not V.animationBagRows[1].toggle.checked)
+assert(not V.animationBagRows[1].slider.mouseEnabled and not V.animationBagRows[1].toggle.checked)
+V.animationBagRows[1].slider:SetValue(20)
+assert(bag.physics==false and bag.amplitude==65,'Disabled slider callbacks cannot enable physics or change amplitude')
+assert(V.animationBagRows[1].slider.alpha==.4,'Unavailable sliders are visibly dimmed')
 assert(V:SetBagPhysics(bag.id,true,65));V:RefreshAnimationsPage()
+assert(V.animationBagRows[1].slider.mouseEnabled and V.animationBagRows[1].slider.alpha==1)
 local other=V:BagInSlot(3);local previous=other and V:BagPhysicsAmount(other)
 V.animationBagRows[1].slider:SetValue(40)
 assert(bag.amplitude==40 and bag.physics)
@@ -62,6 +73,9 @@ VanityStudioCharacter.enabled=false;V:SyncAnimations();assert(capeCalls[#capeCal
 VanityStudioCharacter.enabled=true;this=V.capeAnimationDefault;this.scripts.OnClick();this=oldThis;assert(capeCalls[#capeCalls]==0)
 SaureksClosetAnimationVersion=nil;V:RefreshAnimationsPage()
 assert(not V.animationBagRows[1].toggle.enabled and not V.calmCapeCheckbox.enabled)
+assert(not V.animationBagRows[1].slider.mouseEnabled)
+local oldAmount=bag.amplitude;V.animationBagRows[1].slider:SetValue(175)
+assert(bag.amplitude==oldAmount,'Old DLL cannot receive slider edits')
 assert(not V:SetBagPhysics(bag.id,true,100))
 for _,window in ipairs({V.bagAnimationWindow,V.capeAnimationWindow}) do
     assert(window.close.anchor[4]==-46 and window.close.anchor[5]==-24,'Animation windows share corrected close alignment')
