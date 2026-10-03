@@ -1,7 +1,35 @@
 local V=VanityStudio
-function V:PhysicsControlsAvailable()
+local weaponControls={
+    {key="weaponBounce",title="Bounce",tip="Adjust up-and-down movement while walking and running. 100% keeps the current bounce. This does not change animation speed."},
+    {key="weaponRocking",title="Rocking",tip="Adjust how far weapons rock and swing around their mounting point. Weapons remain rigid at every setting."},
+    {key="weaponJumpLift",title="Jump lift",tip="Adjust the extra outward lift when jumping or falling. 0% removes this extra lift while retaining the normal player animation."}
+}
+function V:PhysicsControlsAvailable(minimum)
     if type(SaureksClosetPhysicsVersion)~="function" or type(SaureksClosetSetWeaponPhysics)~="function" then return false end
-    local ok,version=pcall(SaureksClosetPhysicsVersion);return ok and type(version)=="number" and version>=1
+    local ok,version=pcall(SaureksClosetPhysicsVersion);return ok and type(version)=="number" and version>=(minimum or 1)
+end
+function V:WeaponPhysicsAmount(key)
+    local amount=tonumber(VanityStudioCharacter[key])
+    if not amount or amount~=amount then return 100 end
+    return math.floor(math.max(0,math.min(200,amount))+.5)
+end
+function V:SetWeaponPhysicsAmount(key,amount)
+    if not self:PhysicsControlsAvailable(2) or type(amount)~="number" or amount~=amount or amount<0 or amount>200 then return false end
+    local valid=false;for _,control in ipairs(weaponControls) do if key==control.key then valid=true end end
+    if not valid then return false end
+    VanityStudioCharacter[key]=math.floor(amount+.5)
+    self:SyncPhysics();self:RefreshPhysicsPage();return true
+end
+function V:ResetWeaponPhysics()
+    if not self:PhysicsControlsAvailable() then return false end
+    for _,control in ipairs(weaponControls) do VanityStudioCharacter[control.key]=100 end
+    return self:SetWeaponPhysics(false)
+end
+function V:OpenPhysicsPanel(kind)
+    self.bagPhysicsWindow:Hide();self.weaponPhysicsWindow:Hide()
+    self:RefreshPhysicsPage()
+    if kind=="bags" then self.bagPhysicsWindow:Show()
+    elseif kind=="weapons" then self.weaponPhysicsWindow:Show() end
 end
 function V:ResetBagPhysics()
     if not self:PhysicsControlsAvailable() then return false end
@@ -12,7 +40,8 @@ function V:SyncPhysics()
     local c=VanityStudioCharacter;if not c then return end
     c.calmCape=nil;c.bodyAnimationStyle=nil;c.bodyAnimationEnabled=nil;c.capeAnimationStyle=nil;c.capeAnimationEnabled=nil
     if self.sharingWorldPaused or not self:PhysicsControlsAvailable() then return end
-    pcall(SaureksClosetSetWeaponPhysics,c.enabled and c.weaponPhysics and 1 or 0)
+    pcall(SaureksClosetSetWeaponPhysics,c.enabled and c.weaponPhysics and 1 or 0,
+        self:WeaponPhysicsAmount("weaponBounce"),self:WeaponPhysicsAmount("weaponRocking"),self:WeaponPhysicsAmount("weaponJumpLift"))
 end
 function V:SetWeaponPhysics(enabled)
     if not self:PhysicsControlsAvailable() then return false end
@@ -23,7 +52,7 @@ function V:RefreshPhysicsPage()
     if not self.bagPhysicsRows then return end
     self.physicsRefreshing=true
     local available=self:PhysicsControlsAvailable()
-    self.physicsNotice:SetText(available and "" or "Update SaureksCloset.dll and fully restart WoW.")
+    self.physicsNotice:SetText(self:PhysicsControlsAvailable(2) and "" or "Update SaureksCloset.dll and fully restart WoW.")
     for i,row in ipairs(self.bagPhysicsRows) do
         local bag=self:BagInSlot(i);local model=bag and self.bagCatalogByID[bag.model]
         row.bagID=bag and bag.id
@@ -39,15 +68,21 @@ function V:RefreshPhysicsPage()
     self.physicsEnable(self.bagPhysicsDefault,available)
     self.physicsEnable(self.weaponPhysicsToggle,available);self.physicsEnable(self.weaponPhysicsDefault,available)
     self.weaponPhysicsToggle:SetChecked(VanityStudioCharacter.weaponPhysics)
+    for _,row in ipairs(self.weaponPhysicsRows) do
+        row.slider:SetValue(self:WeaponPhysicsAmount(row.key))
+        row.amount:SetText(self:WeaponPhysicsAmount(row.key).."%")
+        row.slider.closetEnabled=self:PhysicsControlsAvailable(2) and VanityStudioCharacter.weaponPhysics and true or false
+        row.slider:EnableMouse(row.slider.closetEnabled);row.slider:SetAlpha(row.slider.closetEnabled and 1 or .4)
+    end
     self.physicsRefreshing=nil
 end
 function V:CreatePhysicsPage(p,sheet,section,label,settingsButton,enable)
     self.physicsEnable=enable
     label(p,"Physics",38,84,284,24)
-    label(p,"Choose what you want to customize.",38,116,284,22,true)
-    settingsButton(p,"Bag physics",38,156,284,function() V:RefreshPhysicsPage();V.bagPhysicsWindow:Show() end)
-    settingsButton(p,"Weapon physics",38,204,284,function() V:RefreshPhysicsPage();V.weaponPhysicsWindow:Show() end)
-    self.physicsNotice=label(p,"",38,260,284,46,true)
+    self.physicsSubtitle=label(p,"These are experimental features that are not complete and are only included for testing.",38,116,284,58,true)
+    self.bagPhysicsButton=settingsButton(p,"Bag physics",38,184,284,function() V:OpenPhysicsPanel("bags") end)
+    self.weaponPhysicsButton=settingsButton(p,"Weapon physics",38,232,284,function() V:OpenPhysicsPanel("weapons") end)
+    self.physicsNotice=label(p,"",38,282,284,46,true)
     local function window(name,title)
         local f=sheet(name,UIParent,title);f:Hide();f:SetFrameStrata("DIALOG");f:SetClampedToScreen(true)
         f:SetPoint("TOPLEFT",V.frame,"TOPRIGHT",-30,0);f:SetMovable(true);f:RegisterForDrag("LeftButton")
@@ -96,7 +131,23 @@ function V:CreatePhysicsPage(p,sheet,section,label,settingsButton,enable)
     label(self.weaponPhysicsWindow,"Enable weapon physics",63,129,263,24,true)
     self.weaponPhysicsToggle:SetScript("OnClick",function() V:SetWeaponPhysics(this:GetChecked()) end)
     help(self.weaponPhysicsToggle,"Rigid-body weapon physics","Apply the bags' secondary motion to stowed and body-carried weapons. Weapons bob and rock as solid objects and never stretch. Drawn weapons keep their normal hand animation.")
-    label(self.weaponPhysicsWindow,"Stowed and body-carried weapons gain a little weight and momentum as you move, using the same rigid-body motion as bags.\n\nWeapons stay solid and settle when you stop. Weapons in your hands keep their normal animation.\n\nDefault turns weapon physics off.",38,180,286,160,true)
-    self.weaponPhysicsDefault=settingsButton(self.weaponPhysicsWindow,"Default",38,378,160,function() V:SetWeaponPhysics(false) end)
+    self.weaponPhysicsRows={}
+    for i,control in ipairs(weaponControls) do
+        local row=section(self.weaponPhysicsWindow,34,170+(i-1)*62,296,56,false)
+        row.key=control.key;self.weaponPhysicsRows[i]=row
+        label(row,control.title,10,5,206,18,true)
+        row.amount=label(row,"",222,5,62,18,true);row.amount:SetJustifyH("RIGHT")
+        row.slider=CreateFrame("Slider","SaureksClosetWeaponAmplitude"..i,row,"OptionsSliderTemplate")
+        row.slider:ClearAllPoints();row.slider:SetPoint("TOPLEFT",row,"TOPLEFT",14,-31);row.slider:SetWidth(268);row.slider:SetHeight(16)
+        row.slider:SetMinMaxValues(0,200);row.slider:SetValueStep(5)
+        for _,suffix in ipairs({"Low","High","Text"}) do local t=getglobal(row.slider:GetName()..suffix);if t then t:Hide() end end
+        row.slider:SetScript("OnValueChanged",function()
+            local amount=math.floor(this:GetValue()+.5);row.amount:SetText(amount.."%")
+            if not V.physicsRefreshing and this.closetEnabled then V:SetWeaponPhysicsAmount(row.key,amount) end
+        end)
+        help(row.slider,control.title,control.tip)
+    end
+    self.weaponPhysicsDefault=settingsButton(self.weaponPhysicsWindow,"Default",38,378,160,function() V:ResetWeaponPhysics() end)
+    help(self.weaponPhysicsDefault,"Default weapon movement","Turn weapon physics off and reset Bounce, Rocking and Jump lift to 100%. Weapon appearance and placement stay unchanged.")
     self:RefreshPhysicsPage()
 end

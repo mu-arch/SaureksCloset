@@ -17,7 +17,9 @@ static sharing::Fit sharedPackFit(const BagTuningValues& v){
 }
 static BagTuningValues sharedUnpackFit(const sharing::Fit& f){return {f[0]/10000.f,f[1]/10000.f,f[2]/10000.f,f[3]/100.f,f[4]/100.f,f[5]/100.f,f[6]/100.f,true};}
 static void sharedCapture(sharing::Look& look){
-    Player p;if(!snapshot(p))return;look.flags=(weaponPhysicsEnabled&&weaponPhysicsOwner==p.guid)?4u:0u;const auto* c=weaponContext(p.model);if(!c||c->guid!=p.guid||c->token)return;
+    Player p;if(!snapshot(p))return;
+    if(weaponPhysicsOwner==p.guid)look.weaponMotion={{static_cast<unsigned char>(weaponPhysicsSettings.bounce),static_cast<unsigned char>(weaponPhysicsSettings.rocking),static_cast<unsigned char>(weaponPhysicsSettings.jumpLift)}};
+    look.flags=(weaponPhysicsEnabled&&weaponPhysicsOwner==p.guid)?4u:0u;const auto* c=weaponContext(p.model);if(!c||c->guid!=p.guid||c->token)return;
     const auto* native=nativeModel(p.native);if(!native)return;
     const unsigned race=look.body[0]?look.body[1]:native->race,sex=look.body[0]?look.body[2]:native->sex,index=(race-1)*2+sex;
     look.flags|=(c->selection.carriedMode==1?1u:0u)|(c->quiverHorizontal?2u:0u);
@@ -62,6 +64,7 @@ static void sharedWeapons(const Player& p,const sharing::Look& look){
     }
     if(c.sharedWeaponPhysics!=bool(look.flags&4))c.rigidWeapons={};
     c.sharedWeaponPhysics=(look.flags&4)!=0;
+    c.sharedWeaponPhysicsSettings={look.weaponMotion[0],look.weaponMotion[1],look.weaponMotion[2]};
     c.parent=p.model;c.unit=p.unit;c.guid=p.guid;c.selection=next;c.routes=next.routes();c.quiverHorizontal=(look.flags&2)!=0;
     for(unsigned i=0;i<10;++i){auto& fit=c.sharedFits[i];fit.enabled=(look.fitMask&(1u<<i))!=0;if(fit.enabled)fit.values=sharedUnpackFit(look.fits[i]);}
     for(unsigned i=0;i<c.bags.size();++i){const sharing::Bag* source=nullptr;for(const auto& bag:look.bags)if(bag.model&&bag.slot==i)source=&bag;

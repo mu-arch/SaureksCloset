@@ -8,7 +8,7 @@ Do not include that server repository or its credentials/database in addon ZIPs.
 
 The DLL exchanges 364-byte complete snapshots (372-byte publication / 384-byte
 delivery). This includes body details, hide/inherit/replace equipment state,
-independent carried weapons, stowed visibility, precision fits and five bags. Protocol version 4 also carries each bag's physics
+independent carried weapons, stowed visibility, precision fits and five bags. Protocol version 5 also carries each bag's physics
 toggle/amplitude and the weapon physics toggle; it requires the matching relay.
 The game thread copies bounded data into a mailbox. Windows HTTP/WebSocket calls
 run on dedicated threads, with certificate verification, no redirects or cookie
@@ -51,4 +51,4 @@ WinHTTP clients under Wine. Certificates, credentials and Wine state are confine
 to a temporary fixture directory. It requires free loopback ports 8787, 8788 and
 19443, Wine and OpenSSL. No live game credentials are used.
 
-Wire version 4 uses flag 4 for weapon physics. Bytes 85–87 are reserved; cape/race animation choices are removed.
+Wire version 5 uses flag 4 for weapon physics. Bytes 85–87 carry Bounce, Rocking and Jump lift percentages (0–200, default 100). Cape/race animation choices remain removed.

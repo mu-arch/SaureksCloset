@@ -728,13 +728,11 @@ function V:LayoutWeaponCards(advanced)
     group:ClearAllPoints();group:SetPoint("TOPLEFT",self.pagesByName.weaponry,"TOPLEFT",23,-92)
     group:SetHeight(advanced and 102 or 238)
     group.heading:SetText(advanced and "In your hands" or "Equipped weapon slots")
-    self.weaponSlotDescription:SetText(advanced and "Choose the weapons shown while attacking." or "Change the slots you have equipped.\nMain hand and off hand are separate choices.")
-    self.weaponSlotDescription:SetHeight(advanced and 14 or 28)
     if advanced then self.weaponCarriedGroup:Show() else self.weaponCarriedGroup:Hide() end
     for i,slot in ipairs({108,109,110}) do
         local card=self.weaponCards[slot];local b=self.slotButtons[slot]
         local x=advanced and slot==109 and 160 or 0
-        local y=advanced and (slot==110 and 72 or 40) or (58+(i-1)*60)
+        local y=advanced and (slot==110 and 58 or 26) or (28+(i-1)*60)
         local width=advanced and slot~=110 and 158 or 318
         local height=advanced and 30 or 52
         local size=advanced and 24 or 36
@@ -802,10 +800,7 @@ function V:CreateWeaponryPage(p)
         return box
     end
     self.weaponActiveGroup=group("Equipped weapon slots",23,92,318,238)
-    self.weaponSlotDescription=label(self.weaponActiveGroup,"",8,22,302,28,true)
-    self.weaponSlotDescription:SetFont("Fonts\\FRIZQT__.TTF",10);self.weaponSlotDescription:SetSpacing(4)
-    self.weaponSlotDescription:SetTextColor(.7,.7,.7)
-    self.weaponCarriedGroup=group("Carried on your body",23,209,318,150)
+    self.weaponCarriedGroup=group("On your body",23,209,318,150)
     local function choice(parent,slot,x,y,w)
         local card=CreateFrame("Button",nil,parent)
         card:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y);card:SetWidth(w);card:SetHeight(30);card.slot=slot

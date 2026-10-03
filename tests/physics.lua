@@ -2,9 +2,10 @@
 dofile('tests/bags_list_ui.lua')
 local V=VanityStudio
 local physicsCalls={}
+local physicsAmounts={}
 SaureksClosetGetBagFitDefaults=function(target,race,sex,mount) return 1,0,0,-.15,0,0,mount==1 and -90 or mount==2 and 90 or 0,70 end
-SaureksClosetPhysicsVersion=function() return 1 end
-SaureksClosetSetWeaponPhysics=function(mode) table.insert(physicsCalls,mode);return 1 end
+SaureksClosetPhysicsVersion=function() return 2 end
+SaureksClosetSetWeaponPhysics=function(mode,bounce,rocking,jump) table.insert(physicsCalls,mode);physicsAmounts={bounce,rocking,jump};return 1 end
 V.InvalidatePreviewModel=function() end
 local originalCreateFrame=CreateFrame
 function CreateFrame(kind,name,parent,template)
@@ -33,6 +34,21 @@ local page=CreateFrame('Frame',nil,V.frame);page:SetAllPoints(V.frame)
 dofile('addon/SaureksCloset/Physics.lua')
 V:CreatePhysicsPage(page,helpers.sheet,helpers.section,helpers.label,helpers.settingsButton,helpers.enabled)
 assert( #physicsCalls==0,'Opening controls cannot enable weapon physics')
+assert(V.physicsSubtitle.text=="These are experimental features that are not complete and are only included for testing.")
+for _,button in ipairs({V.bagPhysicsButton,V.weaponPhysicsButton,V.bagPhysicsButton,V.weaponPhysicsButton}) do
+    button.scripts.OnClick()
+    local bags=button==V.bagPhysicsButton
+    assert(V.bagPhysicsWindow:IsShown()==bags and V.weaponPhysicsWindow:IsShown()~=bags,'Physics pages must replace each other')
+    assert(V.bagPhysicsRows[1].slider:IsVisible()==bags and V.weaponPhysicsRows[1].slider:IsVisible()~=bags,'Inactive page controls must be hidden')
+end
+-- Refreshes must never write settings or call the DLL from slider callbacks.
+assert(#physicsCalls==0)
+for _,row in ipairs(V.weaponPhysicsRows) do
+    assert(row.slider.min==0 and row.slider.max==200 and row.slider:GetValue()==100)
+    assert(not row.slider.mouseEnabled)
+    row.slider:SetValue(0)
+    assert(V:WeaponPhysicsAmount(row.key)==100)
+end
 assert(#V.bagPhysicsRows==5 and not V.bagTunerWindow.pause)
 local bag=V:BagInSlot(1);assert(bag)
 assert(V:BagPhysicsAmount(bag)==100 and bag.physics~=false)
@@ -69,8 +85,28 @@ V:SetBagPhysics(bag.id,false,55)
 this=V.bagPhysicsDefault;this.scripts.OnClick();this=oldThis
 for _,b in ipairs(V:GetBags()) do assert(b.physics and b.amplitude==100,'Default restores original dynamics without changing placement') end
 assert(V:SetWeaponPhysics(true) and physicsCalls[#physicsCalls]==1)
+assert(physicsAmounts[1]==100 and physicsAmounts[2]==100 and physicsAmounts[3]==100)
+for i,row in ipairs(V.weaponPhysicsRows) do
+    assert(row.slider.mouseEnabled and row.slider.alpha==1)
+    local count=#physicsCalls;row.slider:SetValue(i*50)
+    assert(#physicsCalls==count+1 and physicsAmounts[i]==i*50)
+    assert(V:WeaponPhysicsAmount(row.key)==i*50)
+end
+assert(physicsAmounts[1]==50 and physicsAmounts[2]==100 and physicsAmounts[3]==150)
+for _,bad in ipairs({-1,201,0/0,math.huge}) do assert(not V:SetWeaponPhysicsAmount("weaponBounce",bad)) end
+assert(not V:SetWeaponPhysicsAmount("weapons",0))
+local count=#physicsCalls;V:RefreshPhysicsPage();assert(#physicsCalls==count)
+assert(V:SetWeaponPhysics(false));V.weaponPhysicsRows[1].slider:SetValue(200)
+assert(V:WeaponPhysicsAmount("weaponBounce")==50,'Disabled slider cannot change saved values')
+assert(V:SetWeaponPhysics(true) and physicsAmounts[1]==50,'Toggling preserves customization')
+SaureksClosetPhysicsVersion=function() return 1 end;V:RefreshPhysicsPage()
+assert(V.weaponPhysicsToggle.enabled and not V.weaponPhysicsRows[1].slider.mouseEnabled,'Older bridge supports toggle, not customization')
+assert(not V:SetWeaponPhysicsAmount("weaponBounce",200))
+SaureksClosetPhysicsVersion=function() return 2 end
 VanityStudioCharacter.enabled=false;V:SyncPhysics();assert(physicsCalls[#physicsCalls]==0)
 VanityStudioCharacter.enabled=true;this=V.weaponPhysicsDefault;this.scripts.OnClick();this=oldThis;assert(physicsCalls[#physicsCalls]==0)
+for _,row in ipairs(V.weaponPhysicsRows) do assert(V:WeaponPhysicsAmount(row.key)==100 and not row.slider.mouseEnabled) end
+assert(physicsAmounts[1]==100 and physicsAmounts[2]==100 and physicsAmounts[3]==100,'Default restores all three gains')
 VanityStudioCharacter.calmCape=true;VanityStudioCharacter.bodyAnimationEnabled=true;VanityStudioCharacter.capeAnimationStyle=3
 V:SyncPhysics();assert(not VanityStudioCharacter.calmCape and not VanityStudioCharacter.bodyAnimationEnabled and not VanityStudioCharacter.capeAnimationStyle)
 SaureksClosetPhysicsVersion=nil;V:RefreshPhysicsPage()

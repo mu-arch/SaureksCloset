@@ -367,7 +367,7 @@ static int __fastcall weaponryProbe(void* L){
 #include "UpdateChecker.h"
 #include "SharingRuntime.h"
 #include "VoiceRenderer.h"
-static int __fastcall physicsVersion(void* L){return result(L,1);}
+static int __fastcall physicsVersion(void* L){return result(L,2);}
 static int __fastcall version(void* L){return result(L,40011);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);

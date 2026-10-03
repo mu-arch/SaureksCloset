@@ -85,6 +85,7 @@ struct BagInstance {
 static unsigned bagAttachment(unsigned mount){return mount==1?32:mount==2?33:28;}
 struct WeaponRigidMotion {std::uintptr_t child=0;unsigned point=0;BagMotion motion;};
 static bool weaponPhysicsEnabled=false;
+static WeaponPhysicsSettings weaponPhysicsSettings;
 static std::uint64_t weaponPhysicsOwner=0;
 struct WeaponContext {
     std::uintptr_t parent=0,unit=0;std::uint64_t guid=0;unsigned token=0;
@@ -104,6 +105,7 @@ struct WeaponContext {
     std::array<void*,3> nativeChildren{};
     unsigned previewMode=0;
     bool sharedWeaponPhysics=false;
+    WeaponPhysicsSettings sharedWeaponPhysicsSettings;
     std::array<WeaponRigidMotion,13> rigidWeapons{};
     std::array<BagTuningEntry,10> sharedFits{};
     std::array<unsigned char,8> rangedInfo{};
@@ -783,8 +785,15 @@ static int __fastcall setWeaponPhysicsLua(void* L){
     if(!isNumber(L,1)||(toNumber(L,1)!=0&&toNumber(L,1)!=1))return result(L,-2);
     const auto owner=getPlayer();if(!owner)return result(L,-1);
     const bool enabled=toNumber(L,1)==1;
+    WeaponPhysicsSettings settings;
+    unsigned* amounts[]={&settings.bounce,&settings.rocking,&settings.jumpLift};
+    for(unsigned i=0;i<3;++i)if(isNumber(L,2+i)){
+        const double value=toNumber(L,2+i);
+        if(!std::isfinite(value)||value<0||value>200||value!=std::floor(value))return result(L,-2);
+        *amounts[i]=static_cast<unsigned>(value);
+    }
     if(weaponPhysicsOwner!=owner||weaponPhysicsEnabled!=enabled){for(auto& c:weaponContexts)c.rigidWeapons={};}
-    weaponPhysicsOwner=owner;weaponPhysicsEnabled=enabled;return result(L,1);
+    weaponPhysicsOwner=owner;weaponPhysicsEnabled=enabled;weaponPhysicsSettings=settings;return result(L,1);
 }
 static bool positionWeaponPhysics(void* child,const float* matrix,BagMatrix& out,bool visible){
     const auto model=reinterpret_cast<std::uintptr_t>(child);std::uintptr_t parent=0;unsigned point=0;
@@ -805,7 +814,8 @@ static bool positionWeaponPhysics(void* child,const float* matrix,BagMatrix& out
     if(!matrix||!read(model+0xBC,local)||!read(parent+0xFC,render)||!read(parent+0x2C,scene)||!scene||!read(scene+0x9C,world)){entry={};return false;}
     // The caller may pass a just-computed stack matrix (staff/bow/tuner fixes).
     for(unsigned i=0;i<16;++i)base[i]=matrix[i];
-    return rigidWeaponPhysics(entry.motion,base,local,render,world,out,model,slot,point,bagClockMilliseconds(),bagIsRunning(*c),bagMotionActive(*c),bagAirLiftTarget(*c));
+    const auto& settings=c->guid==getPlayer()?weaponPhysicsSettings:c->sharedWeaponPhysicsSettings;
+    return rigidWeaponPhysics(entry.motion,base,local,render,world,out,model,slot,point,bagClockMilliseconds(),bagIsRunning(*c),bagMotionActive(*c),bagAirLiftTarget(*c),settings);
 }
 static void updateWeaponAttachment(void* model,const float* matrix,const float* color,const float* lighting,float alpha){
     std::array<float,16> adjusted;
