@@ -1698,9 +1698,11 @@ function V:CreateSettingsPage(p)
     checkbox:SetPoint("TOPLEFT",privacy,"TOPLEFT",36,-126);checkbox:SetWidth(24);checkbox:SetHeight(24)
     label(privacy,"Automatically check for updates",67,131,254,36,true)
     checkbox:SetScript("OnClick",function() V:SetAutoUpdates(this:GetChecked()) end)
-    self.autoUpdatesDescription=label(privacy,"Vanilla Closet can automatically check the program's repository on Github.com to see if a newer version is available. If you disable this feature Vanilla Closet will not check for updates.",67,158,254,0,true)
+    self.autoUpdatesDescription=label(privacy,"Check the addon's GitHub repository for new versions. Turn this off to stop automatic update checks.",67,158,254,0,true)
     self.autoUpdatesDescription:SetFont("Fonts\\FRIZQT__.TTF",11)
     self.autoUpdatesDescription:SetTextColor(.8,.8,.8)
+
+    if self.CreateSharingSettings then self:CreateSharingSettings(privacy,label,edit,settingsButton) end
 
     local updates=self.infoPages.updates
     self.addonVersionsHeading=label(updates,"This PC's Version",30,80,284,18)

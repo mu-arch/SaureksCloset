@@ -13,7 +13,7 @@ def at(va):
  raise ValueError(hex(va))
 # Preserve verified entries introduced outside this generator's original list.
 import re
-addresses.extend([0x5f0d60,0x4c8423,0x4c843c,0x4c8449,0x533314,0x533422,0x478960,0x478ad0,0x478cb0,0x478dc0,0x479d10,0x4799a0,0x477860])
+addresses.extend([0x468380,0x6f3690,0x5fb54c,0x5ed8b3,0x5ee66e,0x5ee7fd,0x5f0d60,0x4c8423,0x4c843c,0x4c8449,0x533314,0x533422,0x478960,0x478ad0,0x478cb0,0x478dc0,0x479d10,0x4799a0,0x477860])
 addresses=list(dict.fromkeys(addresses+[int(value,16) for value in re.findall(r'\{(0x[0-9a-f]+),\{', (r/'native/BuildSignatures.h').read_text())]))
 (r/'native/BuildSignatures.h').write_text('// Verified executable prefixes. Incompatible clients leave the bridge inactive.\n#pragma once\nstruct BuildSignature { unsigned address; unsigned char bytes[12]; };\nstatic const BuildSignature signatures[] = {\n'+''.join('{0x%x,{%s}},\n'%(a,','.join('0x%02x'%x for x in at(a))) for a in addresses)+'};\n')
 (r/'native/CLIENT-BUILD.json').write_text(json.dumps({'build':5875,'sha256':hashlib.sha256(b).hexdigest(),'image_base':base,'functions':[hex(a) for a in addresses]},indent=2))

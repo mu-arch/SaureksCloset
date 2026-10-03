@@ -19,5 +19,5 @@ fi
 for source in buffer hook trampoline hde/hde32; do
   "$closet_cc" $closet_crt -O2 -c "native/vendor/minhook/src/$source.c" -Inative/vendor/minhook/include -o "native/build/$(basename "$source").o"
 done
-"$closet_cxx" $closet_crt -std=c++17 -fno-exceptions -fno-rtti -Os -Wall -Wextra -Werror -shared $closet_static -Inative/vendor/minhook/include native/SaureksCloset.cpp native/build/*.o -Wl,--no-insert-timestamp -o native/SaureksCloset.dll -lwinhttp -lshell32
+"$closet_cxx" $closet_crt -std=c++17 -fno-exceptions -fno-rtti -Os -Wall -Wextra -Werror -shared $closet_static -Inative/vendor/minhook/include native/SaureksCloset.cpp native/build/buffer.o native/build/hook.o native/build/trampoline.o native/build/hde32.o -Wl,--no-insert-timestamp -o native/SaureksCloset.dll -lwinhttp -lshell32
 "$closet_objdump" -p native/SaureksCloset.dll | sed -n '/DLL Name/p'

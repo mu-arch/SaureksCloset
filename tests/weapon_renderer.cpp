@@ -56,7 +56,7 @@ static void modelName(void* child,const char* filename){
     resourceNames[resource+0x20]=buffer;
     memory[address(child)+0x30]=resource;memory[address(child)+0x10]=1;
 }
-struct Player {std::uintptr_t model=0,unit=0;std::uint64_t guid=0;unsigned display=0,native=0;};
+struct Player {std::uintptr_t model=0,unit=0;std::uint64_t guid=0;unsigned display=0,native=0;std::uintptr_t fields=0,component=0;unsigned identity=0,body=0,facial=0;};
 static Player player{0x1000,0x2000,123,49,49};
 static PreviewRegistry previews;
 static bool snapshot(Player& p){p=player;return p.guid!=0;}
@@ -113,6 +113,9 @@ template<typename T> static T weaponFunction(std::uintptr_t a){
     else if constexpr(std::is_same_v<T,decltype(&sequenceOffset)>){if(a==0x7127F0)return &sequenceOffset;}
     assert(false);return nullptr;
 }
+#ifdef SAUREKS_SHARING_TEST
+#include "sharing_weapon_fixture.h"
+#endif
 #include "../native/WeaponRenderer.h"
 static unsigned lastBagGeneration=0;
 static int setBagsStatus(void* L){
@@ -2759,4 +2762,5 @@ int main(){
     }
     std::cout<<"PASS: per-hand stow options in both modes, passthrough bows, decorative isolation, bow strings, previews and missing two-hand recovery after ranged NPC/loot transitions\n";
     std::cout<<"PASS: native hook simulation, cross-family ranged drawing/sheathing, real metadata isolation, staff body contact and placement tuning\n";
+    return 0;
 }

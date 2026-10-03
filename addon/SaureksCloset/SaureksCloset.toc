@@ -12,6 +12,7 @@ WeaponData.lua
 Core.lua
 BagCatalog.lua
 Updates.lua
+Sharing.lua
 Weaponry.lua
 Bags.lua
 WeaponryProbe.lua
