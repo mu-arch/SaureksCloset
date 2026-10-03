@@ -74,7 +74,9 @@ local function sheet(name,parent,title)
     f.title:SetPoint("CENTER",f,"TOPLEFT",198,-24)
     f.title:SetTextColor(1,1,1);f.title:SetJustifyH("CENTER");f.title:SetJustifyV("MIDDLE");f.title:SetText(title)
     local close=CreateFrame("Button",name.."CloseButton",f,"UIPanelCloseButton")
-    close:SetPoint("CENTER",f,"TOPRIGHT",-44,-25)
+    -- One alignment for every character-sheet window; do not override per window.
+    close:ClearAllPoints()
+    close:SetPoint("CENTER",f,"TOPRIGHT",-46,-24)
     f.close=close
     return f
 end
@@ -383,7 +385,6 @@ function V:CreateUI()
     self.slot=1;self.query="";self.offset=0;self.previewRequests={}
     local f=sheet("VanityStudioFrame",UIParent,"Saurek's Closet")
     self.frame=f;f:Hide();f:SetFrameStrata("MEDIUM")
-    f.close:ClearAllPoints();f.close:SetPoint("CENTER",f,"TOPRIGHT",-46,-24)
     f:SetPoint("TOPLEFT",UIParent,"TOPLEFT",0,-104)
     f:SetMovable(true);f:SetClampedToScreen(true);f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart",function() this:StartMoving() end)

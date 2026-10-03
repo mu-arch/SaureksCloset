@@ -11,3 +11,12 @@
   documentation together. README is exempt. Preserve historical version references
   and minimum-compatible-renderer thresholds.
 - Build and run the release/package checks before pushing and publishing.
+
+# Shared window layout
+
+- Character-sheet close-button geometry belongs only in `sheet()` in UI.lua.
+  Main and secondary sheets use the same artwork and must share the same anchor.
+  Fix the shared builder, never a single window override. Clear inherited anchors
+  before positioning template widgets.
+- Keep `tests/sheet_close_alignment.lua` in the mandatory checks. It verifies
+  the shared geometry against the main window and rejects leftover anchors.

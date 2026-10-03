@@ -17,6 +17,7 @@ function CreateFrame(kind,name,parent) return node(kind,name,parent) end
 function methods:CreateTexture(name) return node("Texture",name,self) end
 function methods:CreateFontString(name) return node("FontString",name,self) end
 function methods:SetPoint(...) self.anchor={...} end
+function methods:ClearAllPoints() self.anchor=nil;self.allPoints=nil end
 function methods:SetAllPoints(parent) self.allPoints=parent or self.parent end
 function methods:SetWidth(value) self.width=value end
 function methods:SetHeight(value) self.height=value end
