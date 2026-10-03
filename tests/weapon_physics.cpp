@@ -24,6 +24,24 @@ int main(){
         assert(difference(out,stopped)<.0001f);
         for(unsigned t=8500;t<10000;t+=dt){assert(rigidWeaponPhysics(motion,stopped,local,identity,identity,out,77,2,30,t,false,true,1));rigid(bagMatrixProduct(out,local),1);}
     }
+    // Quiet torso mounts must still produce visible secondary movement. The
+    // previous heavy setting failed these displacement/rocking floors.
+    for(bool running:{false,true})for(float scale:{.35f,1.f})for(unsigned dt:{8u,16u,33u}){
+        BagMotion motion;float bob=0,rock=0;
+        for(unsigned t=0;t<6000;t+=dt){
+            auto pose=identity;const float angle=.025f*std::sin(t*.013f);
+            pose[0]=pose[5]=std::cos(angle)*scale;pose[1]=std::sin(angle)*scale;pose[4]=-pose[1];pose[10]=scale;
+            pose[12]=-.25f;pose[14]=1.4f+.012f*std::sin(t*.0176f);BagMatrix moved;
+            assert(rigidWeaponPhysics(motion,pose,identity,identity,identity,moved,77,2,30,t,running,true,0));rigid(moved,scale);
+            if(t>1000){
+                bob=std::fmax(bob,std::fabs(moved[14]-pose[14]));
+                const float dot=std::fabs(bagRotationDot(bagRotation(pose,scale),bagRotation(moved,scale)));
+                rock=std::fmax(rock,2*std::acos(std::fmin(1.f,dot))*57.29578f);
+            }
+        }
+        assert(bob>(running?.009f:.0055f)&&bob<.04f);
+        assert(rock>2.8f&&rock<8.f);
+    }
     // Real attachment dispatch: native equipped weapons and extra decorations.
     player={0x4100000,0x4101000,123,49,49};weaponContexts[0]={};auto& c=weaponContexts[0];c.parent=player.model;c.unit=player.unit;c.guid=player.guid;c.selection.stowedMask=7;
     const auto scene=0x4102000u;memory[c.parent+0x2c]=scene;matrices[c.parent+0xfc]=identity;matrices[scene+0x9c]=identity;memory[c.unit+0x9e8]=1;

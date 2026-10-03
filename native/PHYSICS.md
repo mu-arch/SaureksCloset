@@ -7,7 +7,9 @@ Vanilla sliders use EnableMouse and dimming, not Button-only Enable/Disable.
 
 Weapon physics is an opt-in per-character setting, off by default. Its Default
 turns it off. The renderer uses the existing rigid bag spring, independent motion
-history per weapon, a heavier response and restrained gravity-relative jump lift.
+history per weapon and restrained gravity-relative jump lift. Weapons use the
+standard bag response with 1.5× secondary amplitude, so quiet torso mounts still
+show bob and rocking; model size and animation frequency are unchanged.
 It applies after normal bow/staff/back placement corrections and saved stowed fits.
 Only the final rigid attachment matrix changes: no bone or vertex deformation.
 The current actor/render transforms and child-local fit are removed before motion

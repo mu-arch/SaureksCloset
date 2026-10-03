@@ -2,6 +2,7 @@
 #include "BagCoordinates.h"
 #include "BagMotion.h"
 #include "BagAirLift.h"
+#include "BagAmplitude.h"
 // Run the established rigid bag spring in actor space, then restore the current
 // render and child-local transforms. Only the whole weapon matrix is changed.
 static bool rigidWeaponPhysics(BagMotion& motion,const BagMatrix& attachment,const BagMatrix& local,
@@ -25,15 +26,18 @@ static bool rigidWeaponPhysics(BagMotion& motion,const BagMatrix& attachment,con
     std::array<float,3> up,measure;
     if(!bagWorldUpInModel(inverseRender,worldToRender,up,&measure)){motion={};return false;}
     const auto fitted=target;
-    smoothBagMotion(motion,target,scale,now,child,identity*64+point,running,0,up,&measure,airLift,201+identity%5,moving,true,1.6f);
+    smoothBagMotion(motion,target,scale,now,child,identity*64+point,running,0,up,&measure,airLift,201+identity%5,moving,true,1.f);
     // Seed a reset delay history on the first update, not on a second draw of
     // that frame. Otherwise render-pass count changes the first phase sample.
     if(bagJiggleDelay(201+identity%5)&&!motion.jiggle.count){
         target=fitted;
-        smoothBagMotion(motion,target,scale,now,child,identity*64+point,running,0,up,&measure,airLift,201+identity%5,moving,true,1.6f);
+        smoothBagMotion(motion,target,scale,now,child,identity*64+point,running,0,up,&measure,airLift,201+identity%5,moving,true,1.f);
     }
     const float bob=motion.verticalBob*(1.f+.75f*motion.runWeight);
     for(unsigned axis=0;axis<3;++axis)target[12+axis]+=up[axis]*bob;
+    // A stowed weapon has little native mount motion. Keep the standard bag
+    // response and amplify its secondary movement, without changing speed or size.
+    bagMotionAmplitude(fitted,target,1.5f,0);
     if(motion.airborneWeight>.00001f){
         const auto worldToModel=bagMatrixProduct(inverseRender,worldToRender);BagMatrix modelToWorld;
         if(bagAffineInverse(worldToModel,modelToWorld)){
