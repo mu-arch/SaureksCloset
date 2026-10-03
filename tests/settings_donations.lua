@@ -132,7 +132,7 @@ check(buttonY>=messageY+messageHeight and signatureY>=messageY+messageHeight,"Th
 check(buttonWidth==math.floor(272*.6+.5) and V.donationLinksButton.caption.width==127,"The donation action is 40 percent narrower, rounded to a whole pixel, with room for caption and arrow")
 local panelX,panelY,panelWidth,panelHeight=rect(V.donationPanel)
 local closingX,closingY=rect(V.donationClosing)
-check(signatureY==panelY+192,"The signature artwork moves up eight pixels")
+check(signatureY==panelY+195,"The signature artwork sits at the adjusted vertical position")
 check(closingX==panelX+14,"The normal text sign-off is left-aligned with the letter")
 check(signatureX+signatureWidth==panelX+panelWidth-14 and signatureY<closingY and signatureY+signatureHeight<=buttonY,"The artwork sits higher at the right, above the action row")
 local _,navigationTop=rect(V.settingsNavigationButtons.privacy)
