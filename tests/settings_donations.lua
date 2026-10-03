@@ -99,9 +99,7 @@ end
 V:CreateSettingsPage(settings)
 check(table.getn(opened)==0,"Constructing Settings must never launch a browser")
 check(not V.settingsInfoWindow:IsShown(),"Information window starts closed")
-local expectedMessage="World of Warcraft has always been more than just a game to me. It’s a world full of memories, adventures, friendships, and countless little moments that somehow stick with you. I made this addon as a small love letter to that world, and I hope it adds something special to your own adventures.\n\n"..
-    "While donations are, of course, never required, they go a long way toward telling me, “I care about what you’re making, and I hope you keep working on it!”\n\n"..
-    "Sharing the addon with your friends and communities is also a huge help. And if there are any features you’d like to see in the future, please let me know!"
+local expectedMessage="World of Warcraft is more than a game to me. It’s a lifelong summation of memories, adventures, friendships, and countless little moments that somehow stick with you. I made this add-on as a love letter to a game I adore so much, and I hope it adds something special to your own adventures.\n\nI’ve spent a great deal of time over the years building this, polishing the little details, fixing problems, and adding requested features. If you would like to support that work, a donation is very helpful. On top of that, sharing your custom looks on Reddit, Twitter, Youtube, etc and crediting the addon really helps me.\n\nIf there’s something you’d like to see added or improved, please let me know in my Discord or the Github!"
 check(V.donationTitle and V.donationTitle.kind=="FontString" and V.donationTitle.text=="Thanks for using my addon!","The greeting is a separate title")
 check(V.donationMessage.text==expectedMessage,"The full replacement letter, punctuation, paragraph breaks and signature are preserved")
 check(V.donationTitle.fontSize==12 and V.donationTitle.fontSize>V.donationMessage.fontSize,"The greeting is larger than the letter body")
@@ -131,7 +129,7 @@ local buttonX,buttonY,buttonWidth=rect(V.donationLinksButton)
 local signatureX,signatureY,signatureWidth,signatureHeight=rect(V.donationSignature)
 local _,messageY,_,messageHeight=rect(V.donationMessage)
 check(buttonY>=messageY+messageHeight and signatureY>=messageY+messageHeight,"The action and signature sit below the complete letter")
-check(signatureX>=buttonX+buttonWidth,"The signature sits to the right of the combined action")
+check(buttonWidth==272 and V.donationLinksButton.caption.width==236,"The donation action uses the full card content width with room for its caption and arrow")
 local panelX,panelY,panelWidth,panelHeight=rect(V.donationPanel)
 local closingX,closingY=rect(V.donationClosing)
 check(closingX==panelX+14,"The normal text sign-off is left-aligned with the letter")
