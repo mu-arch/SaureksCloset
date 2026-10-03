@@ -9,9 +9,10 @@
 struct BagTuningValues {
     float left=0,inset=0,up=0,pitch=0,roll=0,yaw=0,scale=85;
     bool motion=true;
+    float amplitude=1;
     bool operator==(const BagTuningValues& other) const {
         return left==other.left&&inset==other.inset&&up==other.up&&pitch==other.pitch&&
-            roll==other.roll&&yaw==other.yaw&&scale==other.scale&&motion==other.motion;
+            roll==other.roll&&yaw==other.yaw&&scale==other.scale&&motion==other.motion&&amplitude==other.amplitude;
     }
 };
 struct BagTuningEntry { bool enabled=false; unsigned revision=0; BagTuningValues values; };
@@ -48,7 +49,7 @@ inline bool bagTuningValid(const BagTuningValues& values,bool bag=false) {
     if(!std::isfinite(values.up)||values.up<(bag?-3.f:-1.f)||values.up>1)return false;
     for(float angle:{values.pitch,values.roll,values.yaw})
         if(!std::isfinite(angle)||angle< -180||angle>180)return false;
-    return std::isfinite(values.scale)&&values.scale>=25&&values.scale<=200;
+    return std::isfinite(values.amplitude)&&values.amplitude>=0&&values.amplitude<=2&&std::isfinite(values.scale)&&values.scale>=25&&values.scale<=200;
 }
 inline bool bagTuningSet(unsigned bag,unsigned race,unsigned sex,bool enabled,const BagTuningValues& values={}) {
     if(!bagTuningKey(bag,race,sex)||bag>=201||(enabled&&!bagTuningValid(values,bag==1)))return false;

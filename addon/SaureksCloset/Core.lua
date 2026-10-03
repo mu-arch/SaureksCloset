@@ -852,6 +852,7 @@ V.events:SetScript("OnUpdate", function()
     elapsed = elapsed + arg1
     if elapsed < .5 then return end
     elapsed = 0
+    if V.SyncAnimations then V:SyncAnimations() end
     if V.UpdateSharing then V:UpdateSharing() end
     if V.armorRepairCheckPending then
         V.armorRepairCheckPending=nil

@@ -21,6 +21,16 @@ end
 function V:BagBodyType(model)
     return type(model)=="number" and model>=12 and model<=16 and "Soft body" or "Rigid body"
 end
+function V:BagPhysicsAmount(bag)
+    local n=bag and bag.amplitude
+    return type(n)=="number" and n==n and math.max(0,math.min(200,math.floor(n+.5))) or 100
+end
+function V:SetBagPhysics(id,on,amount)
+    local bag=self:BagInstance(id)
+    if not bag or not self:AnimationControlsAvailable() or type(amount)~="number" or not (amount>=0 and amount<=200) then return false end
+    bag.physics=on and true or false;bag.amplitude=math.floor(amount+.5)
+    self:BagChanged();return true
+end
 local fitFields={"left","inset","up","pitch","roll","yaw","scale"}
 local function integer(n,low,high)
     return type(n)=="number" and n>=low and n<=high and n==math.floor(n)
@@ -93,6 +103,7 @@ function V:NormalizeBags(weapons)
                 local key=race..":"..sex;local values=type(bag.fits)=="table" and bag.fits[key]
                 if self:ValidBagFit(values) then clean.fits[key]=self:Copy(values) end
             end end
+            clean.physics=bag.physics~=false;clean.amplitude=self:BagPhysicsAmount(bag)
             table.insert(result,clean);used[bag.id]=true
         end
     end
@@ -208,7 +219,7 @@ end
 function V:BagSignature(weapons)
     local text=""
     for _,bag in ipairs(self:NormalizeBags(weapons)) do
-        text=text..":bag"..bag.id..","..bag.model..","..bag.mount..",slot"..bag.slot
+        text=text..":bag"..bag.id..","..bag.model..","..bag.mount..",slot"..bag.slot..",physics"..(bag.physics==false and "off" or "on")..",amplitude"..self:BagPhysicsAmount(bag)
         for race=1,8 do for sex=0,1 do
             local key=race..":"..sex;local fit=bag.fits[key]
             if fit then
@@ -244,14 +255,19 @@ function V:ApplyBagRenderer(token,weapons,useDrafts)
         local key=self:BagDraftKey(bag,race,sex)
         local draft=useDrafts and self.bagTunerDrafts and self.bagTunerDrafts[key]
         local values=enabled and (draft or bag.fits[race..":"..sex]) or nil
-        local motion=not (useDrafts and self.bagTunerPaused and self.bagTunerTargetKey==key)
-        -- Pause also works before a fit has been saved.
-        if enabled and not values and not motion then values=self:BagTunerDefaults(200+bag.id,race,sex) end
-        local signature=values and (motion and "on" or "paused") or "off"
+        local motion=bag.physics~=false and not (useDrafts and self.bagTunerPaused and self.bagTunerTargetKey==key)
+        local amplitude=self:BagPhysicsAmount(bag)
+        -- Animation controls remain effective with default fits and live tuning off.
+        if not values and (not motion or amplitude~=100) then
+            local mount=self.bagMounts[bag.mount]
+            local okDefaults,statusDefaults,left,inset,up,pitch,roll,yaw,scale=pcall(SaureksClosetGetBagFitDefaults,200+bag.id,race,sex,mount)
+            if okDefaults and statusDefaults==1 then values={left=left,inset=inset,up=up,pitch=pitch,roll=roll,yaw=yaw,scale=scale} else return false,-2 end
+        end
+        local signature=values and ((motion and "on" or "paused")..":"..amplitude) or "off"
         if values then for _,field in ipairs(fitFields) do signature=signature..":"..string.format("%.6f",values[field]) end end
         if cache.values[key]~=signature then
             if values then
-                ok,status=pcall(SaureksClosetSetBagInstanceFit,token,bag.id,race,sex,1,values.left,values.inset,values.up,values.pitch,values.roll,values.yaw,values.scale,motion and 1 or 0)
+                ok,status=pcall(SaureksClosetSetBagInstanceFit,token,bag.id,race,sex,1,values.left,values.inset,values.up,values.pitch,values.roll,values.yaw,values.scale,motion and 1 or 0,amplitude)
             else ok,status=pcall(SaureksClosetSetBagInstanceFit,token,bag.id,race,sex,0) end
             if not ok or status~=1 then return false,status end
             cache.values[key]=signature

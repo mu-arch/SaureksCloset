@@ -66,6 +66,10 @@ static bool previewArmed=false;
 static DWORD previewThread=0;
 static unsigned previewToken=0;
 static State state;
+static bool calmCapeEnabled=false;
+static std::uint64_t calmCapeOwner=0;
+static bool calmCapeAvailable(){const auto a=GetFileAttributesA(calmCapeFile);return a!=INVALID_FILE_ATTRIBUTES&&!(a&FILE_ATTRIBUTE_DIRECTORY);}
+static const char* localAnimationModel(const char* name){return capeAnimationModel(name,calmCapeEnabled&&calmCapeOwner==getPlayer()&&calmCapeAvailable());}
 static void* forceRefresh=nullptr;
 template<typename T> static bool read(std::uintptr_t address,T& result){
     SIZE_T count=0;
@@ -101,10 +105,13 @@ static void* __fastcall visibleItemHook(void* unit,void*,int slot){
 }
 static const char* __fastcall nameHook(void* unit,void*){
     Player p;
-    if(state.enabled&&snapshot(p)&&p.unit==reinterpret_cast<std::uintptr_t>(unit)&&applies(p))
-        return state.body.model()->filename;
-    if(const auto* name=sharedName(reinterpret_cast<std::uintptr_t>(unit)))return name;
-    return nameOriginal(unit);
+    if(snapshot(p)&&p.unit==reinterpret_cast<std::uintptr_t>(unit)){
+        const auto* name=applies(p)?state.body.model()->filename:nameOriginal(unit);
+        return localAnimationModel(name);
+    }
+    const auto* name=sharedName(reinterpret_cast<std::uintptr_t>(unit));if(!name)name=nameOriginal(unit);
+    const auto* remote=sharedForUnit(reinterpret_cast<std::uintptr_t>(unit));
+    return capeAnimationModel(name,remote&&(remote->snapshot.look.flags&4)&&calmCapeAvailable());
 }
 static bool __fastcall initHook(void* component,void*,const std::uint32_t* input){
     Player p;std::array<std::uint32_t,91> copy;
@@ -169,7 +176,7 @@ static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned f
             previewBodyMatches(descriptor,requestedPreview)&&(!applies(p)||state.composed==state.revision);
         // Preserve the stock model/texture clone when the requested body is already visible.
         // A different saved body still needs its own model and fresh compositor.
-        void* model=copyAppearance?cloneModelOriginal(scene,source,flags):createModel(scene,requestedPreview.model()->filename,flags);
+        void* model=copyAppearance?cloneModelOriginal(scene,source,flags):createModel(scene,localAnimationModel(requestedPreview.model()->filename),flags);
         if(model){
             previewToken=previews.bind(reinterpret_cast<std::uintptr_t>(model),p.guid,requestedPreview);
             if(auto* entry=previews.find(reinterpret_cast<std::uintptr_t>(model)))entry->copiedAppearance=copyAppearance;
@@ -365,10 +372,27 @@ static int __fastcall weaponryProbe(void* L){
 #include "UpdateChecker.h"
 #include "SharingRuntime.h"
 #include "VoiceRenderer.h"
+static int __fastcall animationVersion(void* L){return result(L,1);}
+static int __fastcall setCapeAnimation(void* L){
+    if(!isNumber(L,1)||(toNumber(L,1)!=0&&toNumber(L,1)!=1))return result(L,-2);
+    const bool enabled=toNumber(L,1)==1;Player p;
+    if(!snapshot(p))return result(L,-1);
+    if(enabled&&!calmCapeAvailable())return result(L,-5);
+    if(calmCapeOwner==p.guid&&calmCapeEnabled==enabled)return result(L,1);
+    if(state.busy)return result(L,-4);
+    calmCapeOwner=p.guid;calmCapeEnabled=enabled;
+    const auto* body=applies(p)?state.body.model():nativeModel(p.native);
+    if(p.display==p.native&&body&&body->race==1&&body->sex==1){
+        forceRefresh=reinterpret_cast<void*>(p.unit);updateDisplay(forceRefresh);forceRefresh=nullptr;
+    }
+    return result(L,1);
+}
 static int __fastcall version(void* L){return result(L,40011);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
+        registerOriginal("SaureksClosetAnimationVersion",reinterpret_cast<std::uintptr_t>(&animationVersion));
+        registerOriginal("SaureksClosetSetCapeAnimation",reinterpret_cast<std::uintptr_t>(&setCapeAnimation));
         registerOriginal("SaureksClosetConfigureSharing",reinterpret_cast<std::uintptr_t>(&configureSharing));
         registerOriginal("SaureksClosetUpdateSharing",reinterpret_cast<std::uintptr_t>(&updateSharing));
         registerOriginal("SaureksClosetSetAppearance",reinterpret_cast<std::uintptr_t>(&setAppearance));

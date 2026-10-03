@@ -288,7 +288,7 @@ local function inTuner(widget,description)
     check(x-tx>=23 and x-tx+w<=341,description.." exceeds tuner width")
     check(y-ty>=70 and y-ty+h<=436,description.." exceeds tuner content height")
 end
-local controls={tuner.modelSelector,tuner.mountSelector,tuner.colorChoices,tuner.status,tuner.live,tuner.pause,tuner.save,tuner.load,tuner.reset,tuner.export}
+local controls={tuner.modelSelector,tuner.mountSelector,tuner.colorChoices,tuner.status,tuner.live,tuner.save,tuner.load,tuner.reset,tuner.export}
 for _,row in ipairs(tuner.rows) do table.insert(controls,row.editor.parent) end
 for i,control in ipairs(controls) do
     inTuner(control,"Tuner control "..i)
@@ -351,7 +351,7 @@ check(V.bagRows[4].bagID==targetID and V.bagRows[5].bagID==preservedID,"Deletion
 click(V.bagRows[4].iconButton)
 check(V.tab=="bags" and V.pagesByName.bags:IsVisible(),"Icon never switches to Outfit")
 check(tuner:IsShown() and V.placementTunerBag==targetID and not V.placementTunerSlot,"Icon opens only the chosen stable bag ID")
-check(tuner.pause.enabled,"Bag instance motion can be paused while fitting")
+check(not tuner.pause,"Bag physics controls belong on the Animations page")
 local layoutGetState=V.GetBagTunerState
 V.GetBagTunerState=function(self)
     local state=layoutGetState(self)
@@ -367,7 +367,7 @@ check(math.abs(V:GetBagTunerState().values.up+2.255)<.000001,"Nudging a foot fit
 tuner:Hide();check(not V.bagRows[4].selected:IsShown(),"Closing the tuner clears the selected card")
 V:OpenPlacementTuner(101)
 check(V.placementTunerSlot==101 and not V.placementTunerBag,"Weapon tuner never inherits a bag target")
-check(not tuner.pause.enabled,"Weapon tuner still cannot pause bag motion")
+check(not tuner.pause,"Weapon tuner has no bag physics toggle")
 check(not tuner.modelSelector:IsVisible() and not tuner.mountSelector:IsVisible() and not tuner.colorChoices:IsVisible(),"Bag selectors stay hidden when tuning weapons")
 check(V:SetBagTunerValue("up",-1),"Weapon lower bound remains accepted")
 click(upRow.minus)

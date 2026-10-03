@@ -50,6 +50,7 @@ static float bagModelMass(const BagResponseProfile* profile,float fittedScale=.4
 struct BagResponseStep { float decay=1,dtDecay=0,driverBlend=0; };
 struct BagResponse {
     bool tracking=false,ready=false;
+    float outputAmplitude=1;
     bool activeMotion=true;
     std::uintptr_t model=0;
     std::uint64_t fit=0;
@@ -126,7 +127,7 @@ static std::array<BagMatrix,61> bagResponseMatrices(const BagResponse& state,con
         for(unsigned k=0;k<3;++k){
             const float limit=.20f*state.profile.height;
             const float shift=std::fmax(-limit,std::fmin(limit,
-                state.localOffset[k]*state.weights[control][k]+state.bobLocal[k]*bobWeight));
+                (state.localOffset[k]*state.weights[control][k]+state.bobLocal[k]*bobWeight)*state.outputAmplitude));
             for(unsigned axis=0;axis<3;++axis)matrix[12+axis]+=modelToRender[k*4+axis]*shift;
         }
     }

@@ -3,6 +3,8 @@
 #include "weapon_renderer.cpp"
 #undef main
 static void* forceRefresh=nullptr;
+static bool calmCapeEnabled=false;
+static std::uint64_t calmCapeOwner=0;
 static unsigned sharedRefreshes=0;
 static void updateDisplay(void*){++sharedRefreshes;}
 static void rebuildComponent(void*){++sharedRefreshes;}
@@ -21,6 +23,8 @@ int main(){existingWeaponRegression();
     sharedApply(incoming);auto* c=weaponContext(p.model);assert(c&&weaponContextActive(*c)&&c->guid!=getPlayer());assert(c->extra[2]&&c->bags[4].child);assert(c->sharedFits[7].values.scale==125);assert(c->bags[4].fits[0].values.scale==70);assert(weaponTuningEntries[7][0].values==localFits&&bagTuningOwner==owner);
     auto child=c->bags[4].child;const auto beforeLoads=loads,beforeRefreshes=sharedRefreshes;sharedApply(incoming);assert(loads==beforeLoads&&sharedRefreshes==beforeRefreshes&&c->bags[4].child==child);
     detach(child);releaseModel(child);assert(!c->bags[4].child&&refs[address(child)]==0);sharedApply(incoming);child=c->bags[4].child;assert(child&&refs[address(child)]==2);
+    incoming[p.guid].look.bags[0].physics=false;incoming[p.guid].look.bags[0].amplitude=40;sharedApply(incoming);assert(!c->bags[4].fits[0].values.motion&&std::fabs(c->bags[4].fits[0].values.amplitude-.4f)<.00001f);
+    incoming[p.guid].look.flags|=4;const auto capeRefresh=sharedRefreshes;sharedApply(incoming);assert(sharedRefreshes==capeRefresh+1);
     auto rangedChild=c->nativeChildren[2];assert(rangedChild&&!hideStoredWeapon(rangedChild));incoming[p.guid].look.stowed=1;sharedApply(incoming);rangedChild=c->nativeChildren[2];assert(rangedChild&&hideStoredWeapon(rangedChild));
     incoming[p.guid].look.bags[0]={};incoming[p.guid].look.carried[2]=0;sharedApply(incoming);assert(!c->bags[4].child&&!c->extra[2]&&refs[address(child)]==0);
     assert(bagTuningOwner==owner&&weaponTuningEntries[7][0].values==localFits);sharedClearAll();assert(sharedAppearances.empty()&&sharedWeaponContexts.empty()&&!weaponContext(p.model));

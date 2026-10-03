@@ -8,6 +8,7 @@
 #include "BagMountFlop.h"
 #include "BagTuning.h"
 #include "BagResponse.h"
+#include "BagAmplitude.h"
 // Dark Schoolbag is authored upright (+Z), outward (-X), with the origin at
 // the center of its back panel. Point 28 supplies the back surface; its
 // parent bone supplies the torso orientation, without a shield's sheath tilt.
@@ -88,6 +89,7 @@ static bool bagPlacement(const std::array<float,16>& renderedBack,const std::arr
         if(!bagAffineInverse(*fittedOverride,validation))return false;
         target=*fittedOverride;
     }
+    const auto fittedTarget=target;
     if(motion){
         std::array<float,3> worldUp{{0,0,1}};
         std::array<float,3> verticalMeasure=worldUp;
@@ -95,7 +97,7 @@ static bool bagPlacement(const std::array<float,16>& renderedBack,const std::arr
         // Revision changes reset once for the matching bag/race/sex. Repeated
         // identical Lua setters leave the motion history untouched.
         if(response&&responseProfile){
-            if(softBody&&tuning.motion&&directionReady){
+            if(softBody&&tuning.motion&&tuning.amplitude>0&&directionReady){
                 const std::uint64_t fitKey=(std::uint64_t(identity)<<48)|(std::uint64_t(baseMount)<<40)|
                     (std::uint64_t(fitIndex)<<32)|override.revision;
                 BagMatrix sample=target,renderToWorld;
@@ -118,7 +120,7 @@ static bool bagPlacement(const std::array<float,16>& renderedBack,const std::arr
         // Keep the original mounting-point momentum and upward/outward fall
         // lift. Local fabric controls are sampled from the unmodified mount
         // above, so this rigid secondary movement cannot feed back into itself.
-        if(tuning.motion&&directionReady){
+        if(tuning.motion&&tuning.amplitude>0&&directionReady){
             const float mass=bagModelMass(responseProfile,size);
             const auto fitted=target;
             const float contactTop=responseProfile?responseProfile->top:.6195f;
@@ -148,6 +150,10 @@ static bool bagPlacement(const std::array<float,16>& renderedBack,const std::arr
             }
         }
         else if(motion->ready)*motion={};
+    }
+    if(motion){
+        bagMotionAmplitude(fittedTarget,target,tuning.motion?tuning.amplitude:0,responseProfile?responseProfile->top:.6195f);
+        if(response)response->outputAmplitude=tuning.motion?tuning.amplitude:0;
     }
     // Restore THIS frame's model/view transform, without filtering camera or
     // character travel. Keep handedness/scale outside quaternion conversion.

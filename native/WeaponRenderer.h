@@ -1393,6 +1393,7 @@ static int __fastcall setBagInstanceFit(void* L){
         }
         unsigned motion=0;if(!bagLuaUnsigned(L,13,1,motion))return result(L,-2);
         values.motion=motion==1;
+        if(isNumber(L,14)){const double amplitude=toNumber(L,14);if(!std::isfinite(amplitude)||amplitude<0||amplitude>200)return result(L,-2);values.amplitude=static_cast<float>(amplitude*.01);}
     }
     Player player;if(!snapshot(player))return result(L,-1);
     const auto guid=player.guid;std::uintptr_t parent=player.model;

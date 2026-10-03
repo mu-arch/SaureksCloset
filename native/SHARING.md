@@ -8,7 +8,8 @@ Do not include that server repository or its credentials/database in addon ZIPs.
 
 The DLL exchanges 364-byte complete snapshots (372-byte publication / 384-byte
 delivery). This includes body details, hide/inherit/replace equipment state,
-independent carried weapons, stowed visibility, precision fits and five bags.
+independent carried weapons, stowed visibility, precision fits and five bags. Protocol version 2 also carries each bag's physics
+toggle/amplitude and the baked cape option; it requires the matching relay.
 The game thread copies bounded data into a mailbox. Windows HTTP/WebSocket calls
 run on dedicated threads, with certificate verification, no redirects or cookie
 sharing, connection deadlines, capped input and reconnect backoff. Optional

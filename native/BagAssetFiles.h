@@ -1,11 +1,13 @@
 #pragma once
 #include "BagCatalog.h"
+#include "CapeAnimation.h"
 // Build 5875 disables ordinary loose-file searches at startup. Route only our
 // catalog's shipped bag assets to the client's existing disk-file handle path.
 using ResolveAssetFile=int (__fastcall *)(const char*,char*,unsigned,unsigned,unsigned*,void**);
 static ResolveAssetFile resolveAssetFileOriginal=nullptr;
 static const char* bagAssetFile(const char* filename){
     if(!filename)return nullptr;
+    if(const auto* animation=capeAnimationAsset(filename))return animation;
     for(const char* allowed:bagAssetFiles){
         unsigned i=0;
         for(;allowed[i]&&filename[i];++i){

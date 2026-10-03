@@ -23,5 +23,6 @@ Preview.lua
 OutfitPreview.lua
 OutfitPortraits.lua
 BagTunerUI.lua
+Animations.lua
 UI.lua
 Bindings.xml
