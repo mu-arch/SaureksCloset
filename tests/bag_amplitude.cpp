@@ -2,7 +2,6 @@
 #include <cmath>
 #include <iostream>
 #include "../native/BagPlacement.h"
-#include "../native/CapeAnimation.h"
 static const BagMatrix identity{{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};
 static void near(float a,float b){assert(std::fabs(a-b)<.000003f);}
 int main(){
@@ -29,8 +28,5 @@ int main(){
         assert(stopped==fitted&&!response.ready&&!motion.ready);
     }
     auto invalid=BagTuningValues{};invalid.amplitude=std::nanf("");assert(!bagTuningValid(invalid,true));
-    for(const char* name:{"Character\\Human\\Female\\HumanFemale.mdx","character/human/female/humanfemale.m2"})assert(capeAnimationModel(name,true)==calmCapeModel&&capeAnimationModel(name,false)==name);
-    const char* other="Character\\Human\\Male\\HumanMale.mdx";assert(capeAnimationModel(other,true)==other);
-    assert(capeAnimationAsset(calmCapeFile)&&!capeAnimationAsset("Interface\\AddOns\\Other\\HumanFemaleCapeCalm.m2"));
-    std::cout<<"PASS: exact default/zero motion, rigid geometry at all amplitudes, dynamic off follows attachment, cape model scope\n";
+    std::cout<<"PASS: exact default/zero motion, rigid geometry at all amplitudes, dynamic off follows attachment\n";
 }

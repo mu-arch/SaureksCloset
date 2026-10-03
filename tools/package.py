@@ -42,14 +42,9 @@ for bag in bags['bags']:
         assert hashlib.sha256((addon / 'Models' / name).read_bytes()).hexdigest() == bag[checksum], name
         bag_files.add(name)
 assert {p.name for p in (addon / 'Models').iterdir() if p.is_file()} == bag_files
-cape = json.loads((root / 'assets/cape/human-female-calm.json').read_text())
-assert hashlib.sha256((addon / 'Animations/HumanFemaleCapeCalm.m2').read_bytes()).hexdigest() == cape['sha256']
 
 # Keep only the installable addon, its existing documentation/screenshots and DLL.
 # Build metadata stays in the repository. Never rewrite the user's README.
-animation_styles = json.loads((root / 'assets/cape/animation-styles.json').read_text())['files']
-for name,digest in animation_styles.items():
-    assert hashlib.sha256((addon/'Animations/Styles'/name).read_bytes()).hexdigest()==digest
 payload = {}
 for p in addon.rglob('*'):
     if not p.is_file():
@@ -59,8 +54,6 @@ for p in addon.rglob('*'):
         include = p.name in {e['texture'] for e in artwork} or p.name == 'ASSETS-LICENSE'
     elif relative.parts[0] == 'Screenshots':
         include = p.suffix.lower() in ('.png', '.gif') or p.name == 'ASSETS-LICENSE'
-    elif relative.parts[0] == 'Animations':
-        include = (len(relative.parts)==3 and relative.parts[1]=='Styles' and relative.name in animation_styles) or (len(relative.parts)==2 and relative.name in {'HumanFemaleCapeCalm.m2', 'ASSETS-LICENSE'})
     elif relative.parts[0] == 'Models':
         include = p.name in bag_files
     elif relative.parts[0] == 'Installation instructions':

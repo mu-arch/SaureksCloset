@@ -2,7 +2,7 @@
 #include <cassert>
 #include <iostream>
 using namespace sharing;
-int main(){Look a;a.bodyAnimation=16;a.capeAnimation=3;a.body={1,1,0,0,0,0,0,0};a.items[0]=0;a.items[2]=1234;a.flags=7;a.carried[0]=17;a.fitMask=1;a.fits[0]={100,0,-300,400,500,600,8500};a.bags[0]={12,1,4,{1000,-1000,-20000,0,0,0,7000}};a.bags[0].amplitude=35;a.bags[0].physics=false;auto b=a.encode();assert(b.size()==appearanceSize);Look decoded;assert(Look::decode(b.data(),b.size(),decoded)&&decoded==a);for(unsigned n=0;n<b.size();++n)assert(!Look::decode(b.data(),n,decoded));b[84]=8;assert(!Look::decode(b.data(),b.size(),decoded));
+int main(){Look a;a.body={1,1,0,0,0,0,0,0};a.items[0]=0;a.items[2]=1234;a.flags=7;a.carried[0]=17;a.fitMask=1;a.fits[0]={100,0,-300,400,500,600,8500};a.bags[0]={12,1,4,{1000,-1000,-20000,0,0,0,7000}};a.bags[0].amplitude=35;a.bags[0].physics=false;auto b=a.encode();assert(b.size()==appearanceSize);Look decoded;assert(Look::decode(b.data(),b.size(),decoded)&&decoded==a);for(unsigned n=0;n<b.size();++n)assert(!Look::decode(b.data(),n,decoded));b[84]=8;assert(!Look::decode(b.data(),b.size(),decoded));
 b=a.encode();b[264+20]=12;b[264+20+3]=4;assert(!Look::decode(b.data(),b.size(),decoded)); // Duplicate nonempty bag slot.
 b=a.encode();b[124+12]=0;b[124+13]=0;assert(!Look::decode(b.data(),b.size(),decoded)); // Enabled zero-size fit.
 b=a.encode();b[268]=201;assert(!Look::decode(b.data(),b.size(),decoded)); // Out-of-range amplitude.

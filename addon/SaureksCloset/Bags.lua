@@ -27,7 +27,7 @@ function V:BagPhysicsAmount(bag)
 end
 function V:SetBagPhysics(id,on,amount)
     local bag=self:BagInstance(id)
-    if not bag or not self:AnimationControlsAvailable() or type(amount)~="number" or not (amount>=0 and amount<=200) then return false end
+    if not bag or not self:PhysicsControlsAvailable() or type(amount)~="number" or not (amount>=0 and amount<=200) then return false end
     bag.physics=on and true or false;bag.amplitude=math.floor(amount+.5)
     self:BagChanged();return true
 end

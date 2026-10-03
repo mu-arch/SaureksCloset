@@ -6,6 +6,7 @@
 #include "BagBodyBinding.h"
 #include "BagCatalog.h"
 #include "BagBehavior.h"
+#include "WeaponPhysics.h"
 #include "PlacementTuning.h"
 #include "StaffPlacement.h"
 #include "StaffFits.h"
@@ -82,6 +83,9 @@ struct BagInstance {
     std::array<BagTuningEntry,16> fits{};
 };
 static unsigned bagAttachment(unsigned mount){return mount==1?32:mount==2?33:28;}
+struct WeaponRigidMotion {std::uintptr_t child=0;unsigned point=0;BagMotion motion;};
+static bool weaponPhysicsEnabled=false;
+static std::uint64_t weaponPhysicsOwner=0;
 struct WeaponContext {
     std::uintptr_t parent=0,unit=0;std::uint64_t guid=0;unsigned token=0;
     WeaponSelection selection;
@@ -99,6 +103,8 @@ struct WeaponContext {
     // The model destruction hook clears these before an address can be reused.
     std::array<void*,3> nativeChildren{};
     unsigned previewMode=0;
+    bool sharedWeaponPhysics=false;
+    std::array<WeaponRigidMotion,13> rigidWeapons{};
     std::array<BagTuningEntry,10> sharedFits{};
     std::array<unsigned char,8> rangedInfo{};
 };
@@ -773,6 +779,34 @@ static bool tuneStoredPlacement(void* child,const BagMatrix& base, std::array<fl
     }
     return false;
 }
+static int __fastcall setWeaponPhysicsLua(void* L){
+    if(!isNumber(L,1)||(toNumber(L,1)!=0&&toNumber(L,1)!=1))return result(L,-2);
+    const auto owner=getPlayer();if(!owner)return result(L,-1);
+    const bool enabled=toNumber(L,1)==1;
+    if(weaponPhysicsOwner!=owner||weaponPhysicsEnabled!=enabled){for(auto& c:weaponContexts)c.rigidWeapons={};}
+    weaponPhysicsOwner=owner;weaponPhysicsEnabled=enabled;return result(L,1);
+}
+static bool positionWeaponPhysics(void* child,const float* matrix,BagMatrix& out,bool visible){
+    const auto model=reinterpret_cast<std::uintptr_t>(child);std::uintptr_t parent=0;unsigned point=0;
+    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point))return false;
+    auto* c=weaponContext(parent);if(!c||!weaponContextActive(*c))return false;
+    int slot=-1;const WeaponAsset* asset=nullptr;
+    for(unsigned i=0;i<c->extra.size();++i)if(c->extra[i]==child&&i!=6){slot=i;asset=weaponAsset(c->selection.items[i]);break;}
+    if(slot<0)for(unsigned role=0;role<3;++role)if(c->nativeChildren[role]==child){
+        slot=10+role;const int route=c->routes[role];asset=weaponAsset(route>=0?c->selection.items[route]:c->selection.equipped[role]);break;
+    }
+    if(slot<0)return false;
+    auto& entry=c->rigidWeapons[slot];
+    const bool enabled=c->guid==getPlayer()?(weaponPhysicsOwner==c->guid&&weaponPhysicsEnabled):c->sharedWeaponPhysics;
+    // Hands, quivers, unrelated props and stationary previews keep native poses.
+    if(!enabled||c->token||!visible||point<26||point>33||!asset||asset->kind==5||!weaponModelMatches(child,asset->model)){entry={};return false;}
+    if(entry.child!=model||entry.point!=point){entry={};entry.child=model;entry.point=point;}
+    BagMatrix base,local,render,world;std::uintptr_t scene=0;
+    if(!matrix||!read(model+0xBC,local)||!read(parent+0xFC,render)||!read(parent+0x2C,scene)||!scene||!read(scene+0x9C,world)){entry={};return false;}
+    // The caller may pass a just-computed stack matrix (staff/bow/tuner fixes).
+    for(unsigned i=0;i<16;++i)base[i]=matrix[i];
+    return rigidWeaponPhysics(entry.motion,base,local,render,world,out,model,slot,point,bagClockMilliseconds(),bagIsRunning(*c),bagMotionActive(*c),bagAirLiftTarget(*c));
+}
 static void updateWeaponAttachment(void* model,const float* matrix,const float* color,const float* lighting,float alpha){
     std::array<float,16> adjusted;
     std::uintptr_t parent=0;read(reinterpret_cast<std::uintptr_t>(model)+0x1CC,parent);
@@ -800,6 +834,8 @@ static void updateWeaponAttachment(void* model,const float* matrix,const float* 
     std::array<float,16> tuned,base;
     if(positioned)base=adjusted;
     if((positioned||read(reinterpret_cast<std::uintptr_t>(matrix),base))&&tuneStoredPlacement(model,base,tuned))matrix=tuned.data();
+    BagMatrix physics;
+    if(positionWeaponPhysics(model,matrix,physics,alpha>0))matrix=physics.data();
     updateAttachedOriginal(model,matrix,color,lighting,alpha);
 }
 static bool ownedBagUpdate(void* model){
@@ -813,12 +849,24 @@ static bool ownedBagUpdate(void* model){
     return clonedBagOwner(parent)==getPlayer()&&getPlayer()&&
         (clonedBagChild(child)||weaponModelMatches(model,"Interface\\AddOns\\SaureksCloset\\Models\\DarkSchoolbag.mdx"));
 }
+static bool ownedWeaponPhysicsUpdate(void* child){
+    const auto model=reinterpret_cast<std::uintptr_t>(child);std::uintptr_t parent=0;unsigned point=0;
+    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point))return false;
+    auto* c=weaponContext(parent);if(!c||!weaponContextActive(*c)||c->token)return false;
+    if(point<26||point>33){for(auto& entry:c->rigidWeapons)if(entry.child==model)entry={};return false;}
+    const bool enabled=c->guid==getPlayer()?(weaponPhysicsOwner==c->guid&&weaponPhysicsEnabled):c->sharedWeaponPhysics;
+    if(!enabled)return false;
+    for(unsigned i=0;i<c->extra.size();++i)if(i!=6&&c->extra[i]==child)return true;
+    for(auto native:c->nativeChildren)if(native==child)return true;
+    return false;
+}
 static void updateAttachmentForCaller(void* model,const float* matrix,const float* color,const float* lighting,float alpha,std::uintptr_t caller){
     // 0x714000 can lazily evaluate a child after its parent is already current
     // (returns 0x71415D/0x714183). Those calls overwrite its complete palette
     // too, so every owned-bag update must restore local deformation afterward.
-    // Other equipment keeps the original recursive-only routing restriction.
-    if(caller==0x718761||ownedBagUpdate(model))
+    // Opted-in rigid weapons must also retain their pose on lazy updates.
+    // Unrelated equipment keeps the recursive-only routing restriction.
+    if(caller==0x718761||ownedBagUpdate(model)||ownedWeaponPhysicsUpdate(model))
         updateWeaponAttachment(model,matrix,color,lighting,alpha);
     else updateAttachedOriginal(model,matrix,color,lighting,alpha);
 }
@@ -826,6 +874,7 @@ static void __fastcall updateAttachedHook(void* model,void*,const float* matrix,
     updateAttachmentForCaller(model,matrix,color,lighting,alpha,reinterpret_cast<std::uintptr_t>(__builtin_return_address(0)));
 }
 static void releaseExtras(WeaponContext& c){
+    c.rigidWeapons={};
     const auto extra=c.extra;c.extra.fill(nullptr);
     for(auto child:extra)if(child){
         std::uintptr_t parent=0;
@@ -862,11 +911,13 @@ static void forgetWeapons(std::uintptr_t model){
     for(auto& entry:clonedBagChildren)if(entry.child==model)entry={};
     for(auto& entry:clonedBagPreviews)if(entry.model==model)entry={};
     for(auto& c:weaponContexts){
+        for(auto& entry:c.rigidWeapons)if(entry.child==model)entry={};
         for(auto& child:c.nativeChildren)if(reinterpret_cast<std::uintptr_t>(child)==model)child=nullptr;
         for(auto& bag:c.bags)if(reinterpret_cast<std::uintptr_t>(bag.child)==model){bag.child=nullptr;bag.motion={};}
     }
 #if !defined(SAUREKS_WEAPON_TEST) || defined(SAUREKS_SHARING_TEST)
     for(auto& pair:sharedWeaponContexts){auto& c=pair.second;
+        for(auto& entry:c.rigidWeapons)if(entry.child==model)entry={};
         for(auto& child:c.nativeChildren)if(reinterpret_cast<std::uintptr_t>(child)==model)child=nullptr;
         for(auto& child:c.extra)if(reinterpret_cast<std::uintptr_t>(child)==model)child=nullptr;
         for(auto& bag:c.bags)if(reinterpret_cast<std::uintptr_t>(bag.child)==model){bag.child=nullptr;bag.motion={};bag.response={};bag.bodyBinding={};bag.bodyBound=false;}
