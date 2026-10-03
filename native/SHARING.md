@@ -8,7 +8,7 @@ Do not include that server repository or its credentials/database in addon ZIPs.
 
 The DLL exchanges 364-byte complete snapshots (372-byte publication / 384-byte
 delivery). This includes body details, hide/inherit/replace equipment state,
-independent carried weapons, stowed visibility, precision fits and five bags. Protocol version 2 also carries each bag's physics
+independent carried weapons, stowed visibility, precision fits and five bags. Protocol version 3 also carries each bag's physics
 toggle/amplitude and the baked cape option; it requires the matching relay.
 The game thread copies bounded data into a mailbox. Windows HTTP/WebSocket calls
 run on dedicated threads, with certificate verification, no redirects or cookie
@@ -50,3 +50,5 @@ This tests authenticated WSS exchange, edit debounce and cancellation with two
 WinHTTP clients under Wine. Certificates, credentials and Wine state are confined
 to a temporary fixture directory. It requires free loopback ports 8787, 8788 and
 19443, Wine and OpenSSL. No live game credentials are used.
+
+Wire version 3 adds independent character/cape style IDs at appearance bytes 85/86. Each accepts 0–16; byte 87 stays reserved. Model reload comparisons and cleanup include both styles.

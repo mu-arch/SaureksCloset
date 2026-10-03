@@ -1,7 +1,7 @@
 #pragma once
 static void sharedClear(std::uint64_t guid){
     auto it=sharedAppearances.find(guid);if(it==sharedAppearances.end())return;
-    Player p;const bool live=sharedPlayer(guid,p);const bool body=it->second.snapshot.look.body[0]||(it->second.snapshot.look.flags&4);
+    Player p;const bool live=sharedPlayer(guid,p);const bool body=it->second.snapshot.look.body[0]||(it->second.snapshot.look.flags&4)||it->second.snapshot.look.bodyAnimation||it->second.snapshot.look.capeAnimation;
     sharedModelOwners.erase(it->second.model);sharedAppearances.erase(it);
     auto c=sharedWeaponContexts.find(guid);
     if(c!=sharedWeaponContexts.end()){releaseExtras(c->second);releasePassthroughQuiver(c->second);releaseBackpack(c->second);releaseBagInstances(c->second);sharedWeaponContexts.erase(c);}
@@ -17,7 +17,7 @@ static sharing::Fit sharedPackFit(const BagTuningValues& v){
 }
 static BagTuningValues sharedUnpackFit(const sharing::Fit& f){return {f[0]/10000.f,f[1]/10000.f,f[2]/10000.f,f[3]/100.f,f[4]/100.f,f[5]/100.f,f[6]/100.f,true};}
 static void sharedCapture(sharing::Look& look){
-    Player p;if(!snapshot(p))return;look.flags=(calmCapeEnabled&&calmCapeOwner==p.guid)?4u:0u;const auto* c=weaponContext(p.model);if(!c||c->guid!=p.guid||c->token)return;
+    Player p;if(!snapshot(p))return;look.bodyAnimation=animationStyleOwner==p.guid?bodyAnimationStyle:0;look.capeAnimation=animationStyleOwner==p.guid?capeAnimationStyle:0;look.flags=(calmCapeEnabled&&calmCapeOwner==p.guid)?4u:0u;const auto* c=weaponContext(p.model);if(!c||c->guid!=p.guid||c->token)return;
     const auto* native=nativeModel(p.native);if(!native)return;
     const unsigned race=look.body[0]?look.body[1]:native->race,sex=look.body[0]?look.body[2]:native->sex,index=(race-1)*2+sex;
     look.flags|=(c->selection.carriedMode==1?1u:0u)|(c->quiverHorizontal?2u:0u);
@@ -80,8 +80,8 @@ static void sharedApply(const std::map<std::uint64_t,sharing::Remote>& incoming)
         auto i=sharedAppearances.find(pair.first);bool changed=i==sharedAppearances.end()||!(i->second.snapshot.look==look);
         bool newModel=i!=sharedAppearances.end()&&i->second.model!=p.model;
         if(changed||newModel){if(!budget)continue;--budget;
-            bool bodyChanged=look.body[0]!=0||(look.flags&4);
-            if(i!=sharedAppearances.end())bodyChanged=i->second.snapshot.look.body!=look.body||((i->second.snapshot.look.flags^look.flags)&4);
+            bool bodyChanged=look.body[0]!=0||(look.flags&4)||look.bodyAnimation||look.capeAnimation;
+            if(i!=sharedAppearances.end())bodyChanged=i->second.snapshot.look.body!=look.body||((i->second.snapshot.look.flags^look.flags)&4)||i->second.snapshot.look.bodyAnimation!=look.bodyAnimation||i->second.snapshot.look.capeAnimation!=look.capeAnimation;
             auto& entry=sharedAppearances[p.guid];entry.snapshot=pair.second;sharedBind(p.guid,entry,p);
             if(p.display==p.native&&nativeModel(p.native)){
                 if(bodyChanged||newModel){forceRefresh=reinterpret_cast<void*>(p.unit);updateDisplay(forceRefresh);forceRefresh=nullptr;}

@@ -81,3 +81,26 @@ for _,window in ipairs({V.bagAnimationWindow,V.capeAnimationWindow}) do
     assert(window.close.anchor[4]==-46 and window.close.anchor[5]==-24,'Animation windows share corrected close alignment')
 end
 print('PASS: per-bag amplitude/disable, saved settings, built-in fits, tuning independence, cape opt-in, old-DLL gating and shared window alignment')
+
+local styles={}
+SaureksClosetAnimationVersion=function() return 2 end
+SaureksClosetSetAnimationStyles=function(...) table.insert(styles,{...});return 1 end
+V:RefreshAnimationsPage()
+assert(V:SetAnimationStyle('body',11,true));assert(styles[#styles][1]==11 and styles[#styles][2]==0)
+assert(V:SetAnimationStyle('cape',4,true));assert(styles[#styles][1]==11 and styles[#styles][2]==4)
+assert(V.animationStyleRows.body.race.caption.text=='Tauren' and V.animationStyleRows.cape.sex.caption.text=='Female')
+assert(V:SetAnimationStyle('body',11,false));assert(styles[#styles][1]==0 and styles[#styles][2]==4)
+assert(V:SetAnimationStyle('body',7,true));assert(V:SetCalmCape(true));assert(styles[#styles][1]==7 and styles[#styles][2]==0 and styles[#styles][3]==1)
+V:ResetAnimationStyle('cape');assert(styles[#styles][1]==7 and styles[#styles][2]==0 and styles[#styles][3]==0)
+V:ResetAnimationStyle('body');assert(styles[#styles][1]==0 and styles[#styles][2]==0)
+assert(not V:SetAnimationStyle('body',17,true) and not V:SetAnimationStyle('cape',0/0,true) and not V:SetAnimationStyle('unknown',1,true))
+-- Real menu callbacks must be anchored to a named frame; custom buttons have no native label.
+local menuEntries={};UIDropDownMenu_AddButton=function(info) table.insert(menuEntries,info) end
+this=V.animationStyleRows.body.race;this.scripts.OnClick();assert(#menuEntries==8 and V.animationStyleMenu.anchor)
+menuEntries[2].func();assert(VanityStudioCharacter.bodyAnimationEnabled)
+menuEntries={};this=V.animationStyleRows.cape.sex;this.scripts.OnClick();assert(#menuEntries==2);menuEntries[1].func()
+assert(VanityStudioCharacter.capeAnimationEnabled and VanityStudioCharacter.bodyAnimationEnabled)
+VanityStudioCharacter.enabled=false;V:SyncAnimations();assert(styles[#styles][1]==0 and styles[#styles][2]==0)
+VanityStudioCharacter.enabled=true
+for _,window in ipairs({V.bodyAnimationWindow,V.capeAnimationWindow}) do assert(window.close.anchor[4]==-46 and window.close.anchor[5]==-24) end
+print('PASS: independent cape/body toggles, race/gender menus, named anchors, original defaults, calmer option and addon disable')

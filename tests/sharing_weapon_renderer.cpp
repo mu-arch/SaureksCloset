@@ -3,6 +3,8 @@
 #include "weapon_renderer.cpp"
 #undef main
 static void* forceRefresh=nullptr;
+static unsigned bodyAnimationStyle=0,capeAnimationStyle=0;
+static std::uint64_t animationStyleOwner=0;
 static bool calmCapeEnabled=false;
 static std::uint64_t calmCapeOwner=0;
 static unsigned sharedRefreshes=0;
