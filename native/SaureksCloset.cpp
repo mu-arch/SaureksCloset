@@ -13,6 +13,7 @@
 #include "WeaponryProbe.h"
 #include "ArmorInspection.h"
 #include "EquipmentUI.h"
+#include "TabardVisibility.h"
 #include "BagAssetFiles.h"
 using Register=void (__fastcall *)(const char*,std::uintptr_t);
 using GetPlayer=std::uint64_t (__fastcall *)();
@@ -34,6 +35,12 @@ static Changed changedOriginal=nullptr;
 static Transform transformOriginal=nullptr;
 static SetMatrix matrixOriginal=nullptr;
 static VisibleItem visibleItemOriginal=nullptr;
+using TabardDisplay=bool (__thiscall *)(void*,unsigned);
+using GuildTabardTextures=void (__thiscall *)(void*,unsigned,unsigned,unsigned,unsigned,unsigned);
+using ItemDisplay=int (__thiscall *)(void*);
+static TabardDisplay tabardDisplayOriginal=nullptr;
+static GuildTabardTextures guildTabardTexturesOriginal=nullptr;
+static const auto itemDisplay=reinterpret_cast<ItemDisplay>(0x62EB40);
 static const auto getPlayer=reinterpret_cast<GetPlayer>(0x468550);
 static const auto objectPtr=reinterpret_cast<ObjectPtr>(0x468460);
 static const auto updateDisplay=reinterpret_cast<Refresh>(0x60ABE0);
@@ -99,6 +106,23 @@ static void* __fastcall visibleItemHook(void* unit,void*,int slot){
         Player p;if(snapshot(p))localPlayer=p.unit;
     }
     return sharedVisibleItem(unit,slot,caller,equipmentUIVisibleItem(unit,slot,caller,localPlayer,visibleItemOriginal));
+}
+static bool __fastcall tabardDisplayHook(void* unit,void*,unsigned display){
+    Player p;
+    if(snapshot(p)&&p.display==p.native&&nativeModel(p.native)){
+        display=tabardDisplayForUpdate(unit,display,p.unit,visibleItemOriginal,
+            [](std::uintptr_t address,auto& value){return read(address,value);},itemDisplay);
+    }
+    // The native routine rejects display zero without touching the compositor.
+    return tabardDisplayOriginal(unit,display);
+}
+static void __fastcall guildTabardTexturesHook(void* component,void*,unsigned emblem,
+        unsigned emblemColor,unsigned border,unsigned borderColor,unsigned background){
+    Player p;
+    if(snapshot(p)&&p.display==p.native&&nativeModel(p.native)&&
+       !allowGuildTabardTextures(component,p.component,p.unit,visibleItemOriginal,
+            [](std::uintptr_t address,auto& value){return read(address,value);},itemDisplay))return;
+    guildTabardTexturesOriginal(component,emblem,emblemColor,border,borderColor,background);
 }
 static const char* __fastcall nameHook(void* unit,void*){
     Player p;
@@ -435,6 +459,8 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
         {0x5F0D60,reinterpret_cast<void*>(&visibleItemHook),reinterpret_cast<void**>(&visibleItemOriginal)},
+        {0x5E0720,reinterpret_cast<void*>(&tabardDisplayHook),reinterpret_cast<void**>(&tabardDisplayOriginal)},
+        {0x47A610,reinterpret_cast<void*>(&guildTabardTexturesHook),reinterpret_cast<void**>(&guildTabardTexturesOriginal)},
         {0x60D450,reinterpret_cast<void*>(&unitSpellVisualHook),reinterpret_cast<void**>(&unitSpellVisualOriginal)},
         {0x60A3D0,reinterpret_cast<void*>(&unitMissileHook),reinterpret_cast<void**>(&unitMissileOriginal)},
         {0x5FE2F0,reinterpret_cast<void*>(&unitAnimationHook),reinterpret_cast<void**>(&unitAnimationOriginal)},
