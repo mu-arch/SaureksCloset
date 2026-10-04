@@ -206,9 +206,13 @@ for i,row in ipairs(V.bagRows) do
     inContent(row,"Empty bag slot")
 end
 local tuner=V.bagTunerWindow
+check(tuner.positionMode.closetPanel,"Coordinate mode uses the shared native red button style")
+check(tuner.positionMode.anchor[4]+tuner.positionMode.width==331 and tuner.positionMode.anchor[5]==-151 and tuner.positionMode.height==22,"Mode button sits at the top right of the value rows")
+check(not overlaps(tuner.positionMode,tuner.live) and not overlaps(tuner.positionMode,tuner.rows[1].editor),"Mode button cannot overlap live tuning or numeric fields")
 click(V.bagRows[4].choose)
 check(tuner.emptySlot==4 and tuner:IsShown() and table.getn(V:GetBags())==0,"Opening an empty slot does not create or equip a default bag")
 check(tuner.modelPicker:IsShown() and not tuner.save.enabled and not tuner.reset.enabled and not tuner.live.enabled,"Empty slot opens the visual picker with fitting actions disabled")
+check(not tuner.positionMode.enabled,"Empty slots cannot switch placement modes")
 for _,row in ipairs(tuner.rows) do check(row.editor:GetText()=="","Empty slot has no legacy fit values") end
 local staleEmpty=tuner.modelPicker.rows[1]
 V:CloseBagTunerModelPicker()

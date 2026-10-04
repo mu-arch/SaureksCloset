@@ -4,9 +4,17 @@
 There is no per-frame cloth solver, collision simulation, race retargeting or
 replacement character movement. Walking (4/13), running (5), standing (0), and
 airborne/landing (37/38/39/40/187) amplitudes are independent, from 0–200%.
+Advanced controls independently scale forward/back swing, side swing and twist,
+set a -30 to +30 degree resting lean, soften direction reversals (0–100%), and
+scale the bottom joint separately (0–200%). The Soft motion preset stages
+55% forward/back, 85% side, 60% twist, 5 degrees outward lean, 65% smoothing,
+and 60% hem motion; it preserves activity amounts until Apply.
+
 Each clip rotates around its quaternion mean. 0% holds that clip's mean lower-cape
 pose; 100% retains the authored animation. Native transitions and timestamps stay
-unchanged. The upper cape bone, body/tail/tabard bones, scale and translation tracks
+unchanged. Directional changes operate on quaternion rotation vectors about each
+clip mean; two-sided exponential filtering smooths reversals without retiming
+character motion. Only the first movable cape joint receives resting lean. The upper cape bone, body/tail/tabard bones, scale and translation tracks
 are never edited. Reset returns to the original model path.
 
 The sixteen base models in `CapeMotion/` are the independently verified private-cape

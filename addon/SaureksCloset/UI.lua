@@ -273,7 +273,7 @@ function V:SetTab(tab)
     -- Body previews deliberately hide equipment and cannot host bag fitting.
     if tab~=self.tab and self.bagTunerWindow and self.bagTunerWindow:IsShown() then self.bagTunerWindow:Hide() end
     if self.CloseBagPlacementEditor then self:CloseBagPlacementEditor() end
-    if self.bagPhysicsWindow then self.bagPhysicsWindow:Hide();self.weaponPhysicsWindow:Hide();self.capePhysicsWindow:Hide() end
+    if self.bagPhysicsWindow then self.bagPhysicsWindow:Hide();self.weaponPhysicsWindow:Hide();self.capePhysicsWindow:Hide();self.capeAdvancedWindow:Hide() end
     local wasCharacter=self.pagesByName.armor:IsVisible()
     if tab~="weaponry" then self:CloseWeaponOptions() end
     self:CloseOutfitMenu();self:CloseOutfitDetails();self:CloseBrowser();self.tab=tab
@@ -399,7 +399,7 @@ function V:CreateUI()
     f:SetScript("OnHide",function()
         if UIParent.doublewide==V.frame then UIParent.doublewide=nil end
         V:CloseOutfitMenu();V:CloseOutfitDetails();V:CloseBrowser();V:CloseWeaponOptions();V:CancelDraft()
-        if V.bagPhysicsWindow then V.bagPhysicsWindow:Hide();V.weaponPhysicsWindow:Hide();V.capePhysicsWindow:Hide() end
+        if V.bagPhysicsWindow then V.bagPhysicsWindow:Hide();V.weaponPhysicsWindow:Hide();V.capePhysicsWindow:Hide();V.capeAdvancedWindow:Hide() end
         if V.outfitName then V.outfitName:ClearFocus() end
     end)
     table.insert(UISpecialFrames,f:GetName())
@@ -474,7 +474,7 @@ function V:CreateUI()
     self:CreateBodyPage(self.pagesByName.body)
     self:CreateWeaponryPage(self.pagesByName.weaponry)
     self:CreateBagsPage(self.pagesByName.bags)
-    if self.CreatePhysicsPage then self:CreatePhysicsPage(self.pagesByName.physics,sheet,section,label,settingsButton,enabled) end
+    if self.CreatePhysicsPage then self:CreatePhysicsPage(self.pagesByName.physics,sheet,section,label,settingsButton,enabled,edit,button) end
     self:CreateExposurePage(self.pagesByName.exposure)
     self:CreateOutfitPage(self.pagesByName.outfits)
     self:CreateSettingsPage(self.pagesByName.settings)
@@ -969,7 +969,7 @@ function V:CreateBagsPage(p)
         bagTooltip(this,"Show bags","Show or hide your cosmetic bags without changing their models, colors or placements.")
     end)
     checkbox:SetScript("OnLeave",function() GameTooltip:Hide() end)
-    self:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled)
+    self:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled,button)
 end
 function V:EditBag(id)
     if not self:BagInstance(id) or not self:MultiBagRendererAvailable() then return end

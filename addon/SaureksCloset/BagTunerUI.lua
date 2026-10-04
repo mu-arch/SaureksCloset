@@ -13,16 +13,45 @@ local function showMessage(text)
     V.bagTunerWindow.messageTime=4
 end
 local function fieldHelp(field)
-    if V.placementTunerSlot and V.placementTunerSlot>=108 then
-        return field.label..": adjust the stowed weapon on your body. Drawing restores its normal position, rotation and size in the hand."
+    local suffix=""
+    if V.bagTunerWindow and V.bagTunerWindow.relativeMode then
+        suffix=field.key=="scale" and "\nSize remains an absolute percentage in both modes." or "\nRelative mode: 0 is this item's placement when Relative was enabled. Positive and negative values are offsets from that point."
     end
-    return field.help
+    if V.placementTunerSlot and V.placementTunerSlot>=108 then
+        return field.label..": adjust the stowed weapon on your body. Drawing restores its normal position, rotation and size in the hand."..suffix
+    end
+    return field.help..suffix
 end
 local function displayValue(field,value)
     return string.format("%."..(field.decimals or 2).."f",value or 0)
 end
 local mountNames={back="Back",leftHip="Left hip",rightHip="Right hip"}
 local mountOrder={"back","leftHip","rightHip"}
+function V:BagTunerDisplayOffset(field,state)
+    local f=self.bagTunerWindow
+    if field.key~="scale" and f.relativeMode and f.relativeKey==state.key and f.relativeOrigin then
+        return f.relativeOrigin[field.key] or 0
+    end
+    return 0
+end
+function V:SetBagTunerRelative(relative,targetKey)
+    local f=self.bagTunerWindow;if not f then return false end
+    local state=self:GetBagTunerState();targetKey=targetKey or f.targetKey
+    if not state.available or state.key~=targetKey then self:RefreshBagTunerUI();return false end
+    for _,row in ipairs(f.rows) do
+        if row.editor.editing then
+            local accepted=self:CommitBagTunerEditor(row.editor);row.editor:ClearFocus()
+            if not accepted then f.invalidInput=nil;return false end
+        end
+    end
+    if f.invalidInput then f.invalidInput=nil;return false end
+    state=self:GetBagTunerState()
+    if not state.available or state.key~=targetKey then self:RefreshBagTunerUI();return false end
+    if f.relativeMode~=(relative and true or false) then
+        f.relativeMode=relative and true or false;f.relativeOrigin=nil;f.relativeKey=nil
+    end
+    self:RefreshBagTunerUI();return true
+end
 function V:PrepareBagTunerSelection(id)
     local f=self.bagTunerWindow
     if not f or not f:IsShown() or self.placementTunerBag~=id or not self:BagInstance(id) then return false end
@@ -71,6 +100,7 @@ function V:CommitBagTunerEditor(editor)
     if not f or f.refreshing or not editor.editing then return true end
     local state=self:GetBagTunerState()
     local value=tonumber(editor:GetText())
+    local offset=editor.relativeOffset or 0;editor.relativeOffset=nil
     local accepted=true
     editor.editing=nil
     if state.key~=editor.targetKey then
@@ -80,7 +110,11 @@ function V:CommitBagTunerEditor(editor)
         accepted=false
         showMessage("Enter a number for "..editor.field.label..".")
     else
-        local ok,err=self:SetBagTunerValue(editor.field.key,value)
+        local low,high=self:BagTunerFieldBounds(editor.field,state.bag)
+        local ok,err
+        if value+offset<low or value+offset>high then
+            ok=false;err="Enter a number from "..displayValue(editor.field,low-offset).." to "..displayValue(editor.field,high-offset).."."
+        else ok,err=self:SetBagTunerValue(editor.field.key,value+offset) end
         accepted=ok
         if not ok then showMessage(err or "That value could not be applied.") end
     end
@@ -99,6 +133,13 @@ function V:RefreshBagTunerUI()
     local targetChanged=f.targetKey~=state.key
     if targetChanged and self.CloseBagPlacementEditor then self:CloseBagPlacementEditor() end
     f.targetKey=state.key
+    if not available or f.relativeKey~=state.key then f.relativeOrigin=nil;f.relativeKey=nil end
+    if available and f.relativeMode and not f.relativeOrigin then
+        f.relativeOrigin={};f.relativeKey=state.key
+        for _,field in ipairs(self.bagTunerFields) do f.relativeOrigin[field.key]=(state.values or {})[field.key] or 0 end
+    end
+    f.positionMode:SetText(f.relativeMode and "Relative" or "Absolute")
+    f.enableControl(f.positionMode,available)
     f.target:SetText(state.title or "Bag fitting")
     local bag=self.placementTunerBag and self:BagInstance(self.placementTunerBag)
     local emptySlot=f.emptySlot
@@ -141,7 +182,7 @@ function V:RefreshBagTunerUI()
         if targetChanged and e.editing then
             e.editing=nil;e.cancelCommit=true;e:ClearFocus();e.cancelCommit=nil
         end
-        if not e.editing then e:SetText(emptySlot and "" or displayValue(e.field,(state.values or {})[e.field.key])) end
+        if not e.editing then e:SetText(emptySlot and "" or displayValue(e.field,((state.values or {})[e.field.key] or 0)-self:BagTunerDisplayOffset(e.field,state))) end
         e:EnableMouse(available);e:SetAlpha(available and 1 or .45)
         row.caption:SetAlpha(available and 1 or .45)
         f.enableControl(row.minus,available);f.enableControl(row.plus,available);f.enableControl(row.reset,available)
@@ -156,7 +197,7 @@ function V:RefreshBagTunerUI()
     end
     f.refreshing=nil
 end
-function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled)
+function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled,redButton)
     if self.bagTunerWindow then return end
     local f=sheet("SaureksClosetBagTuner",UIParent,"Placement Tuner")
     self.bagTunerWindow=f;f.enableControl=enabled;f.rows={}
@@ -176,6 +217,7 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled)
         end
         this.invalidInput=nil;this.invalidEditor=nil;this.resetHover=nil
         this.emptySlot=nil
+        this.relativeOrigin=nil;this.relativeKey=nil
         V:SetBagTunerPaused(false)
         if V.placementTunerSlot and V.placementTunerSlot>=108 then V:RefreshPreview() end
         if V.RefreshBagsPage then V:RefreshBagsPage() end
@@ -357,6 +399,19 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled)
     f.live=checkbox("SaureksClosetBagTunerLive","Live tuning",29,145,function()
         V:SetBagTunerEnabled(this:GetChecked() and true or false);V:RefreshBagTunerUI()
     end,"Preview your current fitting values on the character. Turn this off to compare with the program's default fit.")
+    f.positionMode=redButton(f,"Absolute",227,151,104,function()
+        local key=this.targetKey or f.targetKey;this.targetKey=nil
+        V:SetBagTunerRelative(not f.relativeMode,key)
+    end,"SaureksClosetPlacementMode")
+    local modeMouseDown=f.positionMode:GetScript("OnMouseDown")
+    f.positionMode:SetScript("OnMouseDown",function()
+        this.targetKey=f.targetKey
+        if modeMouseDown then modeMouseDown() end
+    end)
+    tooltip(f.positionMode,function()
+        return f.relativeMode and "Relative positioning: position and rotation values are offsets from this item's placement when Relative was enabled. Click for absolute fit values. Size stays an absolute percentage."
+            or "Absolute positioning: edit the full placement values. Click to use this item's current position and rotation as zero. Switching modes does not move the item."
+    end)
     local function nudge(parent,text,x,field,direction)
         local b=section(parent,x,0,22,22,true,"Button",.75)
         local t=label(b,text,0,1,22,20,true)
@@ -405,7 +460,8 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled)
         local e=edit(row,"SaureksClosetBagTuner"..field.key,139,0,67,16)
         e.field=field;e:SetJustifyH("CENTER")
         e:SetScript("OnEditFocusGained",function()
-            this.editing=true;this.targetKey=V:GetBagTunerState().key
+            local state=V:GetBagTunerState()
+            this.editing=true;this.targetKey=state.key;this.relativeOffset=V:BagTunerDisplayOffset(this.field,state)
         end)
         e:SetScript("OnEditFocusLost",function()
             -- Reset is deliberately independent of every other unfinished field.
@@ -502,6 +558,7 @@ function V:OpenBagSlotTuner(slot)
     if not f then return false end
     if f:IsShown() then f:Hide() end
     self.placementTunerSlot=nil;self.placementTunerBag=nil;self.bagTunerTargetKey=nil
+    f.relativeOrigin=nil;f.relativeKey=nil
     f.emptySlot=slot;f.message=nil;f.messageTime=nil
     f:Show();self:RefreshBagTunerUI();self:OpenBagTunerModelPicker()
     if self.RefreshBagsPage then self:RefreshBagsPage() end
@@ -513,6 +570,7 @@ function V:OpenBagTuner(instanceID)
     if not self.bagTunerWindow then return end
     if self.bagTunerWindow:IsShown() then self.bagTunerWindow:Hide() end
     self.bagTunerWindow.emptySlot=nil
+    self.bagTunerWindow.relativeOrigin=nil;self.bagTunerWindow.relativeKey=nil
     self.placementTunerSlot=nil
     local first=self.GetBags and self:GetBags()[1]
     self.placementTunerBag=instanceID or (first and first.id)
@@ -527,6 +585,7 @@ function V:OpenPlacementTuner(slot)
     if not self.bagTunerWindow then return end
     if self.bagTunerWindow:IsShown() then self.bagTunerWindow:Hide() end
     self.bagTunerWindow.emptySlot=nil
+    self.bagTunerWindow.relativeOrigin=nil;self.bagTunerWindow.relativeKey=nil
     self.placementTunerSlot=slot;self.placementTunerBag=nil
     self.bagTunerWindow.message=nil;self.bagTunerWindow.messageTime=nil
     self.bagTunerWindow:Show();self:RefreshBagTunerUI()

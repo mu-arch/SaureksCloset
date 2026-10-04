@@ -66,7 +66,7 @@ static bool previewArmed=false;
 static DWORD previewThread=0;
 static unsigned previewToken=0;
 static State state;
-static const char* localCapeMotionModel(const char* name){return capeMotion::model(name,capeMotion::owner==getPlayer()&&capeMotion::enabled,capeMotion::amounts);}
+static const char* localCapeMotionModel(const char* name){return capeMotion::model(name,capeMotion::owner==getPlayer()&&capeMotion::enabled,capeMotion::amounts,capeMotion::advanced);}
 static void* forceRefresh=nullptr;
 template<typename T> static bool read(std::uintptr_t address,T& result){
     SIZE_T count=0;
@@ -108,7 +108,7 @@ static const char* __fastcall nameHook(void* unit,void*){
     }
     const auto* name=sharedName(reinterpret_cast<std::uintptr_t>(unit));if(!name)name=nameOriginal(unit);
     const auto* remote=sharedForUnit(reinterpret_cast<std::uintptr_t>(unit));
-    if(remote){const auto& c=remote->snapshot.look.cape;return capeMotion::model(name,c[0]!=0,{{c[1],c[2],c[3],c[4]}});}
+    if(remote){const auto& c=remote->snapshot.look.cape;return capeMotion::model(name,c[0]!=0,{{c[1],c[2],c[3],c[4]}},remote->snapshot.look.capeAdvanced);}
     return name;
 }
 static bool __fastcall initHook(void* component,void*,const std::uint32_t* input){
@@ -375,17 +375,22 @@ static int __fastcall setCapeMotionLua(void* L){
         if(!isNumber(L,i+1))return result(L,-2);const double v=toNumber(L,i+1);
         if(!std::isfinite(v)||v<0||v>(i?200:1)||v!=std::floor(v))return result(L,-2);values[i]=static_cast<unsigned>(v);
     }
+    auto options=capeMotion::advancedDefaults();
+    for(unsigned i=0;i<6;++i)if(isNumber(L,6+i)){
+        const double v=toNumber(L,6+i);const unsigned max=i==3?60:i==4?100:200;
+        if(!std::isfinite(v)||v<0||v>max||v!=std::floor(v))return result(L,-2);options[i]=static_cast<unsigned char>(v);
+    }
     Player p;if(!snapshot(p))return result(L,-1);if(state.busy)return result(L,-4);
     const capeMotion::Amounts amounts{{static_cast<unsigned char>(values[1]),static_cast<unsigned char>(values[2]),static_cast<unsigned char>(values[3]),static_cast<unsigned char>(values[4])}};
-    if(capeMotion::owner==p.guid&&capeMotion::enabled==bool(values[0])&&capeMotion::amounts==amounts)return result(L,1);
+    if(capeMotion::owner==p.guid&&capeMotion::enabled==bool(values[0])&&capeMotion::amounts==amounts&&capeMotion::advanced==options)return result(L,1);
     const auto* body=applies(p)?state.body.model():nativeModel(p.native);
-    if(values[0]&&amounts!=capeMotion::defaults()&&body&&!capeMotion::prepare((body->race-1)*2+body->sex+1,amounts))return result(L,-5);
-    const bool activeBefore=capeMotion::owner==p.guid&&capeMotion::enabled&&capeMotion::amounts!=capeMotion::defaults();
-    capeMotion::owner=p.guid;capeMotion::enabled=values[0]!=0;capeMotion::amounts=amounts;
-    if(p.display==p.native&&body&&(activeBefore||(capeMotion::enabled&&amounts!=capeMotion::defaults()))){forceRefresh=reinterpret_cast<void*>(p.unit);updateDisplay(forceRefresh);forceRefresh=nullptr;}
+    if(values[0]&&(amounts!=capeMotion::defaults()||options!=capeMotion::advancedDefaults())&&body&&!capeMotion::prepare((body->race-1)*2+body->sex+1,amounts,options))return result(L,-5);
+    const bool activeBefore=capeMotion::owner==p.guid&&capeMotion::enabled&&(capeMotion::amounts!=capeMotion::defaults()||capeMotion::advanced!=capeMotion::advancedDefaults());
+    capeMotion::owner=p.guid;capeMotion::enabled=values[0]!=0;capeMotion::amounts=amounts;capeMotion::advanced=options;
+    if(p.display==p.native&&body&&(activeBefore||(capeMotion::enabled&&(amounts!=capeMotion::defaults()||options!=capeMotion::advancedDefaults())))){forceRefresh=reinterpret_cast<void*>(p.unit);updateDisplay(forceRefresh);forceRefresh=nullptr;}
     return result(L,1);
 }
-static int __fastcall physicsVersion(void* L){return result(L,3);}
+static int __fastcall physicsVersion(void* L){return result(L,4);}
 static int __fastcall version(void* L){return result(L,40011);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);

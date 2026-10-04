@@ -22,6 +22,7 @@ static void sharedCapture(sharing::Look& look){
     if(weaponPhysicsOwner==p.guid)look.weaponMotion={{static_cast<unsigned char>(weaponPhysicsSettings.bounce),static_cast<unsigned char>(weaponPhysicsSettings.rocking),static_cast<unsigned char>(weaponPhysicsSettings.jumpLift)}};
     if(weaponPhysicsOwner==p.guid)for(unsigned i=0;i<10;++i){const auto& slot=weaponSlotPhysics[i];look.weaponSlots[i]={{static_cast<unsigned char>(slot.mode),static_cast<unsigned char>(slot.settings.bounce),static_cast<unsigned char>(slot.settings.rocking),static_cast<unsigned char>(slot.settings.jumpLift)}};}
     if(capeMotion::owner==p.guid)look.cape={{static_cast<unsigned char>(capeMotion::enabled),capeMotion::amounts[0],capeMotion::amounts[1],capeMotion::amounts[2],capeMotion::amounts[3]}};
+    if(capeMotion::owner==p.guid)look.capeAdvanced=capeMotion::advanced;
     look.flags=(weaponPhysicsEnabled&&weaponPhysicsOwner==p.guid)?4u:0u;const auto* c=weaponContext(p.model);if(!c||c->guid!=p.guid||c->token)return;
     const auto* native=nativeModel(p.native);if(!native)return;
     const unsigned race=look.body[0]?look.body[1]:native->race,sex=look.body[0]?look.body[2]:native->sex,index=(race-1)*2+sex;
@@ -90,7 +91,7 @@ static void sharedApply(const std::map<std::uint64_t,sharing::Remote>& incoming)
         bool newModel=i!=sharedAppearances.end()&&i->second.model!=p.model;
         if(changed||newModel){if(!budget)continue;--budget;
             bool bodyChanged=look.body[0]!=0||look.cape[0]!=0;
-            if(i!=sharedAppearances.end())bodyChanged=i->second.snapshot.look.body!=look.body||i->second.snapshot.look.cape!=look.cape;
+            if(i!=sharedAppearances.end())bodyChanged=i->second.snapshot.look.body!=look.body||i->second.snapshot.look.cape!=look.cape||i->second.snapshot.look.capeAdvanced!=look.capeAdvanced;
             auto& entry=sharedAppearances[p.guid];entry.snapshot=pair.second;sharedBind(p.guid,entry,p);
             if(p.display==p.native&&nativeModel(p.native)){
                 if(bodyChanged||newModel){forceRefresh=reinterpret_cast<void*>(p.unit);updateDisplay(forceRefresh);forceRefresh=nullptr;}

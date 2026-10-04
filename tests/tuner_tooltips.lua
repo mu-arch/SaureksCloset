@@ -20,7 +20,7 @@ dofile('addon/SaureksCloset/BagTunerUI.lua')
 local function sheet() local f=widget();f.close=widget();return f end
 local function make() return widget() end
 V.bagModelChoices={};V.RefreshBagTunerUI=noop
-V:CreateBagTunerUI(sheet,make,make,make,make,noop)
+V:CreateBagTunerUI(sheet,make,make,make,make,noop,make)
 local function exhaustFieldClosure(callback)
     for i=1,20 do
         local name,value=debug.getupvalue(callback,i)

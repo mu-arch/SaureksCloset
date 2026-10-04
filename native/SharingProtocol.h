@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <map>
 namespace sharing {
-constexpr unsigned maxVisible=256,maxMessage=8192,appearanceSize=409;
+constexpr unsigned maxVisible=256,maxMessage=8192,appearanceSize=415;
 constexpr std::uint32_t inherit=0xffffffffu;
 using Bytes=std::vector<unsigned char>;
 inline void put(Bytes& b,std::uint64_t v,unsigned n){for(unsigned i=0;i<n;++i)b.push_back(static_cast<unsigned char>(v>>(8*i)));}
@@ -25,12 +25,13 @@ struct Look{
     std::array<Bag,5> bags{};
     std::array<std::array<unsigned char,4>,10> weaponSlots{};
     std::array<unsigned char,5> cape{{0,100,100,100,100}};
+    std::array<unsigned char,6> capeAdvanced{{100,100,100,30,0,100}};
     Look(){items.fill(inherit);for(auto& slot:weaponSlots)slot={{0,100,100,100}};}
-    bool operator==(const Look& b)const{return body==b.body&&items==b.items&&stowed==b.stowed&&weaponMotion==b.weaponMotion&&flags==b.flags&&fitMask==b.fitMask&&carried==b.carried&&fits==b.fits&&bags==b.bags&&weaponSlots==b.weaponSlots&&cape==b.cape;}
+    bool operator==(const Look& b)const{return body==b.body&&items==b.items&&stowed==b.stowed&&weaponMotion==b.weaponMotion&&flags==b.flags&&fitMask==b.fitMask&&carried==b.carried&&fits==b.fits&&bags==b.bags&&weaponSlots==b.weaponSlots&&cape==b.cape&&capeAdvanced==b.capeAdvanced;}
     Bytes encode()const{Bytes b(body.begin(),body.end());for(auto id:items)put(b,id,4);b.push_back(stowed);b.insert(b.end(),weaponMotion.begin(),weaponMotion.end());put(b,flags,4);for(auto id:carried)put(b,id,4);put(b,fitMask,4);
         for(const auto& fit:fits)for(auto v:fit)put(b,static_cast<std::uint16_t>(v),2);
         for(const auto& bag:bags){put(b,bag.model,2);b.push_back(static_cast<unsigned char>(bag.mount));b.push_back(static_cast<unsigned char>(bag.slot));b.push_back(static_cast<unsigned char>(bag.amplitude));b.push_back(bag.physics?0:1);for(auto v:bag.fit)put(b,static_cast<std::uint16_t>(v),2);}
-        for(const auto& slot:weaponSlots)b.insert(b.end(),slot.begin(),slot.end());b.insert(b.end(),cape.begin(),cape.end());return b;}
+        for(const auto& slot:weaponSlots)b.insert(b.end(),slot.begin(),slot.end());b.insert(b.end(),cape.begin(),cape.end());b.insert(b.end(),capeAdvanced.begin(),capeAdvanced.end());return b;}
     static bool decode(const unsigned char* b,unsigned n,Look& out){
         if(n!=appearanceSize||b[0]>1||b[2]>1||(b[0]&&(b[1]<1||b[1]>8))||b[84]>7||b[85]>200||b[86]>200||b[87]>200)return false;
         Look value;std::copy(b,b+8,value.body.begin());
@@ -48,10 +49,12 @@ struct Look{
         for(unsigned i=0;i<10;++i){const auto* p=b+364+4*i;if(p[0]>2||(i==6&&p[0])||p[1]>200||p[2]>200||p[3]>200)return false;std::copy(p,p+4,value.weaponSlots[i].begin());}
         if(b[404]>1||b[405]>200||b[406]>200||b[407]>200||b[408]>200)return false;
         std::copy(b+404,b+409,value.cape.begin());
+        if(b[409]>200||b[410]>200||b[411]>200||b[412]>60||b[413]>100||b[414]>200)return false;
+        std::copy(b+409,b+415,value.capeAdvanced.begin());
         out=value;return true;
     }
 };
-inline Bytes message(unsigned char kind){return {'S','C',6,kind};}
+inline Bytes message(unsigned char kind){return {'S','C',7,kind};}
 inline Bytes publish(const Look& look,unsigned sequence){auto b=message(4);put(b,sequence,4);const auto p=look.encode();b.insert(b.end(),p.begin(),p.end());return b;}
 inline Bytes visible(const std::vector<std::uint64_t>& ids){auto b=message(3);for(auto id:ids)put(b,id,8);return b;}
 struct Remote{std::uint64_t revision=0;Look look;};
@@ -65,7 +68,7 @@ struct Inbox{
     void subscriptions(std::vector<std::uint64_t> next){std::sort(next.begin(),next.end());visible=std::move(next);for(auto i=looks.begin();i!=looks.end();)if(!allows(i->first))i=looks.erase(i);else ++i;}
     bool allows(std::uint64_t guid)const{return receive&&guid&&guid!=self&&std::binary_search(visible.begin(),visible.end(),guid);}
     bool accept(const Bytes& b){
-        if(b.size()<4||b[0]!='S'||b[1]!='C'||b[2]!=6)return false;
+        if(b.size()<4||b[0]!='S'||b[1]!='C'||b[2]!=7)return false;
         if((b[3]==129||b[3]==133)&&b.size()==4)return true;
         if(b[3]==131&&b.size()==12){looks.erase(get(b.data()+4,8));return true;}
         if(b[3]!=130||b.size()!=20+appearanceSize)return false;

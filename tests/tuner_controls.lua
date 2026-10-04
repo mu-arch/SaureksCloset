@@ -46,7 +46,7 @@ local function button(_,_,_,_,_,callback)
     local b=widget();b:SetScript("OnClick",callback);return b
 end
 local function enable(w,yes) w.closetEnabled=yes end
-V:CreateBagTunerUI(sheet,make,make,make,button,enable)
+V:CreateBagTunerUI(sheet,make,make,make,button,enable,button)
 local f=V.bagTunerWindow
 local editor=f.rows[3].editor
 local plus,minus=f.rows[1].plus,f.rows[1].minus
@@ -109,3 +109,45 @@ assert(writes==before+1 and V.bagTunerDrafts["101:1:0"].up==.5 and V.bagTunerDra
 available=false;before=writes;run(plus,"OnClick")
 assert(writes==before,"Unavailable placement cannot be nudged")
 print("PASS: tuner nudges respect invalid text, focus ordering, body changes and valid numeric edits")
+
+-- Absolute/relative is a view of the same fit, never a different saved format.
+available=true;target="101:1:0";V.bagTunerDrafts[target]=values()
+V.bagTunerDrafts[target].left=.35;V.bagTunerDrafts[target].up=-.2;V.bagTunerDrafts[target].pitch=25
+V:RefreshBagTunerUI();before=writes
+run(f.positionMode,"OnMouseDown");run(f.positionMode,"OnClick")
+assert(f.relativeMode and f.positionMode.text=="Relative" and writes==before)
+assert(f.rows[1].editor:GetText()=="0.0000" and f.rows[3].editor:GetText()=="0.0000" and f.rows[4].editor:GetText()=="0.0")
+assert(f.rows[7].editor:GetText()=="100.0","Relative positioning cannot turn size into a zero percentage")
+local function enter(row,text)
+    local e=f.rows[row].editor;run(e,"OnEditFocusGained");e:SetText(text);run(e,"OnEnterPressed")
+end
+enter(1,"0.15");assert(math.abs(V.bagTunerDrafts[target].left-.5)<.000001)
+enter(1,"0.15");assert(math.abs(V.bagTunerDrafts[target].left-.5)<.000001,"Re-entering a relative offset cannot accumulate it")
+enter(3,"-0.3");assert(V.bagTunerDrafts[target].up==-.5)
+enter(4,"-10");assert(V.bagTunerDrafts[target].pitch==15)
+enter(7,"80");assert(V.bagTunerDrafts[target].scale==80)
+run(plus,"OnClick");assert(math.abs(V.bagTunerDrafts[target].left-.505)<.000001 and f.rows[1].editor:GetText()=="0.1550")
+V:RefreshBagTunerUI();assert(f.rows[1].editor:GetText()=="0.1550","Refresh must not drift the relative origin")
+before=writes;enter(1,"0.66");assert(writes==before and f.invalidInput,"Relative values retain absolute safety limits")
+run(f.positionMode,"OnClick");assert(f.relativeMode,"Rejected input blocks changing coordinate mode")
+run(f.positionMode,"OnClick");assert(not f.relativeMode and f.rows[1].editor:GetText()=="0.5050" and writes==before)
+run(f.positionMode,"OnClick");assert(f.rows[1].editor:GetText()=="0.0000","Re-enabling relative mode starts from the current fit")
+-- A valid unfinished edit is interpreted in its original mode before switching.
+run(editor,"OnEditFocusGained");editor:SetText("0.1")
+run(f.positionMode,"OnClick")
+assert(not f.relativeMode and math.abs(V.bagTunerDrafts[target].up+.4)<.000001)
+-- Reset keeps its existing built-in-fit meaning and displays the resulting delta.
+function V:BagTunerDefaults() return values() end
+run(f.positionMode,"OnClick");run(f.rows[1].reset,"OnClick")
+assert(V.bagTunerDrafts[target].left==0 and f.rows[1].editor:GetText()=="-0.5050")
+-- Changing body/slot/model discards the old origin without moving the new item.
+before=writes;run(f.positionMode,"OnMouseDown");target="101:1:1";V.bagTunerDrafts[target]=values();V.bagTunerDrafts[target].left=-.6
+V:RefreshBagTunerUI();run(f.positionMode,"OnClick")
+assert(f.relativeMode and writes==before and f.rows[1].editor:GetText()=="0.0000")
+enter(1,"0.1");assert(V.bagTunerDrafts[target].left==-.5)
+assert(V.bagTunerDrafts["101:1:0"].left==0,"New target edits cannot affect the previous fit")
+-- Valid pending commits that change the target block the mode change.
+run(editor,"OnEditFocusGained");editor:SetText("0.2")
+onSync=function() target="101:1:0" end;run(f.positionMode,"OnClick");onSync=nil
+assert(f.relativeMode and V.bagTunerDrafts["101:1:1"].up==.2)
+print("PASS: relative fit offsets, unchanged mode switches, stable origins, absolute storage/size, reset semantics, bounds and target isolation")

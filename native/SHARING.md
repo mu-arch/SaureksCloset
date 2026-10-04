@@ -6,9 +6,9 @@ repository (`../sharing-relay` in this development workspace). Its OPERATIONS.md
 specifies deployment, authentication, analytics and the little-endian protocol.
 Do not include that server repository or its credentials/database in addon ZIPs.
 
-The DLL exchanges 409-byte complete snapshots (417-byte publication / 429-byte
+The DLL exchanges 415-byte complete snapshots (423-byte publication / 435-byte
 delivery). This includes body details, hide/inherit/replace equipment state,
-independent carried weapons, stowed visibility, precision fits and five bags. Protocol version 6 also carries each bag's physics
+independent carried weapons, stowed visibility, precision fits and five bags. Protocol version 7 also carries each bag's physics
 toggle/amplitude and the weapon physics toggle; it requires the matching relay.
 The game thread copies bounded data into a mailbox. Windows HTTP/WebSocket calls
 run on dedicated threads, with certificate verification, no redirects or cookie
@@ -51,4 +51,4 @@ WinHTTP clients under Wine. Certificates, credentials and Wine state are confine
 to a temporary fixture directory. It requires free loopback ports 8787, 8788 and
 19443, Wine and OpenSSL. No live game credentials are used.
 
-Wire version 6 uses flag 4 for weapon physics. Bytes 85–87 carry shared Bounce, Rocking and Jump lift percentages (0–200, default 100). Bytes 364–403 carry ten slot overrides (inherit/off/on and three percentages); the quiver remains inherited. Bytes 404–408 carry cape customization enabled and walk/run/idle/airborne percentages. Race animation replacement remains removed.
+Wire version 7 uses flag 4 for weapon physics. Bytes 85–87 carry shared Bounce, Rocking and Jump lift percentages (0–200, default 100). Bytes 364–403 carry ten slot overrides (inherit/off/on and three percentages); the quiver remains inherited. Bytes 404–408 carry cape customization enabled and walk/run/idle/airborne percentages. Bytes 409–414 carry forward/back, side, twist, lean + 30, smoothing and hem settings. Race animation replacement remains removed.

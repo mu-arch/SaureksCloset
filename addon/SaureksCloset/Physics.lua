@@ -1,8 +1,8 @@
 local V=VanityStudio
 local weaponControls={
-    {key="weaponBounce",title="Bounce",tip="Adjust up-and-down movement while walking and running. 100% keeps the current bounce. This does not change animation speed."},
-    {key="weaponRocking",title="Rocking",tip="Adjust how far weapons rock and swing around their mounting point. Weapons remain rigid at every setting."},
-    {key="weaponJumpLift",title="Jump lift",tip="Adjust the extra outward lift when jumping or falling. 0% removes this extra lift while retaining the normal player animation."}
+    {key="weaponBounce",default=40,title="Bounce",tip="Adjust up-and-down movement while walking and running. This does not change animation speed."},
+    {key="weaponRocking",default=115,title="Rocking",tip="Adjust how far weapons rock and swing around their mounting point. Weapons remain rigid at every setting."},
+    {key="weaponJumpLift",default=200,title="Jump lift",tip="Adjust the extra outward lift when jumping or falling. 0% removes this extra lift while retaining the normal player animation."}
 }
 function V:PhysicsControlsAvailable(minimum)
     if type(SaureksClosetPhysicsVersion)~="function" or type(SaureksClosetSetWeaponPhysics)~="function" then return false end
@@ -14,7 +14,8 @@ function V:WeaponPhysicsConfig(slot)
     return slot~=0 and slots and slots[slot] or VanityStudioCharacter
 end
 function V:SelectWeaponPhysicsSlot(slot)
-    self.weaponPhysicsSlot=slot;self:RefreshPhysicsPage()
+    if not self:CommitWeaponPhysicsEditors() then return false end
+    self.weaponPhysicsSlot=slot;self:RefreshPhysicsPage();return true
 end
 function V:SetWeaponPhysicsCustom(custom)
     local slot=self.weaponPhysicsSlot or 0
@@ -29,7 +30,10 @@ function V:SetWeaponPhysicsCustom(custom)
 end
 function V:WeaponPhysicsAmount(key,slot)
     local amount=tonumber(self:WeaponPhysicsConfig(slot)[key])
-    if not amount or amount~=amount then return 100 end
+    if not amount or amount~=amount then
+        for _,control in ipairs(weaponControls) do if control.key==key then return control.default end end
+        return 100
+    end
     return math.floor(math.max(0,math.min(200,amount))+.5)
 end
 function V:SetWeaponPhysicsAmount(key,amount)
@@ -40,14 +44,37 @@ function V:SetWeaponPhysicsAmount(key,amount)
     self:WeaponPhysicsConfig()[key]=math.floor(amount+.5)
     self:SyncPhysics();self:RefreshPhysicsPage();return true
 end
+function V:CommitWeaponPhysicsEditor(editor)
+    if self.physicsRefreshing or not editor.editing then return true end
+    editor.editing=nil
+    local amount=tonumber(editor:GetText())
+    local valid=editor.closetEnabled and editor.targetSlot==(self.weaponPhysicsSlot or 0) and editor.targetConfig==self:WeaponPhysicsConfig()
+        and amount and amount==amount and amount>=0 and amount<=200
+    if valid then valid=self:SetWeaponPhysicsAmount(editor.key,amount) end
+    self.weaponPhysicsInvalid=not valid
+    self.weaponPhysicsStatus:SetText(valid and "" or "Enter a value from 0 to 200.")
+    self:RefreshPhysicsPage();return valid and true or false
+end
+function V:CommitWeaponPhysicsEditors()
+    for _,row in ipairs(self.weaponPhysicsRows or {}) do
+        if row.editor.editing then
+            local ok=self:CommitWeaponPhysicsEditor(row.editor);row.editor:ClearFocus()
+            if not ok then self.weaponPhysicsInvalid=nil;return false end
+        end
+    end
+    if self.weaponPhysicsInvalid then self.weaponPhysicsInvalid=nil;return false end
+    return true
+end
 function V:ResetWeaponPhysics()
     if not self:PhysicsControlsAvailable() then return false end
+    for _,row in ipairs(self.weaponPhysicsRows or {}) do row.editor.editing=nil;row.editor:ClearFocus() end
+    self.weaponPhysicsInvalid=nil;self.weaponPhysicsStatus:SetText("")
     if (self.weaponPhysicsSlot or 0)~=0 then return self:SetWeaponPhysicsCustom(false) end
-    for _,control in ipairs(weaponControls) do VanityStudioCharacter[control.key]=100 end
+    for _,control in ipairs(weaponControls) do VanityStudioCharacter[control.key]=control.default end
     return self:SetWeaponPhysics(false)
 end
 function V:OpenPhysicsPanel(kind)
-    self.bagPhysicsWindow:Hide();self.weaponPhysicsWindow:Hide();if self.capePhysicsWindow then self.capePhysicsWindow:Hide() end
+    self.bagPhysicsWindow:Hide();self.weaponPhysicsWindow:Hide();if self.capePhysicsWindow then self.capePhysicsWindow:Hide();self.capeAdvancedWindow:Hide() end
     self:RefreshPhysicsPage()
     if kind=="bags" then self.bagPhysicsWindow:Show()
     elseif kind=="weapons" then self.weaponPhysicsWindow:Show()
@@ -108,14 +135,18 @@ function V:RefreshPhysicsPage()
     else self.weaponPhysicsCustom:Show();self.weaponPhysicsCustomLabel:Show() end
     self.physicsEnable(self.weaponPhysicsCustom,self:PhysicsControlsAvailable(3))
     for _,row in ipairs(self.weaponPhysicsRows) do
-        row.slider:SetValue(self:WeaponPhysicsAmount(row.key))
-        row.amount:SetText(self:WeaponPhysicsAmount(row.key).."%")
-        row.slider.closetEnabled=editable and self:PhysicsControlsAvailable(2) and self:WeaponPhysicsConfig().weaponPhysics and true or false
-        row.slider:EnableMouse(row.slider.closetEnabled);row.slider:SetAlpha(row.slider.closetEnabled and 1 or .4)
+        local active=editable and self:PhysicsControlsAvailable(2) and self:WeaponPhysicsConfig().weaponPhysics and true or false
+        local editor=row.editor
+        if editor.editing and (not active or editor.targetSlot~=selected or editor.targetConfig~=self:WeaponPhysicsConfig()) then
+            editor.editing=nil;editor:ClearFocus()
+        end
+        if not editor.editing then editor:SetText(self:WeaponPhysicsAmount(row.key)) end
+        editor.closetEnabled=active;editor:EnableMouse(active);editor:SetAlpha(active and 1 or .4)
+        self.physicsEnable(row.minus,active);self.physicsEnable(row.plus,active)
     end
     self.physicsRefreshing=nil
 end
-function V:CreatePhysicsPage(p,sheet,section,label,settingsButton,enable)
+function V:CreatePhysicsPage(p,sheet,section,label,settingsButton,enable,edit,redButton)
     self.physicsEnable=enable
     label(p,"Physics",38,84,284,24)
     self.physicsSubtitle=label(p,"These are experimental features that are not complete and are only included for testing.",38,116,284,58,true)
@@ -180,32 +211,51 @@ function V:CreatePhysicsPage(p,sheet,section,label,settingsButton,enable)
     self.weaponPhysicsCustom:ClearAllPoints();self.weaponPhysicsCustom:SetPoint("TOPLEFT",self.weaponPhysicsWindow,"TOPLEFT",33,-116)
     self.weaponPhysicsCustom:SetWidth(24);self.weaponPhysicsCustom:SetHeight(24)
     self.weaponPhysicsCustomLabel=label(self.weaponPhysicsWindow,"Custom settings for this slot",63,121,263,18,true)
-    self.weaponPhysicsCustom:SetScript("OnClick",function() V:SetWeaponPhysicsCustom(this:GetChecked()) end)
+    self.weaponPhysicsCustom:SetScript("OnClick",function() if V:CommitWeaponPhysicsEditors() then V:SetWeaponPhysicsCustom(this:GetChecked()) else V:RefreshPhysicsPage() end end)
     help(self.weaponPhysicsCustom,"Custom slot physics","Enable to give this slot its own physics settings. Off uses Shared defaults. Default returns just this slot to Shared defaults.")
     self.weaponPhysicsToggle=CreateFrame("CheckButton","SaureksClosetWeaponPhysicsToggle",self.weaponPhysicsWindow,"UICheckButtonTemplate")
     self.weaponPhysicsToggle:ClearAllPoints();self.weaponPhysicsToggle:SetPoint("TOPLEFT",self.weaponPhysicsWindow,"TOPLEFT",33,-144)
     self.weaponPhysicsToggle:SetWidth(24);self.weaponPhysicsToggle:SetHeight(24)
     label(self.weaponPhysicsWindow,"Enable weapon physics",63,149,263,24,true)
-    self.weaponPhysicsToggle:SetScript("OnClick",function() V:SetWeaponPhysics(this:GetChecked()) end)
+    self.weaponPhysicsToggle:SetScript("OnClick",function() if V:CommitWeaponPhysicsEditors() then V:SetWeaponPhysics(this:GetChecked()) else V:RefreshPhysicsPage() end end)
     help(self.weaponPhysicsToggle,"Rigid-body weapon physics","Apply the bags' secondary motion to stowed and body-carried weapons. Weapons bob and rock as solid objects and never stretch. Drawn weapons keep their normal hand animation.")
     self.weaponPhysicsRows={}
     for i,control in ipairs(weaponControls) do
         local row=section(self.weaponPhysicsWindow,34,178+(i-1)*62,296,56,false)
         row.key=control.key;self.weaponPhysicsRows[i]=row
         label(row,control.title,10,5,206,18,true)
-        row.amount=label(row,"",222,5,62,18,true);row.amount:SetJustifyH("RIGHT")
-        row.slider=CreateFrame("Slider","SaureksClosetWeaponAmplitude"..i,row,"OptionsSliderTemplate")
-        row.slider:ClearAllPoints();row.slider:SetPoint("TOPLEFT",row,"TOPLEFT",14,-31);row.slider:SetWidth(268);row.slider:SetHeight(16)
-        row.slider:SetMinMaxValues(0,200);row.slider:SetValueStep(5)
-        for _,suffix in ipairs({"Low","High","Text"}) do local t=getglobal(row.slider:GetName()..suffix);if t then t:Hide() end end
-        row.slider:SetScript("OnValueChanged",function()
-            local amount=math.floor(this:GetValue()+.5);row.amount:SetText(amount.."%")
-            if not V.physicsRefreshing and this.closetEnabled then V:SetWeaponPhysicsAmount(row.key,amount) end
+        row.editor=edit(row,"SaureksClosetWeaponAmount"..i,108,29,72,16)
+        row.editor.key=control.key;row.editor:SetJustifyH("CENTER")
+        row.editor:SetScript("OnEditFocusGained",function()
+            this.editing=true;this.targetSlot=V.weaponPhysicsSlot or 0;this.targetConfig=V:WeaponPhysicsConfig()
         end)
-        help(row.slider,control.title,control.tip)
+        row.editor:SetScript("OnEditFocusLost",function() V:CommitWeaponPhysicsEditor(this) end)
+        row.editor:SetScript("OnEnterPressed",function() V:CommitWeaponPhysicsEditor(this);this:ClearFocus() end)
+        row.editor:SetScript("OnEscapePressed",function() this.editing=nil;this:ClearFocus();V:RefreshPhysicsPage() end)
+        label(row,"%",186,29,16,20,true)
+        help(row.editor,control.title,control.tip.." Enter a value from 0 to 200. Default: "..control.default.."%.")
+        local function nudge(x,text,direction)
+            local b=section(row,x,27,22,22,true,"Button",.75);b.key=row.key;b.direction=direction
+            local caption=label(b,text,0,1,22,20,true);caption:SetFont("Fonts\\FRIZQT__.TTF",14);caption:SetJustifyH("CENTER");caption:SetJustifyV("MIDDLE")
+            b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
+            b:SetScript("OnMouseDown",function() this.targetSlot=V.weaponPhysicsSlot or 0;this.targetConfig=V:WeaponPhysicsConfig() end)
+            b:SetScript("OnClick",function()
+                if not this.closetEnabled then return end
+                local slot=this.targetSlot or V.weaponPhysicsSlot or 0;local config=this.targetConfig or V:WeaponPhysicsConfig()
+                this.targetSlot=nil;this.targetConfig=nil
+                if not V:CommitWeaponPhysicsEditors() or slot~=(V.weaponPhysicsSlot or 0) or config~=V:WeaponPhysicsConfig() then return end
+                local step=IsShiftKeyDown and IsShiftKeyDown() and 10 or 1
+                V:SetWeaponPhysicsAmount(this.key,math.max(0,math.min(200,V:WeaponPhysicsAmount(this.key)+this.direction*step)))
+                V.weaponPhysicsStatus:SetText("")
+            end)
+            help(b,control.title,"Adjust by 1 percentage point. Hold Shift for 10. Range: 0 to 200%.")
+            return b
+        end
+        row.minus=nudge(76,"-",-1);row.plus=nudge(207,"+",1)
     end
+    self.weaponPhysicsStatus=label(self.weaponPhysicsWindow,"",38,357,290,18,true)
     self.weaponPhysicsDefault=settingsButton(self.weaponPhysicsWindow,"Default",38,378,160,function() V:ResetWeaponPhysics() end)
-    help(self.weaponPhysicsDefault,"Default weapon movement","For a custom slot, return to Shared defaults. For Shared defaults, turn physics off and reset all amounts to 100%. Other custom slots stay unchanged.")
-    self:CreateCapePhysicsWindow(window,section,label,settingsButton,enable,help)
+    help(self.weaponPhysicsDefault,"Default weapon movement","For a custom slot, return to Shared defaults. For Shared defaults, turn physics off and restore Bounce 40%, Rocking 115%, and Jump lift 200%. Other custom slots stay unchanged.")
+    self:CreateCapePhysicsWindow(window,section,label,settingsButton,enable,help,edit,redButton)
     self:RefreshPhysicsPage()
 end
