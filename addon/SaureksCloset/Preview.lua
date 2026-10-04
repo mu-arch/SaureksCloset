@@ -113,8 +113,12 @@ function V:PreviewItems()
     end
     for _,slot in ipairs(self.slotOrder) do
         local id
-        if VanityStudioCharacter.enabled then id=VanityStudioCharacter.selected[slot] end
-        if self.draft and self.draft.slot==slot then id=self.draft.id end
+        -- Haircraft uses equipped items with the close-up camera, not Body's
+        -- shirt-only outfit or an appearance browser's temporary selection.
+        if self.tab~="haircraft" then
+            if VanityStudioCharacter.enabled then id=VanityStudioCharacter.selected[slot] end
+            if self.draft and self.draft.slot==slot then id=self.draft.id end
+        end
         if id==nil then
             local link=GetInventoryItemLink("player",slot)
             if link then local _,_,number=string.find(link,"item:(%d+)");id=tonumber(number) end
@@ -179,7 +183,7 @@ function V:RefreshPreview()
         if now<(self.previewCaptureAt or 0) then return end
         local ok,copied=pcall(function()
             V.previewBuffer:SetAlpha(0)
-            if V.tab=="body" then V:RestoreBodyPreview(V.previewBuffer) end
+            if V.tab=="body" or V.tab=="haircraft" then V:RestoreBodyPreview(V.previewBuffer) end
             if not V:CopyWardrobeModel(V.previewBuffer) then return false end
             V:FrameBodyPreview(V.previewBuffer)
             V.previewBuffer:SetRotation(V.model.rotation or .61)
@@ -203,12 +207,13 @@ function V:RefreshPreview()
     end
     if self.previewDressAt and now<self.previewDressAt then return end
     local bodyPreview=self.tab=="body"
-    local items=self:PreviewItems();local weapons=bodyPreview and {} or self:PreviewWeapons()
-    local routes=bodyPreview and {} or self:PreviewWeaponRoutes(weapons)
+    local realEquipment=self.tab=="haircraft"
+    local items=self:PreviewItems();local weapons=(bodyPreview or realEquipment) and {} or self:PreviewWeapons()
+    local routes=(bodyPreview or realEquipment) and {} or self:PreviewWeaponRoutes(weapons)
     -- Include the page's dressing policy so entering/leaving Body always
     -- redresses the shared model, even when all ordinary item choices match.
     local dressSignature=key..":body"
-    if not bodyPreview then dressSignature=key..":equipment"..self:WeaponSignature(weapons,nil,true)..":pose"..self:WeaponPreviewMode() end
+    if not bodyPreview then dressSignature=key..(realEquipment and ":real-equipment" or ":equipment")..self:WeaponSignature(weapons,nil,true)..":pose"..self:WeaponPreviewMode() end
     for _,slot in ipairs(self.slotOrder) do dressSignature=dressSignature..":"..items[slot] end
     local signature=dressSignature..(bodyPreview and "" or self:WeaponDisplaySignature(weapons))
     if self.previewReveal and self.previewReveal.dressSignature==dressSignature then
@@ -223,7 +228,7 @@ function V:RefreshPreview()
         local previous=self.model;local target=reveal.target
         target.rotation=previous.rotation or .61;target:SetRotation(target.rotation)
         if target~=previous then previous:SetAlpha(0);self.model=target;self.previewBuffer=previous end
-        if self.tab=="body" then self:FrameBodyPreview(target) end
+        if self.tab=="body" or self.tab=="haircraft" then self:FrameBodyPreview(target) end
         target:SetAlpha(1)
         self.previewSignature=signature;self.previewDressSignature=reveal.dressSignature;self.previewError=nil;self.previewReveal=nil;self.previewDressAt=nil;self.previewDressingModel=nil
         self.previewNote:SetText("")
@@ -263,7 +268,7 @@ function V:RefreshPreview()
         end
         V:DressWeaponPlacements(target,weapons)
         target:SetRotation(V.model.rotation or .61)
-        if V.tab=="body" then V:FrameBodyPreview(target) end
+        if V.tab=="body" or V.tab=="haircraft" then V:FrameBodyPreview(target) end
     end)
     if ok and target.weaponToken then
         self.previewReveal={target=target,signature=signature,dressSignature=dressSignature,at=now}

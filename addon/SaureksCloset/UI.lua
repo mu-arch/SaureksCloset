@@ -281,7 +281,8 @@ function V:SetTab(tab)
     local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="physics" or tab=="haircraft" or tab=="exposure"
     local modelPage=tab=="armor" or tab=="body" or tab=="haircraft" or tab=="exposure"
     local sideControls=tab=="body" or tab=="haircraft" or tab=="exposure"
-    local leftPane=tab=="body"
+    local closeUp=tab=="body" or tab=="haircraft"
+    local leftPane=closeUp
     if character then self.wardrobePage=tab end
     for name,p in pairs(self.pagesByName) do
         if name==tab or (name=="armor" and modelPage) then p:Show() else p:Hide() end
@@ -321,22 +322,22 @@ function V:SetTab(tab)
         -- Body's full-width model fade repaints the scenery. Keep the frame's
         -- shadow above that repaint so its lower edge stays visible.
         local shadowLevel=self.pagesByName.armor:GetFrameLevel()+1
-        if tab=="body" then shadowLevel=self.bodyPreviewFade:GetFrameLevel()+1 end
+        if closeUp then shadowLevel=self.bodyPreviewFade:GetFrameLevel()+1 end
         self.wardrobeViewShadowFrame:SetFrameLevel(shadowLevel)
         if sideControls then self.wardrobeViewShadowFrame:Show() else self.wardrobeViewShadowFrame:Hide() end
     end
-    local modelX=tab=="body" and 129 or sideControls and 96 or 61
+    local modelX=closeUp and 129 or sideControls and 96 or 61
     -- The model widget owns its render viewport. Keep Body's viewport inside
     -- the scenic area so ears, shoulders and animated limbs cannot escape it.
-    local modelY=tab=="body" and -75 or -86
-    local modelWidth=tab=="body" and 213 or 244
-    local modelHeight=tab=="body" and 311 or 340
+    local modelY=closeUp and -75 or -86
+    local modelWidth=closeUp and 213 or 244
+    local modelHeight=closeUp and 311 or 340
     for _,model in ipairs({self.model,self.previewBuffer}) do
         model:ClearAllPoints();model:SetPoint("TOPLEFT",self.pagesByName.armor,"TOPLEFT",modelX,modelY)
         model:SetWidth(modelWidth);model:SetHeight(modelHeight)
         self:FrameBodyPreview(model)
     end
-    if tab=="body" then self.bodyPreviewFade:Show() else self.bodyPreviewFade:Hide() end
+    if closeUp then self.bodyPreviewFade:Show() else self.bodyPreviewFade:Hide() end
     if modelPage then self.rotationControls:Show() else self.rotationControls:Hide() end
     if modelPage and not wasCharacter then self:HidePreviewUntilReady();self:InvalidatePreviewModel(0,true) end
     self:Refresh()
@@ -362,7 +363,7 @@ local bodyPreviewCameras={
     {{2.052249,1.166833,2.148758},{2.225957,1.199099,2.329100}}, -- Troll
 }
 function V:FrameBodyPreview(model)
-    if self.tab~="body" then self:RestoreBodyPreview(model);return end
+    if self.tab~="body" and self.tab~="haircraft" then self:RestoreBodyPreview(model);return end
     if not model.closetBodyFramed then
         local x,y,z=model:GetPosition()
         model.closetBodyRestoration={scale=model:GetModelScale(),x=x,y=y,z=z}

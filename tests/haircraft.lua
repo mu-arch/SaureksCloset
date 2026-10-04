@@ -15,6 +15,42 @@ assert(V.tab=='haircraft' and V.wardrobePage=='haircraft')
 assert(V.pagesByName.armor:IsShown() and V.pagesByName.haircraft:IsShown())
 assert(not V.pagesByName.bags:IsShown() and not V.pagesByName.body:IsShown())
 assert(V.rotationControls:IsShown() and V.wardrobeSelectorLabel:GetText()=='Haircraft')
+-- Reuse the Body camera/viewport for every race and sex, including both
+-- buffers. Repeated close-up tab switches must not compound the zoom or lose
+-- the original Outfit camera.
+V.leftPaneFrameOverlay=CreateFrame("Frame",nil,V.frame)
+for race=1,8 do for sex=0,1 do
+    c.body={race=race,sex=sex}
+    V:SetTab('armor')
+    local scale=V.model:GetModelScale()
+    local x,y,z=V.model:GetPosition()
+    V:SetTab('body')
+    local bx,by,bz=V.model:GetPosition()
+    V:SetTab('haircraft')
+    for _,model in ipairs({V.model,V.previewBuffer}) do
+        local hx,hy,hz=model:GetPosition()
+        assert(model:GetModelScale()==2.2 and hx==bx and hy==by and hz==bz)
+        assert(model.width==213 and model.height==311)
+        assert(model.anchor[4]==129 and model.anchor[5]==-75)
+    end
+    assert(V.bodyPreviewFade:IsShown() and V.leftPaneFrameOverlay:IsShown())
+    V:SetTab('armor')
+    local ax,ay,az=V.model:GetPosition()
+    assert(V.model:GetModelScale()==scale and ax==x and ay==y and az==z)
+    assert(not V.bodyPreviewFade:IsShown() and not V.model.closetBodyFramed)
+end end
+V:SetTab('haircraft')
+-- Periodic fit synchronization must not reintroduce decorative bags into the
+-- actual-equipment preview; the world retains its own bag configuration.
+local originalApply=V.ApplyBagRenderer
+local fitCalls={}
+V.ApplyBagRenderer=function(_,token,weapons) fitCalls[token]=weapons;return true,1 end
+local originalMulti=V.MultiBagRendererAvailable
+V.MultiBagRendererAvailable=function() return true end
+V.model.weaponToken=81;V.previewBuffer.weaponToken=82
+assert(V:SyncLiveBagFits())
+assert(fitCalls[0]==c.weapons and not next(fitCalls[81]) and not next(fitCalls[82]))
+V.ApplyBagRenderer=originalApply;V.MultiBagRendererAvailable=originalMulti
 local baseline=invalidated
 V.haircraftToggle.scripts.OnClick()
 assert(c.keepHairWithHat and calls[#calls]==1 and invalidated==baseline+1)

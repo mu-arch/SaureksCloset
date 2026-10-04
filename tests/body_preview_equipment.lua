@@ -143,6 +143,37 @@ now=now+.1;V:RefreshPreview()
 assert(V.previewDressSignature~=bodySignature)
 assertSelectionsUnchanged()
 
+-- Haircraft shares the close-up camera, but must retain real equipped items,
+-- ignoring hidden/cosmetic armor and carried weapon overrides and drafts.
+V.tab="haircraft";V.draft={slot=1,id=999}
+items=V:PreviewItems()
+for _,slot in ipairs(V.slotOrder) do assert(items[slot]==(equipment[slot] or 0)) end
+assert(V:WeaponPreviewMode()==0)
+for _,previewToken in ipairs({V.model.weaponToken,V.previewBuffer.weaponToken}) do
+    assert(V:ApplyWeaponRenderer(previewToken,weapons))
+    local call=nativeCalls[#nativeCalls]
+    for i=2,8 do assert(call[i]==0,"Cosmetic weapons leaked into Haircraft") end
+    assert(call[9]==101 and call[10]==102 and call[11]==103 and call[15]==104)
+    for i=16,22 do assert(call[i]==0,"Custom bag, appearance or pose leaked into Haircraft") end
+end
+for _,otherToken in ipairs({0,99}) do
+    assert(V:ApplyWeaponRenderer(otherToken,weapons));expectNormalNative(nativeCalls[#nativeCalls],otherToken)
+end
+now=now+.1;V:RefreshPreview();now=now+.1;V:RefreshPreview()
+for _,id in ipairs({401,402,403,101,102,103}) do assert(contains(V.model.tried,id)) end
+assert(not contains(V.model.tried,501) and not contains(V.model.tried,999) and not contains(V.model.tried,6096))
+assert(V.model.sequence==0 and string.find(V.previewDressSignature,":real-equipment",1,true))
+assertSelectionsUnchanged()
+-- Inventory changes redress the close-up without recreating the player.
+equipment[1]=404
+now=now+.1;V:RefreshPreview();now=now+.1;V:RefreshPreview()
+assert(contains(V.model.tried,404) and not contains(V.model.tried,401))
+V.draft=nil;V.tab="armor"
+now=now+.1;V:RefreshPreview();now=now+.1;V:RefreshPreview()
+assert(contains(V.model.tried,501) and not contains(V.model.tried,404))
+expectNormalNative(nativeCalls[#nativeCalls],V.model.weaponToken)
+assertSelectionsUnchanged()
+
 -- Even identical item lists need distinct signatures to toggle native hiding.
 for _,slot in ipairs(V.slotOrder) do VanityStudioCharacter.selected[slot]=slot==4 and 6096 or 0 end
 VanityStudioCharacter.weapons={}

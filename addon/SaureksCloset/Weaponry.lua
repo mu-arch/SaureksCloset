@@ -272,7 +272,7 @@ function V:EffectiveWeapons(weapons,overrides)
     return result
 end
 function V:WeaponPreviewMode()
-    if self.tab=="body" then return 0 end
+    if self.tab=="body" or self.tab=="haircraft" then return 0 end
     if self.bagTunerWindow and self.bagTunerWindow:IsShown() and self.placementTunerSlot and self.placementTunerSlot>=108 and self.placementTunerSlot<=110 then
         return 0
     end
@@ -282,12 +282,14 @@ function V:WeaponPreviewMode()
 end
 function V:ApplyWeaponRenderer(token,weapons)
     if not self:WeaponRendererAvailable() then return false end
-    local bodyPreview=self.tab=="body" and token>0 and
+    local wardrobePreview=token>0 and
         ((self.model and self.model.weaponToken==token) or (self.previewBuffer and self.previewBuffer.weaponToken==token))
+    local bodyPreview=self.tab=="body" and wardrobePreview
+    local realEquipment=self.tab=="haircraft" and wardrobePreview
     -- Empty carried mode hides stock sheathed weapons and releases every
     -- custom attachment. Keep real weapon IDs solely to identify leftovers.
     -- World token 0 and saved-look preview tokens retain their own appearance.
-    local w=bodyPreview and {independent=true,carriedEnabled=true} or self:EffectiveWeapons(weapons)
+    local w=bodyPreview and {independent=true,carriedEnabled=true} or realEquipment and {} or self:EffectiveWeapons(weapons)
     local real=self:RealWeaponItems()
     local actualQuiver=bodyPreview and 0 or self:RealQuiverItem()
     local carried=self:CarriedWeaponsEnabled(w)
