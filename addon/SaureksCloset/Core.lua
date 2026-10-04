@@ -159,6 +159,7 @@ function V:Sync()
     self:UpdateArmorEquipment()
     local c = VanityStudioCharacter
     self:SyncBody()
+    if self.SyncHaircraft then self:SyncHaircraft() end
     local refreshArmorDisplay=self.refreshArmorDisplay
     if refreshArmorDisplay then
         -- Consume before calling the helper: its model events are synchronous
@@ -853,6 +854,7 @@ V.events:SetScript("OnUpdate", function()
     if elapsed < .5 then return end
     elapsed = 0
     if V.SyncPhysics then V:SyncPhysics() end
+    if V.SyncHaircraft then V:SyncHaircraft() end
     if V.UpdateSharing then V:UpdateSharing() end
     if V.armorRepairCheckPending then
         V.armorRepairCheckPending=nil

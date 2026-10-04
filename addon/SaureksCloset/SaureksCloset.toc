@@ -25,5 +25,6 @@ OutfitPortraits.lua
 BagTunerUI.lua
 Physics.lua
 CapePhysics.lua
+Haircraft.lua
 UI.lua
 Bindings.xml

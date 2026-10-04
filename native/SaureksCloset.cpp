@@ -14,6 +14,7 @@
 #include "ArmorInspection.h"
 #include "EquipmentUI.h"
 #include "TabardVisibility.h"
+#include "Haircraft.h"
 #include "BagAssetFiles.h"
 using Register=void (__fastcall *)(const char*,std::uintptr_t);
 using GetPlayer=std::uint64_t (__fastcall *)();
@@ -41,6 +42,10 @@ using ItemDisplay=int (__thiscall *)(void*);
 static TabardDisplay tabardDisplayOriginal=nullptr;
 static GuildTabardTextures guildTabardTexturesOriginal=nullptr;
 static const auto itemDisplay=reinterpret_cast<ItemDisplay>(0x62EB40);
+using ComposeHelmet=void (__thiscall *)(void*);
+using HairGroup=unsigned (__thiscall *)(void*);
+static ComposeHelmet composeHelmetOriginal=nullptr;
+static const auto hairGroup=reinterpret_cast<HairGroup>(0x478540);
 static const auto getPlayer=reinterpret_cast<GetPlayer>(0x468550);
 static const auto objectPtr=reinterpret_cast<ObjectPtr>(0x468460);
 static const auto updateDisplay=reinterpret_cast<Refresh>(0x60ABE0);
@@ -98,6 +103,20 @@ static bool snapshot(Player& p){
 #include "SharingAppearance.h"
 static bool applies(const Player& p){
     return state.enabled&&state.guid==p.guid&&p.display==p.native&&nativeModel(p.native);
+}
+static void __fastcall composeHelmetHook(void* component,void*){
+    bool keepHair=false;
+    if(haircraft::enabled&&haircraft::owner==getPlayer()){
+        Player p;std::uintptr_t model=0;
+        if(snapshot(p)&&read(reinterpret_cast<std::uintptr_t>(component)+0x38,model)&&model){
+            const auto* preview=previews.find(model);
+            keepHair=haircraft::owns(haircraft::owner,p.guid,haircraft::enabled,
+                reinterpret_cast<std::uintptr_t>(component),model,p.component,p.model,
+                p.display==p.native&&nativeModel(p.native),preview?preview->guid:0);
+        }
+    }
+    haircraft::compose(component,keepHair,composeHelmetOriginal,hairGroup,
+        [](std::uintptr_t address,unsigned group){*reinterpret_cast<unsigned*>(address)=group;});
 }
 static void* __fastcall visibleItemHook(void* unit,void*,int slot){
     const auto caller=reinterpret_cast<std::uintptr_t>(__builtin_return_address(0));
@@ -262,6 +281,17 @@ static bool refresh(const Player& p,bool modelChanged){
     // If the M2 is loading, its normal component initialization uses the newest selection.
     return true;
 }
+static int __fastcall setHaircraftLua(void* L){
+    if(!isNumber(L,1))return result(L,-2);
+    const double value=toNumber(L,1);
+    if(value!=0&&value!=1)return result(L,-2);
+    Player p;if(!snapshot(p)||state.busy)return result(L,-1);
+    if(haircraft::owner==p.guid&&haircraft::enabled==(value==1))return result(L,1);
+    const bool wasEnabled=haircraft::owner==p.guid&&haircraft::enabled;
+    haircraft::owner=p.guid;haircraft::enabled=value==1;
+    if(wasEnabled||haircraft::enabled)refresh(p,false);
+    return result(L,1);
+}
 static int __fastcall setAppearance(void* L){
     unsigned values[7];
     for(int i=0;i<7;++i){
@@ -420,6 +450,7 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
         registerOriginal("SaureksClosetSetCapeMotion",reinterpret_cast<std::uintptr_t>(&setCapeMotionLua));
+        registerOriginal("SaureksClosetSetHaircraft",reinterpret_cast<std::uintptr_t>(&setHaircraftLua));
         registerOriginal("SaureksClosetPhysicsVersion",reinterpret_cast<std::uintptr_t>(&physicsVersion));
         registerOriginal("SaureksClosetSetWeaponSlotPhysics",reinterpret_cast<std::uintptr_t>(&setWeaponSlotPhysicsLua));
         registerOriginal("SaureksClosetSetWeaponPhysics",reinterpret_cast<std::uintptr_t>(&setWeaponPhysicsLua));
@@ -459,6 +490,7 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
         {0x5F0D60,reinterpret_cast<void*>(&visibleItemHook),reinterpret_cast<void**>(&visibleItemOriginal)},
+        {0x4799A0,reinterpret_cast<void*>(&composeHelmetHook),reinterpret_cast<void**>(&composeHelmetOriginal)},
         {0x5E0720,reinterpret_cast<void*>(&tabardDisplayHook),reinterpret_cast<void**>(&tabardDisplayOriginal)},
         {0x47A610,reinterpret_cast<void*>(&guildTabardTexturesHook),reinterpret_cast<void**>(&guildTabardTexturesOriginal)},
         {0x60D450,reinterpret_cast<void*>(&unitSpellVisualHook),reinterpret_cast<void**>(&unitSpellVisualOriginal)},

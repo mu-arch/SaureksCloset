@@ -278,9 +278,9 @@ function V:SetTab(tab)
     if tab~="weaponry" then self:CloseWeaponOptions() end
     self:CloseOutfitMenu();self:CloseOutfitDetails();self:CloseBrowser();self.tab=tab
     self.selectedOutfit=nil;self.confirmDelete=nil
-    local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="physics" or tab=="exposure"
-    local modelPage=tab=="armor" or tab=="body" or tab=="exposure"
-    local sideControls=tab=="body" or tab=="exposure"
+    local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="physics" or tab=="haircraft" or tab=="exposure"
+    local modelPage=tab=="armor" or tab=="body" or tab=="haircraft" or tab=="exposure"
+    local sideControls=tab=="body" or tab=="haircraft" or tab=="exposure"
     local leftPane=tab=="body"
     if character then self.wardrobePage=tab end
     for name,p in pairs(self.pagesByName) do
@@ -302,7 +302,7 @@ function V:SetTab(tab)
         for _,tile in ipairs(self.weaponSelectorFill) do
             if wide then tile:Show() else tile:Hide() end
         end
-        self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags",physics="Physics",exposure="Exposure"})[tab])
+        self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags",physics="Physics",haircraft="Haircraft",exposure="Exposure"})[tab])
     else self.wardrobeSelectorBox:Hide() end
     if self.leftPaneFrameOverlay then
         if leftPane then self.leftPaneFrameOverlay:Show() else self.leftPaneFrameOverlay:Hide() end
@@ -446,7 +446,7 @@ function V:CreateUI()
     self.outfitMenu=CreateFrame("Frame","SaureksClosetOutfitMenu",f)
     self.outfitMenu.displayMode="MENU";self.outfitMenu:Hide()
     self.outfitMenu.initialize=function(level) V:BuildOutfitMenu(level) end
-    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),physics=page(f),exposure=page(f),outfits=page(f),settings=page(f)}
+    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),physics=page(f),haircraft=page(f),exposure=page(f),outfits=page(f),settings=page(f)}
     self.tabButtons={}
     local function fitTab(b)
         local text=getglobal(b:GetName().."Text")
@@ -475,6 +475,7 @@ function V:CreateUI()
     self:CreateWeaponryPage(self.pagesByName.weaponry)
     self:CreateBagsPage(self.pagesByName.bags)
     if self.CreatePhysicsPage then self:CreatePhysicsPage(self.pagesByName.physics,sheet,section,label,settingsButton,enabled,edit,button) end
+    if self.CreateHaircraftPage then self:CreateHaircraftPage(self.pagesByName.haircraft,label,button,enabled) end
     self:CreateExposurePage(self.pagesByName.exposure)
     self:CreateOutfitPage(self.pagesByName.outfits)
     self:CreateSettingsPage(self.pagesByName.settings)
@@ -523,7 +524,7 @@ function V:CreateWardrobeSelector()
             UIDropDownMenu_AddButton({text=text,checked=V.tab==page and 1 or nil,
                 func=function() V:SetTab(page) end})
         end
-        choice("Outfit","armor");choice("Weaponry","weaponry");choice("Body","body");choice("Bags","bags");choice("Physics","physics");choice("Exposure","exposure")
+        choice("Outfit","armor");choice("Weaponry","weaponry");choice("Body","body");choice("Bags","bags");choice("Physics","physics");choice("Haircraft","haircraft");choice("Exposure","exposure")
     end
     b:SetScript("OnClick",function() ToggleDropDownMenu(1,nil,menu,b:GetName(),0,0) end)
 end
@@ -2024,6 +2025,7 @@ function V:Refresh()
     self.activeOutfitLabel:SetText(self:ActiveOutfitText())
     self:RefreshBagsPage()
     if self.RefreshPhysicsPage then self:RefreshPhysicsPage() end
+    if self.RefreshHaircraftPage then self:RefreshHaircraftPage() end
     for slot,b in pairs(self.slotButtons) do
         local id=self:SlotSelection(slot);local icon
         if id and id>0 then local n,l,q,lev,typ,sub,stack,loc,path=GetItemInfo(id);icon=path or self:CatalogIcon(id)
@@ -2035,7 +2037,7 @@ function V:Refresh()
     end
     self:RefreshSlotHighlights()
     self:RefreshWeaponCards()
-    if self.tab=="armor" or self.tab=="bags" or self.tab=="exposure" then self:RefreshPreview()
+    if self.tab=="armor" or self.tab=="bags" or self.tab=="exposure" or self.tab=="haircraft" then self:RefreshPreview()
     elseif self.tab=="body" then self:RefreshBody();self:RefreshPreview()
     elseif self.tab=="outfits" then self:RefreshOutfits() end
     if self.browser:IsShown() then self:RefreshList() end
