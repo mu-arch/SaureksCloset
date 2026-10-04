@@ -1,7 +1,8 @@
 #pragma once
+#include "CapeMotion.h"
 static void sharedClear(std::uint64_t guid){
     auto it=sharedAppearances.find(guid);if(it==sharedAppearances.end())return;
-    Player p;const bool live=sharedPlayer(guid,p);const bool body=it->second.snapshot.look.body[0];
+    Player p;const bool live=sharedPlayer(guid,p);const bool body=it->second.snapshot.look.body[0]||it->second.snapshot.look.cape[0];
     sharedModelOwners.erase(it->second.model);sharedAppearances.erase(it);
     auto c=sharedWeaponContexts.find(guid);
     if(c!=sharedWeaponContexts.end()){releaseExtras(c->second);releasePassthroughQuiver(c->second);releaseBackpack(c->second);releaseBagInstances(c->second);sharedWeaponContexts.erase(c);}
@@ -19,6 +20,8 @@ static BagTuningValues sharedUnpackFit(const sharing::Fit& f){return {f[0]/10000
 static void sharedCapture(sharing::Look& look){
     Player p;if(!snapshot(p))return;
     if(weaponPhysicsOwner==p.guid)look.weaponMotion={{static_cast<unsigned char>(weaponPhysicsSettings.bounce),static_cast<unsigned char>(weaponPhysicsSettings.rocking),static_cast<unsigned char>(weaponPhysicsSettings.jumpLift)}};
+    if(weaponPhysicsOwner==p.guid)for(unsigned i=0;i<10;++i){const auto& slot=weaponSlotPhysics[i];look.weaponSlots[i]={{static_cast<unsigned char>(slot.mode),static_cast<unsigned char>(slot.settings.bounce),static_cast<unsigned char>(slot.settings.rocking),static_cast<unsigned char>(slot.settings.jumpLift)}};}
+    if(capeMotion::owner==p.guid)look.cape={{static_cast<unsigned char>(capeMotion::enabled),capeMotion::amounts[0],capeMotion::amounts[1],capeMotion::amounts[2],capeMotion::amounts[3]}};
     look.flags=(weaponPhysicsEnabled&&weaponPhysicsOwner==p.guid)?4u:0u;const auto* c=weaponContext(p.model);if(!c||c->guid!=p.guid||c->token)return;
     const auto* native=nativeModel(p.native);if(!native)return;
     const unsigned race=look.body[0]?look.body[1]:native->race,sex=look.body[0]?look.body[2]:native->sex,index=(race-1)*2+sex;
@@ -65,6 +68,7 @@ static void sharedWeapons(const Player& p,const sharing::Look& look){
     if(c.sharedWeaponPhysics!=bool(look.flags&4))c.rigidWeapons={};
     c.sharedWeaponPhysics=(look.flags&4)!=0;
     c.sharedWeaponPhysicsSettings={look.weaponMotion[0],look.weaponMotion[1],look.weaponMotion[2]};
+    for(unsigned i=0;i<10;++i){const auto& s=look.weaponSlots[i];auto& target=c.sharedWeaponSlotPhysics[i];if(target.mode!=s[0]){c.rigidWeapons[i]={};if(i>=7)c.rigidWeapons[i+3]={};}target={s[0],{s[1],s[2],s[3]}};}
     c.parent=p.model;c.unit=p.unit;c.guid=p.guid;c.selection=next;c.routes=next.routes();c.quiverHorizontal=(look.flags&2)!=0;
     for(unsigned i=0;i<10;++i){auto& fit=c.sharedFits[i];fit.enabled=(look.fitMask&(1u<<i))!=0;if(fit.enabled)fit.values=sharedUnpackFit(look.fits[i]);}
     for(unsigned i=0;i<c.bags.size();++i){const sharing::Bag* source=nullptr;for(const auto& bag:look.bags)if(bag.model&&bag.slot==i)source=&bag;
@@ -85,8 +89,8 @@ static void sharedApply(const std::map<std::uint64_t,sharing::Remote>& incoming)
         auto i=sharedAppearances.find(pair.first);bool changed=i==sharedAppearances.end()||!(i->second.snapshot.look==look);
         bool newModel=i!=sharedAppearances.end()&&i->second.model!=p.model;
         if(changed||newModel){if(!budget)continue;--budget;
-            bool bodyChanged=look.body[0]!=0;
-            if(i!=sharedAppearances.end())bodyChanged=i->second.snapshot.look.body!=look.body;
+            bool bodyChanged=look.body[0]!=0||look.cape[0]!=0;
+            if(i!=sharedAppearances.end())bodyChanged=i->second.snapshot.look.body!=look.body||i->second.snapshot.look.cape!=look.cape;
             auto& entry=sharedAppearances[p.guid];entry.snapshot=pair.second;sharedBind(p.guid,entry,p);
             if(p.display==p.native&&nativeModel(p.native)){
                 if(bodyChanged||newModel){forceRefresh=reinterpret_cast<void*>(p.unit);updateDisplay(forceRefresh);forceRefresh=nullptr;}

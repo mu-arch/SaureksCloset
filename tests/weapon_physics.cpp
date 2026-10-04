@@ -109,6 +109,26 @@ int main(){
         assert(c.rigidWeapons[2].motion.ready);forgetWeapons(address(child));assert(!c.rigidWeapons[2].child);
         assert(setWeaponPhysicsLua(&off)==1);assert(!positionWeaponPhysics(child,pose.data(),out,true));
     }
+    // Slot overrides work even when shared defaults are off, including lazy draws.
+    assert(setWeaponPhysicsLua(&off)==1);WeaponPhysicsSettings resolved;
+    Lua mainCustom{{108,2,175,50,0}},bodyCustom{{103,2,75,125,100}},mainDisabled{{108,1,100,100,100}},mainInherit{{108,0,100,100,100}};
+    assert(setWeaponSlotPhysicsLua(&mainCustom)==1);
+    assert(weaponPhysicsForSlot(c,10,resolved)&&resolved.bounce==175&&resolved.rocking==50&&resolved.jumpLift==0);
+    assert(!weaponPhysicsForSlot(c,11,resolved)&&!weaponPhysicsForSlot(c,2,resolved));
+    const WeaponAsset* picked=nullptr;for(const auto& a:weaponAssets)if(a.kind==2){picked=&a;break;}assert(picked);
+    auto item=pointer(0x4300000);modelName(item,picked->model);memory[address(item)+0x1cc]=c.parent;memory[address(item)+0x1d0]=30;matrices[address(item)+0xbc]=identity;
+    c.extra={};c.nativeChildren={{item,nullptr,nullptr}};c.routes={{-1,-1,-1}};c.selection.equipped[0]=picked->item;
+    assert(ownedWeaponPhysicsUpdate(item));BagMatrix customOutput;
+    assert(positionWeaponPhysics(item,identity.data(),customOutput,true));
+    assert(setWeaponSlotPhysicsLua(&mainDisabled)==1&&!ownedWeaponPhysicsUpdate(item));
+    assert(!positionWeaponPhysics(item,identity.data(),customOutput,true));
+    assert(setWeaponPhysicsLua(&on)==1&&!weaponPhysicsForSlot(c,10,resolved));
+    assert(setWeaponSlotPhysicsLua(&mainInherit)==1&&weaponPhysicsForSlot(c,10,resolved));
+    assert(setWeaponPhysicsLua(&off)==1);assert(setWeaponSlotPhysicsLua(&bodyCustom)==1);
+    c.nativeChildren={};c.extra[2]=item;c.selection.items[2]=picked->item;
+    assert(ownedWeaponPhysicsUpdate(item)&&positionWeaponPhysics(item,identity.data(),customOutput,true));
+    memory[address(item)+0x1d0]=1;assert(!ownedWeaponPhysicsUpdate(item)&&!positionWeaponPhysics(item,identity.data(),customOutput,true));
+    for(auto values:{std::vector<double>{107,2,100,100,100},{100,2,100,100,100},{111,2,100,100,100},{108,3,100,100,100},{108,2,201,100,100}}){Lua bad{values};assert(setWeaponSlotPhysicsLua(&bad)==-2);}
     BagMotion bad;BagMatrix out,skew=identity;skew[0]=2;assert(!rigidWeaponPhysics(bad,skew,identity,identity,identity,out,1,1,30,0,true,true,0));
     std::cout<<"PASS: rigid weapon bob/rock, jump, quiet idle, camera/duplicate-frame invariance, native/decorative ownership, drawing, hiding, preview, disable and destruction cleanup\n";
 }

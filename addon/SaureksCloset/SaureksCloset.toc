@@ -24,5 +24,6 @@ OutfitPreview.lua
 OutfitPortraits.lua
 BagTunerUI.lua
 Physics.lua
+CapePhysics.lua
 UI.lua
 Bindings.xml

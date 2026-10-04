@@ -1,0 +1,184 @@
+[
+  {
+    "file": "B01.m2",
+    "race": "Human",
+    "sex": "Male",
+    "original_bones": 119,
+    "cape_bones": [
+      119,
+      120
+    ],
+    "sha256": "613533c7c60e2da85d1a059133db1362294ae13e2a38b5d1593fa27da66ef82b"
+  },
+  {
+    "file": "B02.m2",
+    "race": "Human",
+    "sex": "Female",
+    "original_bones": 117,
+    "cape_bones": [
+      117,
+      118
+    ],
+    "sha256": "71895ad12be944cd6b12e5ed8d583ed2f66edd39c51e717573bf76749090d23c"
+  },
+  {
+    "file": "B03.m2",
+    "race": "Orc",
+    "sex": "Male",
+    "original_bones": 128,
+    "cape_bones": [
+      128,
+      129
+    ],
+    "sha256": "e4f8946b134a4513550512e72b41b5cda43e1a87f649749b8a0a6f201845e2f1"
+  },
+  {
+    "file": "B04.m2",
+    "race": "Orc",
+    "sex": "Female",
+    "original_bones": 129,
+    "cape_bones": [
+      129,
+      130
+    ],
+    "sha256": "a27a4d60eae068308dab3e880c2744078c1b5aa18b2367906815ac02ee08c907"
+  },
+  {
+    "file": "B05.m2",
+    "race": "Dwarf",
+    "sex": "Male",
+    "original_bones": 142,
+    "cape_bones": [
+      142,
+      143
+    ],
+    "sha256": "7a6ea34a5e4eb474c1148605b0ad0c42200f5ad8329e1a3e653f390f4f83d0cf"
+  },
+  {
+    "file": "B06.m2",
+    "race": "Dwarf",
+    "sex": "Female",
+    "original_bones": 138,
+    "cape_bones": [
+      138,
+      139
+    ],
+    "sha256": "c5173f8dbdd31e9465df1a359772b5e82260e2d713062d95dd94e50d58f66d2f"
+  },
+  {
+    "file": "B07.m2",
+    "race": "NightElf",
+    "sex": "Male",
+    "original_bones": 123,
+    "cape_bones": [
+      123,
+      124
+    ],
+    "sha256": "6adc50213f4ca6f63194868a628e4ef951d363c8095b291b424aaeddfd3cec40"
+  },
+  {
+    "file": "B08.m2",
+    "race": "NightElf",
+    "sex": "Female",
+    "original_bones": 141,
+    "cape_bones": [
+      141,
+      142
+    ],
+    "sha256": "1a70180e2b5d23bf6d2ecc766fc1e5d5f9e022f785e84eacb4c4cc9a2cdce87b"
+  },
+  {
+    "file": "B09.m2",
+    "race": "Scourge",
+    "sex": "Male",
+    "original_bones": 135,
+    "cape_bones": [
+      135,
+      136,
+      137
+    ],
+    "sha256": "7df66279af8a701ad8925fe636b813afaf917e40bce0861382e289a0c836aa1e"
+  },
+  {
+    "file": "B10.m2",
+    "race": "Scourge",
+    "sex": "Female",
+    "original_bones": 133,
+    "cape_bones": [
+      133,
+      134,
+      135
+    ],
+    "sha256": "0d2c89058057366ca6c305e77701b2b73e990f8d1c4a8bafd2b94add27d19703"
+  },
+  {
+    "file": "B11.m2",
+    "race": "Tauren",
+    "sex": "Male",
+    "original_bones": 134,
+    "cape_bones": [
+      134,
+      135,
+      136,
+      137
+    ],
+    "sha256": "8b96bbb3e1a526cc9602c7337da81f8acbd4bd5c21fc3f0ee3d678142144dd4d"
+  },
+  {
+    "file": "B12.m2",
+    "race": "Tauren",
+    "sex": "Female",
+    "original_bones": 137,
+    "cape_bones": [
+      137,
+      138,
+      139
+    ],
+    "sha256": "827b2cab29a0f3b2798e97c1a12e507ee64960369c95d5af160fea8bed3533ae"
+  },
+  {
+    "file": "B13.m2",
+    "race": "Gnome",
+    "sex": "Male",
+    "original_bones": 118,
+    "cape_bones": [
+      118,
+      119
+    ],
+    "sha256": "6eef5305b82f68ee0147b84d2f6d60903dcb7520cffd208a2ab6ce59b6906ea0"
+  },
+  {
+    "file": "B14.m2",
+    "race": "Gnome",
+    "sex": "Female",
+    "original_bones": 118,
+    "cape_bones": [
+      118,
+      119
+    ],
+    "sha256": "621891a2aaf79a1be63677bbdc947bb85055f9ace4555c06910fdaa0749d8b46"
+  },
+  {
+    "file": "B15.m2",
+    "race": "Troll",
+    "sex": "Male",
+    "original_bones": 118,
+    "cape_bones": [
+      118,
+      119
+    ],
+    "sha256": "21623eeee8239a038ad04f65a41da9bdf41c5ccbbf9051ab146969a5af222023"
+  },
+  {
+    "file": "B16.m2",
+    "race": "Troll",
+    "sex": "Female",
+    "original_bones": 120,
+    "cape_bones": [
+      120,
+      121,
+      122
+    ],
+    "sha256": "691839f59c4b309b36fe15cc101c2c6af8e5edde67729e16e1d4b28a952b4218"
+  }
+]

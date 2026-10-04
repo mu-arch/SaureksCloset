@@ -17,14 +17,14 @@ int main(int argc,char** argv){
     }
     if(argc!=2)return 2;const bool first=std::string(argv[1])=="10";const auto guid=first?10u:20u,other=first?20u:10u;
     SharingConfig config;config.url="wss://localhost:19443/v1/sharing";config.token=std::string(64,first?'a':'b');config.server="server";config.realm="realm";config.name="TEST_ONLY";config.game="1.12.1 / 5875";config.guid=guid;config.flags=3;
-    sharing::Look look;look.items[0]=guid;look.flags=4;look.weaponMotion={{50,125,200}};
+    sharing::Look look;look.items[0]=guid;look.flags=4;look.weaponSlots[7]={{2,150,25,0}};look.cape={{1,50,25,100,75}};look.weaponMotion={{50,125,200}};
     sharingMailbox.config=config;sharingMailbox.generation=1;sharingMailbox.status=1;sharingMailbox.inbox.self=guid;sharingMailbox.inbox.receive=true;sharingMailbox.inbox.subscriptions({other});sharingMailbox.debounce.update(look,GetTickCount());
     auto thread=CreateThread(nullptr,0,connectFixture,&config,0,nullptr);if(!thread)return 4;
     DWORD start=GetTickCount(),changed=0;bool initial=false,updated=false;
     while(GetTickCount()-start<30000){
         {std::lock_guard<std::mutex> lock(sharingMailbox.mutex);auto i=sharingMailbox.inbox.looks.find(other);
         if(i!=sharingMailbox.inbox.looks.end()){
-            if(i->second.look.items[0]==other&&i->second.look.flags==4&&i->second.look.weaponMotion==std::array<unsigned char,3>{{50,125,200}})initial=true;
+            if(i->second.look.weaponSlots==look.weaponSlots&&i->second.look.cape==look.cape&&i->second.look.items[0]==other&&i->second.look.flags==4&&i->second.look.weaponMotion==std::array<unsigned char,3>{{50,125,200}})initial=true;
             if(initial&&!changed){changed=GetTickCount();look.items[0]=guid+100;look.weaponMotion={{200,0,75}};sharingMailbox.debounce.update(look,changed);}
             if(i->second.look.items[0]==other+100&&i->second.look.weaponMotion==std::array<unsigned char,3>{{200,0,75}}){updated=true;break;}
         }}Sleep(25);

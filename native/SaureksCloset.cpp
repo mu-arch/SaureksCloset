@@ -66,6 +66,7 @@ static bool previewArmed=false;
 static DWORD previewThread=0;
 static unsigned previewToken=0;
 static State state;
+static const char* localCapeMotionModel(const char* name){return capeMotion::model(name,capeMotion::owner==getPlayer()&&capeMotion::enabled,capeMotion::amounts);}
 static void* forceRefresh=nullptr;
 template<typename T> static bool read(std::uintptr_t address,T& result){
     SIZE_T count=0;
@@ -103,9 +104,11 @@ static const char* __fastcall nameHook(void* unit,void*){
     Player p;
     if(snapshot(p)&&p.unit==reinterpret_cast<std::uintptr_t>(unit)){
         const auto* name=applies(p)?state.body.model()->filename:nameOriginal(unit);
-        return name;
+        return localCapeMotionModel(name);
     }
     const auto* name=sharedName(reinterpret_cast<std::uintptr_t>(unit));if(!name)name=nameOriginal(unit);
+    const auto* remote=sharedForUnit(reinterpret_cast<std::uintptr_t>(unit));
+    if(remote){const auto& c=remote->snapshot.look.cape;return capeMotion::model(name,c[0]!=0,{{c[1],c[2],c[3],c[4]}});}
     return name;
 }
 static bool __fastcall initHook(void* component,void*,const std::uint32_t* input){
@@ -171,7 +174,7 @@ static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned f
             previewBodyMatches(descriptor,requestedPreview)&&(!applies(p)||state.composed==state.revision);
         // Preserve the stock model/texture clone when the requested body is already visible.
         // A different saved body still needs its own model and fresh compositor.
-        void* model=copyAppearance?cloneModelOriginal(scene,source,flags):createModel(scene,requestedPreview.model()->filename,flags);
+        void* model=copyAppearance?cloneModelOriginal(scene,source,flags):createModel(scene,localCapeMotionModel(requestedPreview.model()->filename),flags);
         if(model){
             previewToken=previews.bind(reinterpret_cast<std::uintptr_t>(model),p.guid,requestedPreview);
             if(auto* entry=previews.find(reinterpret_cast<std::uintptr_t>(model)))entry->copiedAppearance=copyAppearance;
@@ -367,12 +370,29 @@ static int __fastcall weaponryProbe(void* L){
 #include "UpdateChecker.h"
 #include "SharingRuntime.h"
 #include "VoiceRenderer.h"
-static int __fastcall physicsVersion(void* L){return result(L,2);}
+static int __fastcall setCapeMotionLua(void* L){
+    unsigned values[5];for(unsigned i=0;i<5;++i){
+        if(!isNumber(L,i+1))return result(L,-2);const double v=toNumber(L,i+1);
+        if(!std::isfinite(v)||v<0||v>(i?200:1)||v!=std::floor(v))return result(L,-2);values[i]=static_cast<unsigned>(v);
+    }
+    Player p;if(!snapshot(p))return result(L,-1);if(state.busy)return result(L,-4);
+    const capeMotion::Amounts amounts{{static_cast<unsigned char>(values[1]),static_cast<unsigned char>(values[2]),static_cast<unsigned char>(values[3]),static_cast<unsigned char>(values[4])}};
+    if(capeMotion::owner==p.guid&&capeMotion::enabled==bool(values[0])&&capeMotion::amounts==amounts)return result(L,1);
+    const auto* body=applies(p)?state.body.model():nativeModel(p.native);
+    if(values[0]&&amounts!=capeMotion::defaults()&&body&&!capeMotion::prepare((body->race-1)*2+body->sex+1,amounts))return result(L,-5);
+    const bool activeBefore=capeMotion::owner==p.guid&&capeMotion::enabled&&capeMotion::amounts!=capeMotion::defaults();
+    capeMotion::owner=p.guid;capeMotion::enabled=values[0]!=0;capeMotion::amounts=amounts;
+    if(p.display==p.native&&body&&(activeBefore||(capeMotion::enabled&&amounts!=capeMotion::defaults()))){forceRefresh=reinterpret_cast<void*>(p.unit);updateDisplay(forceRefresh);forceRefresh=nullptr;}
+    return result(L,1);
+}
+static int __fastcall physicsVersion(void* L){return result(L,3);}
 static int __fastcall version(void* L){return result(L,40011);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
+        registerOriginal("SaureksClosetSetCapeMotion",reinterpret_cast<std::uintptr_t>(&setCapeMotionLua));
         registerOriginal("SaureksClosetPhysicsVersion",reinterpret_cast<std::uintptr_t>(&physicsVersion));
+        registerOriginal("SaureksClosetSetWeaponSlotPhysics",reinterpret_cast<std::uintptr_t>(&setWeaponSlotPhysicsLua));
         registerOriginal("SaureksClosetSetWeaponPhysics",reinterpret_cast<std::uintptr_t>(&setWeaponPhysicsLua));
         registerOriginal("SaureksClosetConfigureSharing",reinterpret_cast<std::uintptr_t>(&configureSharing));
         registerOriginal("SaureksClosetUpdateSharing",reinterpret_cast<std::uintptr_t>(&updateSharing));

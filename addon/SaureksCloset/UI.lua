@@ -273,7 +273,7 @@ function V:SetTab(tab)
     -- Body previews deliberately hide equipment and cannot host bag fitting.
     if tab~=self.tab and self.bagTunerWindow and self.bagTunerWindow:IsShown() then self.bagTunerWindow:Hide() end
     if self.CloseBagPlacementEditor then self:CloseBagPlacementEditor() end
-    if self.bagPhysicsWindow then self.bagPhysicsWindow:Hide();self.weaponPhysicsWindow:Hide() end
+    if self.bagPhysicsWindow then self.bagPhysicsWindow:Hide();self.weaponPhysicsWindow:Hide();self.capePhysicsWindow:Hide() end
     local wasCharacter=self.pagesByName.armor:IsVisible()
     if tab~="weaponry" then self:CloseWeaponOptions() end
     self:CloseOutfitMenu();self:CloseOutfitDetails();self:CloseBrowser();self.tab=tab
@@ -399,7 +399,7 @@ function V:CreateUI()
     f:SetScript("OnHide",function()
         if UIParent.doublewide==V.frame then UIParent.doublewide=nil end
         V:CloseOutfitMenu();V:CloseOutfitDetails();V:CloseBrowser();V:CloseWeaponOptions();V:CancelDraft()
-        if V.bagPhysicsWindow then V.bagPhysicsWindow:Hide();V.weaponPhysicsWindow:Hide() end
+        if V.bagPhysicsWindow then V.bagPhysicsWindow:Hide();V.weaponPhysicsWindow:Hide();V.capePhysicsWindow:Hide() end
         if V.outfitName then V.outfitName:ClearFocus() end
     end)
     table.insert(UISpecialFrames,f:GetName())

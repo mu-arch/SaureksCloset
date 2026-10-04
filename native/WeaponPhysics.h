@@ -6,6 +6,10 @@
 struct WeaponPhysicsSettings{
     unsigned bounce=100,rocking=100,jumpLift=100;
 };
+struct WeaponSlotPhysics{
+    unsigned mode=0; // 0 inherits shared defaults, 1 off, 2 on.
+    WeaponPhysicsSettings settings;
+};
 // Run the established rigid bag spring in actor space, then restore the current
 // render and child-local transforms. Only the whole weapon matrix is changed.
 static bool rigidWeaponPhysics(BagMotion& motion,const BagMatrix& attachment,const BagMatrix& local,

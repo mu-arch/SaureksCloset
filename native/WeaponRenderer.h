@@ -86,6 +86,7 @@ static unsigned bagAttachment(unsigned mount){return mount==1?32:mount==2?33:28;
 struct WeaponRigidMotion {std::uintptr_t child=0;unsigned point=0;BagMotion motion;};
 static bool weaponPhysicsEnabled=false;
 static WeaponPhysicsSettings weaponPhysicsSettings;
+static std::array<WeaponSlotPhysics,10> weaponSlotPhysics{};
 static std::uint64_t weaponPhysicsOwner=0;
 struct WeaponContext {
     std::uintptr_t parent=0,unit=0;std::uint64_t guid=0;unsigned token=0;
@@ -106,6 +107,7 @@ struct WeaponContext {
     unsigned previewMode=0;
     bool sharedWeaponPhysics=false;
     WeaponPhysicsSettings sharedWeaponPhysicsSettings;
+    std::array<WeaponSlotPhysics,10> sharedWeaponSlotPhysics{};
     std::array<WeaponRigidMotion,13> rigidWeapons{};
     std::array<BagTuningEntry,10> sharedFits{};
     std::array<unsigned char,8> rangedInfo{};
@@ -793,7 +795,30 @@ static int __fastcall setWeaponPhysicsLua(void* L){
         *amounts[i]=static_cast<unsigned>(value);
     }
     if(weaponPhysicsOwner!=owner||weaponPhysicsEnabled!=enabled){for(auto& c:weaponContexts)c.rigidWeapons={};}
+    if(weaponPhysicsOwner!=owner)weaponSlotPhysics={};
     weaponPhysicsOwner=owner;weaponPhysicsEnabled=enabled;weaponPhysicsSettings=settings;return result(L,1);
+}
+static int __fastcall setWeaponSlotPhysicsLua(void* L){
+    unsigned values[5];for(unsigned i=0;i<5;++i){
+        if(!isNumber(L,i+1))return result(L,-2);
+        const double v=toNumber(L,i+1);
+        if(!std::isfinite(v)||v<0||v>(i==0?110:i==1?2:200)||v!=std::floor(v))return result(L,-2);
+        values[i]=static_cast<unsigned>(v);
+    }
+    if(values[0]<101||values[0]==107)return result(L,-2);
+    const auto owner=getPlayer();if(!owner)return result(L,-1);
+    if(weaponPhysicsOwner!=owner){weaponSlotPhysics={};weaponPhysicsEnabled=false;weaponPhysicsSettings={};weaponPhysicsOwner=owner;}
+    auto& slot=weaponSlotPhysics[values[0]-101];
+    if(slot.mode!=values[1])for(auto& c:weaponContexts){c.rigidWeapons[values[0]-101]={};if(values[0]>=108)c.rigidWeapons[values[0]-108+10]={};}
+    slot={values[1],{values[2],values[3],values[4]}};return result(L,1);
+}
+static bool weaponPhysicsForSlot(const WeaponContext& c,unsigned index,WeaponPhysicsSettings& settings){
+    const unsigned slot=index>=10?index-3:index;
+    if(slot>=10||slot==6)return false;
+    const bool local=c.guid==getPlayer();if(local&&weaponPhysicsOwner!=c.guid)return false;
+    const auto& custom=local?weaponSlotPhysics[slot]:c.sharedWeaponSlotPhysics[slot];
+    settings=custom.mode?custom.settings:(local?weaponPhysicsSettings:c.sharedWeaponPhysicsSettings);
+    return custom.mode?custom.mode==2:(local?weaponPhysicsEnabled:c.sharedWeaponPhysics);
 }
 static bool positionWeaponPhysics(void* child,const float* matrix,BagMatrix& out,bool visible){
     const auto model=reinterpret_cast<std::uintptr_t>(child);std::uintptr_t parent=0;unsigned point=0;
@@ -806,7 +831,7 @@ static bool positionWeaponPhysics(void* child,const float* matrix,BagMatrix& out
     }
     if(slot<0)return false;
     auto& entry=c->rigidWeapons[slot];
-    const bool enabled=c->guid==getPlayer()?(weaponPhysicsOwner==c->guid&&weaponPhysicsEnabled):c->sharedWeaponPhysics;
+    WeaponPhysicsSettings settings;const bool enabled=weaponPhysicsForSlot(*c,slot,settings);
     // Hands, quivers, unrelated props and stationary previews keep native poses.
     if(!enabled||c->token||!visible||point<26||point>33||!asset||asset->kind==5||!weaponModelMatches(child,asset->model)){entry={};return false;}
     if(entry.child!=model||entry.point!=point){entry={};entry.child=model;entry.point=point;}
@@ -814,7 +839,6 @@ static bool positionWeaponPhysics(void* child,const float* matrix,BagMatrix& out
     if(!matrix||!read(model+0xBC,local)||!read(parent+0xFC,render)||!read(parent+0x2C,scene)||!scene||!read(scene+0x9C,world)){entry={};return false;}
     // The caller may pass a just-computed stack matrix (staff/bow/tuner fixes).
     for(unsigned i=0;i<16;++i)base[i]=matrix[i];
-    const auto& settings=c->guid==getPlayer()?weaponPhysicsSettings:c->sharedWeaponPhysicsSettings;
     return rigidWeaponPhysics(entry.motion,base,local,render,world,out,model,slot,point,bagClockMilliseconds(),bagIsRunning(*c),bagMotionActive(*c),bagAirLiftTarget(*c),settings);
 }
 static void updateWeaponAttachment(void* model,const float* matrix,const float* color,const float* lighting,float alpha){
@@ -864,10 +888,9 @@ static bool ownedWeaponPhysicsUpdate(void* child){
     if(!read(model+0x1CC,parent)||!read(model+0x1D0,point))return false;
     auto* c=weaponContext(parent);if(!c||!weaponContextActive(*c)||c->token)return false;
     if(point<26||point>33){for(auto& entry:c->rigidWeapons)if(entry.child==model)entry={};return false;}
-    const bool enabled=c->guid==getPlayer()?(weaponPhysicsOwner==c->guid&&weaponPhysicsEnabled):c->sharedWeaponPhysics;
-    if(!enabled)return false;
-    for(unsigned i=0;i<c->extra.size();++i)if(i!=6&&c->extra[i]==child)return true;
-    for(auto native:c->nativeChildren)if(native==child)return true;
+    WeaponPhysicsSettings settings;
+    for(unsigned i=0;i<c->extra.size();++i)if(i!=6&&c->extra[i]==child)return weaponPhysicsForSlot(*c,i,settings);
+    for(unsigned role=0;role<3;++role)if(c->nativeChildren[role]==child)return weaponPhysicsForSlot(*c,10+role,settings);
     return false;
 }
 static void updateAttachmentForCaller(void* model,const float* matrix,const float* color,const float* lighting,float alpha,std::uintptr_t caller){
