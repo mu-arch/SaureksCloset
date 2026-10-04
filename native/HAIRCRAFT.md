@@ -32,3 +32,29 @@ bald and selected hair groups, restoring defaults, unchanged facial groups,
 and local/preview ownership. Executable signatures guard the native functions
 and the verified hair-mask instructions. Actual hat/hair overlap still needs
 visual evaluation in the running game.
+
+## Hat placement
+
+**Adjust hat** opens the shared precision tuner without leaving Haircraft. It
+offers live lateral/longitudinal/vertical offsets, three rotation axes, size,
+relative editing, individual resets, Save Fit, Load Saved, and Default. Target
+111 uses separate `hatTuningEntries`; weapon entries and sharing's weapon fit
+mask retain their original ten slots. Fits follow the existing account profile
+format, keyed by race and gender, and apply to hats worn with that body. They
+work independently of the keep-hair switch. The overall addon/live-tuning
+switches suspend placement overrides. Save Fit persists an edit; Default
+previews the native placement until saved.
+
+The attachment dispatcher adjusts only point 11 children with a
+`Item\ObjectComponents\Head\` resource path and a current local-player or
+registered Closet-preview parent. It composes the fresh attachment matrix with
+the fit, preserving its animated head transform and camera transform. Each
+update, including lazy updates, starts from the native input; there is no
+accumulated offset, dynamic motion, head-bone edit or model reload per nudge.
+Head spell effects, weapons, other players and transformed world bodies retain
+their native placement. Capability probing of target 111 disables Adjust hat
+when an older DLL is loaded.
+
+`tests/hat_tuner.lua`, `tests/hat_placement.cpp`, and the actual hook simulation
+in `tests/weapon_renderer.cpp` cover persistence, resets, body isolation, live
+dispatch, default/disabled behavior, camera invariance and lazy updates.

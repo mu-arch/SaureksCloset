@@ -2,6 +2,11 @@ local V=VanityStudio
 function V:HaircraftAvailable()
     return type(SaureksClosetSetHaircraft)=="function"
 end
+function V:HatTuningAvailable()
+    if not self:HaircraftAvailable() or not self:BagTuningAvailable() then return false end
+    local ok,status=pcall(SaureksClosetGetBagFitDefaults,111,1,0)
+    return ok and status==1
+end
 function V:SyncHaircraft()
     if not self:HaircraftAvailable() or self.sharingWorldPaused then return false end
     local c=VanityStudioCharacter
@@ -33,7 +38,13 @@ function V:CreateHaircraftPage(p,label,button,enabled)
     end)
     self.haircraftToggle:SetScript("OnLeave",function() GameTooltip:Hide() end)
     self.haircraftStatus=label(p,"",33,214,124,76,true)
-    self.haircraftDefault=button(p,"Default",33,310,124,function() V:SetHaircraft(false) end)
+    self.haircraftHat=button(p,"Adjust hat",33,300,124,function() V:OpenPlacementTuner(111) end)
+    self.haircraftHat:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Adjust hat placement",1,1,1)
+        GameTooltip:AddLine("Move, tilt or resize your hat to fit your hairstyle. Adjustments follow your head. Save Fit keeps the placement for this race and gender; Default restores the original fit.",1,.82,0,true);GameTooltip:Show()
+    end)
+    self.haircraftHat:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    self.haircraftDefault=button(p,"Default hair",33,337,124,function() V:SetHaircraft(false) end)
     self.haircraftEnableControl=enabled
     self:RefreshHaircraftPage()
 end
@@ -43,6 +54,7 @@ function V:RefreshHaircraftPage()
     self.haircraftToggle:SetText(c.keepHairWithHat and "Keep hair: On" or "Keep hair: Off")
     self.haircraftEnableControl(self.haircraftToggle,available)
     self.haircraftEnableControl(self.haircraftDefault,available)
+    self.haircraftEnableControl(self.haircraftHat,self:HatTuningAvailable())
     self.haircraftStatus:SetText(not available and "Update the DLL and restart WoW to use Haircraft." or
         not c.enabled and "Enable the addon to see Haircraft." or
         c.keepHairWithHat and "Hair stays visible. Some hats may overlap your hair." or "Hats use their normal hair visibility.")

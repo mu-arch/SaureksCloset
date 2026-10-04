@@ -17,7 +17,11 @@ local function fieldHelp(field)
     if V.bagTunerWindow and V.bagTunerWindow.relativeMode then
         suffix=field.key=="scale" and "\nSize remains an absolute percentage in both modes." or "\nRelative mode: 0 is this item's placement when Relative was enabled. Positive and negative values are offsets from that point."
     end
-    if V.placementTunerSlot and V.placementTunerSlot>=108 then
+    if V.placementTunerSlot==111 then
+        local help={left="Move left/right with the head.",inset="Move forward/back with the head. Positive moves forward.",up="Raise or lower the hat with the head.",pitch="Tilt the hat around the head's lateral axis.",roll="Tilt the hat around the head's longitudinal axis.",yaw="Turn the hat around the head's vertical axis.",scale="Resize the hat around its head attachment. 100% is the original size."}
+        return field.label..": "..help[field.key]..suffix
+    end
+    if V.placementTunerSlot and V.placementTunerSlot>=108 and V.placementTunerSlot<=110 then
         return field.label..": adjust the stowed weapon on your body. Drawing restores its normal position, rotation and size in the hand."..suffix
     end
     return field.help..suffix
@@ -579,8 +583,10 @@ function V:OpenBagTuner(instanceID)
     if self.RefreshBagsPage then self:RefreshBagsPage() end
 end
 function V:OpenPlacementTuner(slot)
-    if not self:IsWeaponPosition(slot) then return end
-    if slot>=108 and not self:HeldWeaponTuningAvailable() then return end
+    if slot==111 then
+        if not self:HatTuningAvailable() then return end
+    elseif not self:IsWeaponPosition(slot) then return end
+    if slot>=108 and slot<=110 and not self:HeldWeaponTuningAvailable() then return end
     if not self.frame then self:Toggle(true) end
     if not self.bagTunerWindow then return end
     if self.bagTunerWindow:IsShown() then self.bagTunerWindow:Hide() end

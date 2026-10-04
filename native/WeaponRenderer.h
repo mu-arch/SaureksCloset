@@ -8,6 +8,8 @@
 #include "BagBehavior.h"
 #include "WeaponPhysics.h"
 #include "PlacementTuning.h"
+#include "HatPlacement.h"
+#include "ArmorInspection.h"
 #include "StaffPlacement.h"
 #include "StaffFits.h"
 #include "StaffShafts.h"
@@ -893,7 +895,35 @@ static bool ownedWeaponPhysicsUpdate(void* child){
     for(unsigned role=0;role<3;++role)if(c->nativeChildren[role]==child)return weaponPhysicsForSlot(*c,10+role,settings);
     return false;
 }
+static bool positionHaircraftHat(void* child,const float* matrix,BagMatrix& out){
+    if(!bagTuningOwner||bagTuningOwner!=getPlayer())return false;
+    const auto model=reinterpret_cast<std::uintptr_t>(child);
+    std::uintptr_t parent=0;unsigned point=0;
+    if(!read(model+0x1D0,point)||point!=11||!read(model+0x1CC,parent))return false;
+    Player p;if(!snapshot(p))return false;
+    unsigned race=0,sex=0;
+    if(parent==p.model&&p.display==p.native&&nativeModel(p.native)){
+        if(!p.component||!read(p.component+0x18,race)||!read(p.component+0x1C,sex))return false;
+    }else{
+        const auto* preview=previews.find(parent);
+        if(!preview||preview->guid!=p.guid)return false;
+        race=preview->body.race;sex=preview->body.sex;
+    }
+    if(!bagTuningKey(111,race,sex))return false;
+    const auto& fit=hatTuningEntries[(race-1)*2+sex];if(!fit.enabled)return false;
+    // Spell effects can also attach to point 11. Adjust head equipment only.
+    std::uintptr_t resource=0;std::array<char,260> path{};BagMatrix base;
+    if(!read(model+0x30,resource)||!resource||
+       !read(resource+0x20,path)||!read(reinterpret_cast<std::uintptr_t>(matrix),base))return false;
+    for(auto& ch:path)ch=armorPathCharacter(ch);
+    if(!armorPathPrefix(path,"item\\objectcomponents\\head\\"))return false;
+    return hatPlacement(base,fit.values,out);
+}
 static void updateAttachmentForCaller(void* model,const float* matrix,const float* color,const float* lighting,float alpha,std::uintptr_t caller){
+    BagMatrix hat;
+    if(positionHaircraftHat(model,matrix,hat)){
+        updateAttachedOriginal(model,hat.data(),color,lighting,alpha);return;
+    }
     // 0x714000 can lazily evaluate a child after its parent is already current
     // (returns 0x71415D/0x714183). Those calls overwrite its complete palette
     // too, so every owned-bag update must restore local deformation afterward.

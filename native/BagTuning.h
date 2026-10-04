@@ -17,10 +17,11 @@ struct BagTuningValues {
 };
 struct BagTuningEntry { bool enabled=false; unsigned revision=0; BagTuningValues values; };
 inline std::array<BagTuningEntry,16> bagTuningEntries{};
+inline std::array<BagTuningEntry,16> hatTuningEntries{};
 inline std::array<std::array<BagTuningEntry,16>,10> weaponTuningEntries{};
 inline std::uint64_t bagTuningOwner=0;
 inline bool bagTuningKey(unsigned bag,unsigned race,unsigned sex) {
-    return (bag==1||(bag>=101&&bag<=110)||(bag>=201&&bag<=208))&&race>=1&&race<=8&&sex<=1;
+    return (bag==1||(bag>=101&&bag<=111)||(bag>=201&&bag<=208))&&race>=1&&race<=8&&sex<=1;
 }
 inline bool bagInstanceTuningDefaults(unsigned mount,unsigned race,unsigned sex,BagTuningValues& out) {
     if(mount>2||race<1||race>8||sex>1)return false;
@@ -53,7 +54,7 @@ inline bool bagTuningValid(const BagTuningValues& values,bool bag=false) {
 }
 inline bool bagTuningSet(unsigned bag,unsigned race,unsigned sex,bool enabled,const BagTuningValues& values={}) {
     if(!bagTuningKey(bag,race,sex)||bag>=201||(enabled&&!bagTuningValid(values,bag==1)))return false;
-    auto& entry=bag==1?bagTuningEntries[(race-1)*2+sex]:weaponTuningEntries[bag-101][(race-1)*2+sex];
+    auto& entry=bag==1?bagTuningEntries[(race-1)*2+sex]:bag==111?hatTuningEntries[(race-1)*2+sex]:weaponTuningEntries[bag-101][(race-1)*2+sex];
     if(entry.enabled==enabled&&(!enabled||entry.values==values))return true;
     entry.enabled=enabled;
     if(enabled)entry.values=values;
@@ -69,4 +70,5 @@ inline void bagTuningUseOwner(std::uint64_t guid) {
         if(entry.enabled){entry.enabled=false;++entry.revision;}
     }
     bagTuningOwner=guid;
+    for(auto& entry:hatTuningEntries)if(entry.enabled){entry.enabled=false;++entry.revision;}
 }

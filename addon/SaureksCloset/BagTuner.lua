@@ -11,7 +11,7 @@ V.bagTunerFields={
 }
 local function keyFor(bag,race,sex) return bag..":"..race..":"..sex end
 local function validIdentity(bag,race,sex)
-    return (bag==1 or (type(bag)=="number" and ((bag>=101 and bag<=110) or (bag>=201 and bag<=208)) and bag==math.floor(bag))) and type(race)=="number" and race>=1 and race<=8 and race==math.floor(race) and (sex==0 or sex==1)
+    return (bag==1 or (type(bag)=="number" and ((bag>=101 and bag<=111) or (bag>=201 and bag<=208)) and bag==math.floor(bag))) and type(race)=="number" and race>=1 and race<=8 and race==math.floor(race) and (sex==0 or sex==1)
 end
 local function instanceFor(target) return type(target)=="number" and target>=201 and target<=208 and V.BagInstance and V:BagInstance(target-200) end
 local function draftKey(target,race,sex)
@@ -19,8 +19,10 @@ local function draftKey(target,race,sex)
     return bag and V:BagDraftKey(bag,race,sex) or keyFor(target,race,sex)
 end
 local function targets()
-    if V:HeldWeaponTuningAvailable() then return {1,101,102,103,104,105,106,107,108,109,110} end
-    return V:WeaponTuningAvailable() and {1,101,102,103,104,105,106,107} or {1}
+    local result=V:HeldWeaponTuningAvailable() and {1,101,102,103,104,105,106,107,108,109,110} or
+        V:WeaponTuningAvailable() and {1,101,102,103,104,105,106,107} or {1}
+    if V.HatTuningAvailable and V:HatTuningAvailable() then table.insert(result,111) end
+    return result
 end
 function V:HeldWeaponTuningAvailable()
     if not self:WeaponTuningAvailable() then return false end
@@ -141,7 +143,8 @@ function V:GetBagTunerState()
     end
     if not self:BagTuningAvailable() then result.status="Update SaureksCloset.dll and fully restart WoW to use the tuner.";return result end
     if self.placementTunerBag and not self:MultiBagRendererAvailable() then result.status="Fully restart WoW with the updated DLL to tune each bag.";return result end
-    if self.placementTunerSlot and self.placementTunerSlot>=108 and not self:HeldWeaponTuningAvailable() then result.status="Update the DLL and restart WoW to tune stowed weapons.";return result end
+    if self.placementTunerSlot==111 and not self:HatTuningAvailable() then result.status="Update the DLL and restart WoW to adjust hats.";return result end
+    if self.placementTunerSlot and self.placementTunerSlot>=108 and self.placementTunerSlot<=110 and not self:HeldWeaponTuningAvailable() then result.status="Update the DLL and restart WoW to tune stowed weapons.";return result end
     if self.placementTunerSlot and not self:WeaponTuningAvailable() then result.status="Fully restart WoW with the updated DLL to tune weapons and quivers.";return result end
     local store=self:BagTunerStore()
     if not store then result.status="Saved tuner data uses an unsupported format; it has been preserved.";return result end
@@ -155,7 +158,7 @@ function V:GetBagTunerState()
     if not self.bagTunerDrafts[key] then self.bagTunerDrafts[key]=self:Copy(saved and saved.values or defaults) end
     self.bagTunerTargetKey=key;self:SyncBagTuning()
     result.available=true;result.bag=bag;result.race=race;result.sex=sex;result.key=key
-    local name=instance and self.bagCatalogByID[instance.model].name or (bag==1 and "Runecloth Bag" or self.slotNames[bag])
+    local name=instance and self.bagCatalogByID[instance.model].name or (bag==111 and "Hat" or bag==1 and "Runecloth Bag" or self.slotNames[bag])
     result.title=name.." - "..VanityStudioRaces[race][1]..(sex==0 and " Male" or " Female")
     result.values=self:Copy(self.bagTunerDrafts[key]);result.saved=saved~=nil
     result.dirty=not sameValues(result.values,saved and saved.values or defaults);result.enabled=store.enabled~=false
@@ -231,7 +234,7 @@ local function fitJSON(record)
     local version=tonumber(record.renderer)
     if not version or not (version>=30510 and version<=2147483647) or math.floor(version)~=version then version=rendererVersion() end
     local target=record.bag or 1;local instance=instanceFor(target)
-    local slot=instance and ("bag_"..instance.id.."_"..instance.mount) or (target==1 and "back_top_left" or V.slotNames[target])
+    local slot=instance and ("bag_"..instance.id.."_"..instance.mount) or (target==1 and "back_top_left" or target==111 and "hat" or V.slotNames[target])
     return '{"bag": '..target..', "slot": '..quote(slot)..(instance and (', "model": '..instance.model) or '')..', "race": '..record.race..', "sex": '..record.sex..', "renderer": '..version..', "savedAt": '..quote(record.savedAt)..', "values": {'..table.concat(fields,", ")..'}}'
 end
 function V:ExportBagTunerFits()

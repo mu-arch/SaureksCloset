@@ -280,6 +280,46 @@ static Lua request(unsigned token,const WeaponSelection& s,int quiverHorizontal=
     if(s.stowedMask>=0){L.values.resize(23,0);L.values[22]=s.stowedMask;}
     return L;
 }
+
+static void testHatPlacementRouting(){
+    const auto previous=player;
+    player.component=0xB10000;
+    memory[player.component+0x18]=1;memory[player.component+0x1C]=0;
+    const auto child=pointer(0xB11000);
+    memory[address(child)+0x1CC]=player.model;memory[address(child)+0x1D0]=11;
+    modelName(child,"Item\\ObjectComponents\\Head\\Helm_Cloth_HuM.mdx");
+    BagMatrix base{{1,0,0,0,0,1,0,0,0,0,1,0,4,5,6,1}};
+    matrices[address(base.data())]=base;
+    BagTuningValues values;assert(bagTuningDefaults(111,1,0,values));
+    values.up=.12f;values.inset=.04f;values.left=-.02f;values.pitch=12;values.scale=110;
+    bagTuningUseOwner(player.guid);assert(bagTuningSet(111,1,0,true,values));
+    BagMatrix expected,out;assert(hatPlacement(base,values,expected));
+    assert(positionHaircraftHat(child,base.data(),out)&&out==expected);
+    captureAttachmentMatrix=true;
+    for(auto caller:{0x718761u,0x71415Du,0x714183u}){
+        updateAttachmentForCaller(child,base.data(),nullptr,nullptr,.75f,caller);
+        assert(capturedAttachmentMatrix==expected&&attachmentUpdate.alpha==.75f);
+        assert(matrices[address(base.data())]==base);
+    }
+    captureAttachmentMatrix=false;
+    modelName(child,"Spell\\HeadGlow.mdx");assert(!positionHaircraftHat(child,base.data(),out));
+    modelName(child,"ITEM/OBJECTCOMPONENTS/HEAD/Helm_Cloth_HuM.M2");
+    memory[address(child)+0x1D0]=6;assert(!positionHaircraftHat(child,base.data(),out));
+    memory[address(child)+0x1D0]=11;
+    player.display=999;assert(!positionHaircraftHat(child,base.data(),out));player=previous;player.component=0xB10000;
+    memory[address(child)+0x1CC]=0xB12000;assert(!positionHaircraftHat(child,base.data(),out));
+    auto* preview=previews.bind(0xB12000,player.guid,Appearance{})?previews.find(0xB12000):nullptr;
+    assert(preview&&positionHaircraftHat(child,base.data(),out));
+    preview->guid=player.guid+1;assert(!positionHaircraftHat(child,base.data(),out));
+    preview->guid=player.guid;preview->body.sex=1;assert(!positionHaircraftHat(child,base.data(),out));
+    previews.forget(0xB12000);
+    memory[address(child)+0x1CC]=player.model;
+    bagTuningSet(111,1,0,false);assert(!positionHaircraftHat(child,base.data(),out));
+    bagTuningSet(111,1,0,true,values);bagTuningUseOwner(player.guid+1);
+    assert(!positionHaircraftHat(child,base.data(),out)&&!hatTuningEntries[0].enabled);
+    bagTuningUseOwner(player.guid);player=previous;
+}
+
 int main(){
     {
         // Exercise the actual Lua bridge, including validation before narrowing
@@ -345,6 +385,7 @@ int main(){
     rebuildWeaponOriginal=&rebuild;
     sheathTransitionOriginal=&sheathTransition;updateAttachedOriginal=&observeAttachment;
     bowStringDrawOriginal=&observeBowString;
+    testHatPlacementRouting();
     memory[player.unit+0xD8]=player.model;memory[player.unit+0xD40]=0;memory[player.model+0x10]=1;
     memory[0xC0DC10]=0x900000;memory[0xC0DC14]=100000;
     for(const auto& a:weaponAssets){const auto row=0xC00000+100*a.display;memory[0x900000+4*a.display]=row;memory[row]=a.display;}
