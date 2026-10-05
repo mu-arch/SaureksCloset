@@ -286,7 +286,7 @@ function V:SyncLiveBagFits()
             -- Expired or composing preview tokens belong to the normal preview
             -- rebuild loop; they must not report a failed world fit.
             if checked and ready==1 then
-                local applied,code=self:ApplyBagRenderer(target.weaponToken,(self.tab=="body" or self.tab=="haircraft") and {} or weapons,true)
+                local applied,code=self:ApplyBagRenderer(target.weaponToken,self.tab=="body" and {} or weapons,true)
                 if not applied and code~=0 then ok=false end
             end
         end

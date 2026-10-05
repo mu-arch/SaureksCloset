@@ -113,12 +113,10 @@ function V:PreviewItems()
     end
     for _,slot in ipairs(self.slotOrder) do
         local id
-        -- Haircraft uses equipped items with the close-up camera, not Body's
-        -- shirt-only outfit or an appearance browser's temporary selection.
-        if self.tab~="haircraft" then
-            if VanityStudioCharacter.enabled then id=VanityStudioCharacter.selected[slot] end
-            if self.draft and self.draft.slot==slot then id=self.draft.id end
-        end
+        -- Haircraft shares the active outfit, including hidden slots and
+        -- passthrough equipment; only its camera differs from Outfit.
+        if VanityStudioCharacter.enabled then id=VanityStudioCharacter.selected[slot] end
+        if self.draft and self.draft.slot==slot then id=self.draft.id end
         if id==nil then
             local link=GetInventoryItemLink("player",slot)
             if link then local _,_,number=string.find(link,"item:(%d+)");id=tonumber(number) end
@@ -207,13 +205,12 @@ function V:RefreshPreview()
     end
     if self.previewDressAt and now<self.previewDressAt then return end
     local bodyPreview=self.tab=="body"
-    local realEquipment=self.tab=="haircraft"
-    local items=self:PreviewItems();local weapons=(bodyPreview or realEquipment) and {} or self:PreviewWeapons()
-    local routes=(bodyPreview or realEquipment) and {} or self:PreviewWeaponRoutes(weapons)
+    local items=self:PreviewItems();local weapons=bodyPreview and {} or self:PreviewWeapons()
+    local routes=bodyPreview and {} or self:PreviewWeaponRoutes(weapons)
     -- Include the page's dressing policy so entering/leaving Body always
     -- redresses the shared model, even when all ordinary item choices match.
     local dressSignature=key..":body"
-    if not bodyPreview then dressSignature=key..(realEquipment and ":real-equipment" or ":equipment")..self:WeaponSignature(weapons,nil,true)..":pose"..self:WeaponPreviewMode() end
+    if not bodyPreview then dressSignature=key..":equipment"..self:WeaponSignature(weapons,nil,true)..":pose"..self:WeaponPreviewMode() end
     for _,slot in ipairs(self.slotOrder) do dressSignature=dressSignature..":"..items[slot] end
     local signature=dressSignature..(bodyPreview and "" or self:WeaponDisplaySignature(weapons))
     if self.previewReveal and self.previewReveal.dressSignature==dressSignature then

@@ -143,34 +143,44 @@ now=now+.1;V:RefreshPreview()
 assert(V.previewDressSignature~=bodySignature)
 assertSelectionsUnchanged()
 
--- Haircraft shares the close-up camera, but must retain real equipped items,
--- ignoring hidden/cosmetic armor and carried weapon overrides and drafts.
-V.tab="haircraft";V.draft={slot=1,id=999}
+-- Haircraft uses the active transmog with a neutral pose. Real equipped
+-- items only fill passthrough slots; hidden slots must remain hidden.
+V.tab="haircraft"
 items=V:PreviewItems()
-for _,slot in ipairs(V.slotOrder) do assert(items[slot]==(equipment[slot] or 0)) end
+assert(items[1]==501 and items[4]==502 and items[5]==503)
 assert(V:WeaponPreviewMode()==0)
-for _,previewToken in ipairs({V.model.weaponToken,V.previewBuffer.weaponToken}) do
+for _,previewToken in ipairs({V.model.weaponToken,V.previewBuffer.weaponToken,0,99}) do
     assert(V:ApplyWeaponRenderer(previewToken,weapons))
-    local call=nativeCalls[#nativeCalls]
-    for i=2,8 do assert(call[i]==0,"Cosmetic weapons leaked into Haircraft") end
-    assert(call[9]==101 and call[10]==102 and call[11]==103 and call[15]==104)
-    for i=16,22 do assert(call[i]==0,"Custom bag, appearance or pose leaked into Haircraft") end
+    expectNormalNative(nativeCalls[#nativeCalls],previewToken)
 end
-for _,otherToken in ipairs({0,99}) do
-    assert(V:ApplyWeaponRenderer(otherToken,weapons));expectNormalNative(nativeCalls[#nativeCalls],otherToken)
+local function refresh()
+    for i=1,3 do now=now+.1;V:RefreshPreview() end
+    assert(not V.previewReveal and not V.previewDressingModel)
 end
-now=now+.1;V:RefreshPreview();now=now+.1;V:RefreshPreview()
-for _,id in ipairs({401,402,403,101,102,103}) do assert(contains(V.model.tried,id)) end
-assert(not contains(V.model.tried,501) and not contains(V.model.tried,999) and not contains(V.model.tried,6096))
-assert(V.model.sequence==0 and string.find(V.previewDressSignature,":real-equipment",1,true))
+refresh()
+assert(contains(V.model.tried,501) and not contains(V.model.tried,401))
+assert(V.model.sequence==0)
 assertSelectionsUnchanged()
--- Inventory changes redress the close-up without recreating the player.
-equipment[1]=404
-now=now+.1;V:RefreshPreview();now=now+.1;V:RefreshPreview()
+-- Changing the selected hat, hiding it, or returning to passthrough updates
+-- the same close-up immediately, without stale cache retries restoring it.
+VanityStudioCharacter.selected[1]=504;refresh()
+assert(contains(V.model.tried,504) and not contains(V.model.tried,501))
+VanityStudioCharacter.selected[1]=0;refresh()
+availableItems[504]=true;V:UpdatePreviewLoading()
+assert(not contains(V.model.tried,504) and not contains(V.model.tried,401))
+VanityStudioCharacter.selected[1]=nil;refresh()
+assert(contains(V.model.tried,401))
+equipment[1]=404;refresh()
 assert(contains(V.model.tried,404) and not contains(V.model.tried,401))
-V.draft=nil;V.tab="armor"
-now=now+.1;V:RefreshPreview();now=now+.1;V:RefreshPreview()
+VanityStudioCharacter.selected[1]=501
+VanityStudioCharacter.enabled=false;refresh()
+assert(contains(V.model.tried,404) and not contains(V.model.tried,501))
+VanityStudioCharacter.enabled=true;refresh()
 assert(contains(V.model.tried,501) and not contains(V.model.tried,404))
+V.draft={slot=1,id=999};refresh()
+assert(contains(V.model.tried,999) and not contains(V.model.tried,501))
+V.draft=nil;V.tab="armor";refresh()
+assert(contains(V.model.tried,501) and not contains(V.model.tried,999))
 expectNormalNative(nativeCalls[#nativeCalls],V.model.weaponToken)
 assertSelectionsUnchanged()
 

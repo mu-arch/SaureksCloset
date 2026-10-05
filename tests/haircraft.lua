@@ -40,8 +40,8 @@ for race=1,8 do for sex=0,1 do
     assert(not V.bodyPreviewFade:IsShown() and not V.model.closetBodyFramed)
 end end
 V:SetTab('haircraft')
--- Periodic fit synchronization must not reintroduce decorative bags into the
--- actual-equipment preview; the world retains its own bag configuration.
+-- Periodic fit synchronization keeps Haircraft consistent with the active
+-- outfit, including its custom bags.
 local originalApply=V.ApplyBagRenderer
 local fitCalls={}
 V.ApplyBagRenderer=function(_,token,weapons) fitCalls[token]=weapons;return true,1 end
@@ -49,7 +49,7 @@ local originalMulti=V.MultiBagRendererAvailable
 V.MultiBagRendererAvailable=function() return true end
 V.model.weaponToken=81;V.previewBuffer.weaponToken=82
 assert(V:SyncLiveBagFits())
-assert(fitCalls[0]==c.weapons and not next(fitCalls[81]) and not next(fitCalls[82]))
+assert(fitCalls[0]==c.weapons and fitCalls[81]==c.weapons and fitCalls[82]==c.weapons)
 V.ApplyBagRenderer=originalApply;V.MultiBagRendererAvailable=originalMulti
 local baseline=invalidated
 V.haircraftToggle.scripts.OnClick()
