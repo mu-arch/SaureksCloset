@@ -10,6 +10,8 @@ local function label(parent,text,x,y,w,h,white)
     return f
 end
 local function paintButton(b,state)
+    -- Toggle buttons can look grey while remaining enabled and clickable.
+    if b.closetToggledOff then state="Disabled" end
     for _,part in ipairs({"Left","Middle","Right"}) do
         getglobal(b:GetName()..part):SetTexture("Interface\\Buttons\\UI-Panel-Button-"..state)
     end

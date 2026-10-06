@@ -1,13 +1,14 @@
 # Haircraft
 
-Wardrobe → Haircraft offers **Keep hair: On/Off** and **Adjust hat**. This is a
-per-character preference (`keepHairWithHat`), initially off. It uses the current
-native or customized hairstyle without replacing the selected hat. Turning Keep hair off
+Wardrobe → Haircraft offers **Toggle Hair** and **Adjust hat**. This is a
+per-character preference (`keepHairWithHat`), initially off. Its button stays
+clickable in both states: grey when off and red when on. It uses the current
+native or customized hairstyle without replacing the selected hat. Turning Toggle Hair off
 restores ordinary hat visibility. Disabling the addon suspends the effect while
 retaining the preference. The registered wardrobe previews use the same policy.
 **Trim hair** is a separate checkbox that enables automatic fitting beneath
-the current hat while Keep hair is on. Turning it off restores the full hairstyle
-without changing Keep hair. The character preference `trimHair` defaults to on
+the current hat while Toggle Hair is on. Turning it off restores the full hairstyle
+without changing Toggle Hair. The character preference `trimHair` defaults to on
 when absent, preserving existing behavior. There is no trimming window or
 cutting-plane configuration.
 
@@ -75,7 +76,7 @@ all material batches and only fits sections using the hair replacement texture
 `SaureksClosetHairMaskVersion()` returns 3. The new call is
 `SaureksClosetSetHairMask(on,3)`; old enable arguments are rejected. Disable
 calls remain compatible. Lua ignores old saved cutting presets and explicitly
-disables the old bake when paired with an older DLL. Keep hair controls hairstyle visibility; Trim hair independently controls
+disables the old bake when paired with an older DLL. Toggle Hair controls hairstyle visibility; Trim hair independently controls
 fitting. The current hat, hairstyle, body and hat placement determine the fit.
 
 The attachment dispatcher captures the real hat triangle mesh and its fitted

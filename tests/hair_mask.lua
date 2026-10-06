@@ -14,7 +14,8 @@ assert(V:HairMaskKey()=='1:1:3:501')
 assert(V.haircraftTrim:GetChecked()) -- existing users retain automatic fitting
 assert(V:SetHairTrimming(false));assert(c.trimHair==false and c.keepHairWithHat and calls[#calls][1]==0)
 V:RefreshHaircraftPage();V:SyncHairMask();assert(not V.haircraftTrim:GetChecked() and calls[#calls][1]==0)
-assert(string.find(V.haircraftStatus:GetText(),'Trimming is off',1,true))
+assert(string.find(V.hairMaskStatus,'Trimming is off',1,true))
+assert(string.find(V.haircraftStatus:GetText(),"It's normal for hats to clip",1,true))
 assert(V:SetHairTrimming(true));assert(c.trimHair and c.keepHairWithHat and calls[#calls][1]==1)
 status=-5;assert(not V:SetHairTrimming(false));assert(c.trimHair and V.haircraftTrim:GetChecked());status=1
 -- Automatic fitting follows current hat without requiring a saved config.

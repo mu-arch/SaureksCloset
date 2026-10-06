@@ -39,30 +39,31 @@ function V:CreateHaircraftPage(p,label,button,enabled)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
     label(p,"Haircraft",33,87,124,18)
     label(p,"Keep your hairstyle visible while wearing hats.",33,115,124,48,true)
-    self.haircraftToggle=button(p,"Keep hair: Off",33,176,124,function()
+    self.haircraftToggle=button(p,"Toggle Hair",33,176,124,function()
         V:SetHaircraft(not VanityStudioCharacter.keepHairWithHat)
     end)
     self.haircraftToggle:SetScript("OnEnter",function()
-        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Keep hair with hats",1,1,1)
+        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Toggle Hair",1,1,1)
         GameTooltip:AddLine("Show your current hairstyle, including ponytails, with your equipped or cosmetic hat. This character setting also applies to the wardrobe preview. Enable Trim hair to automatically fit covered hair while preserving skin and exposed lower hair. Hats that sit inside the head may still need Adjust hat.",1,.82,0,true)
         GameTooltip:Show()
     end)
     self.haircraftToggle:SetScript("OnLeave",function() GameTooltip:Hide() end)
-    self.haircraftStatus=label(p,"",33,214,124,76,true)
-    self.haircraftHat=button(p,"Adjust hat",33,300,124,function() V:OpenPlacementTuner(111) end)
+    self.haircraftStatus=label(p,"It's normal for hats to clip when getting started. Don't give up, adjust the position and fit. Most hats can be made to look okay.",33,214,124,100,true)
+    self.haircraftHat=button(p,"Adjust hat",33,324,124,function() V:OpenPlacementTuner(111) end)
     self.haircraftHat:SetScript("OnEnter",function()
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Adjust hat placement",1,1,1)
         GameTooltip:AddLine("Move, tilt or resize your hat to fit your hairstyle. Adjustments follow your head. Save Fit keeps the placement for this race and gender; Default restores the original fit.",1,.82,0,true);GameTooltip:Show()
     end)
     self.haircraftHat:SetScript("OnLeave",function() GameTooltip:Hide() end)
     self.haircraftTrim=CreateFrame("CheckButton","SaureksClosetHaircraftTrim",p,"UICheckButtonTemplate")
-    self.haircraftTrim:ClearAllPoints();self.haircraftTrim:SetPoint("TOPLEFT",p,"TOPLEFT",33,-334)
+    self.haircraftTrim:ClearAllPoints();self.haircraftTrim:SetPoint("TOPLEFT",p,"TOPLEFT",33,-356)
     self.haircraftTrim:SetWidth(24);self.haircraftTrim:SetHeight(24)
-    label(p,"Trim hair",61,338,96,20,true)
+    label(p,"Trim hair",61,360,96,20,true)
     self.haircraftTrim:SetScript("OnClick",function() V:SetHairTrimming(this:GetChecked()) end)
     self.haircraftTrim:SetScript("OnEnter",function()
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Trim hair",1,1,1)
-        GameTooltip:AddLine("Automatically fit hair beneath your hat when Keep hair is on. Turn this off to show your full, untrimmed hairstyle. Saved for this character.",1,.82,0,true);GameTooltip:Show()
+        if V.hairMaskStatus then GameTooltip:AddLine(V.hairMaskStatus,1,.82,0,true) end
+        GameTooltip:AddLine("Automatically fit hair beneath your hat when Toggle Hair is on. Turn this off to show your full, untrimmed hairstyle. Saved for this character.",1,.82,0,true);GameTooltip:Show()
     end)
     self.haircraftTrim:SetScript("OnLeave",function() GameTooltip:Hide() end)
     self.haircraftEnableControl=enabled
@@ -71,14 +72,13 @@ end
 function V:RefreshHaircraftPage()
     if not self.haircraftToggle then return end
     local available=self:HaircraftAvailable();local c=VanityStudioCharacter
-    self.haircraftToggle:SetText(c.keepHairWithHat and "Keep hair: On" or "Keep hair: Off")
+    self.haircraftToggle:SetText("Toggle Hair")
+    self.haircraftToggle.closetToggledOff=not c.keepHairWithHat
     self.haircraftEnableControl(self.haircraftToggle,available)
     self.haircraftEnableControl(self.haircraftHat,self:HatTuningAvailable())
     self.haircraftTrim:SetChecked(c.trimHair~=false)
     self.haircraftEnableControl(self.haircraftTrim,available and self:HairMaskAvailable())
-    self.haircraftStatus:SetText(not available and "Update the DLL and restart WoW to use Haircraft." or
-        not c.enabled and "Enable the addon to see Haircraft." or
-        c.keepHairWithHat and (c.trimHair==false and "Hair stays visible. Trimming is off." or self.hairMaskStatus or "Fitting hair around your hat...") or "Hats use their normal hair visibility.")
+
 end
 
 function V:HairMaskAvailable()
