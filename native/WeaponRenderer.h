@@ -1,4 +1,5 @@
 #pragma once
+#include "HairMask.h"
 #include "WeaponState.h"
 #include <map>
 #include "BowPlacement.h"
@@ -920,6 +921,7 @@ static bool positionHaircraftHat(void* child,const float* matrix,BagMatrix& out)
     return hatPlacement(base,fit.values,out);
 }
 static void updateAttachmentForCaller(void* model,const float* matrix,const float* color,const float* lighting,float alpha,std::uintptr_t caller){
+    if(hairMask::capture)hairMask::capture(model,matrix);
     BagMatrix hat;
     if(positionHaircraftHat(model,matrix,hat)){
         updateAttachedOriginal(model,hat.data(),color,lighting,alpha);return;

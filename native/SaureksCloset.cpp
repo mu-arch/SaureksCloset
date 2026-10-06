@@ -74,7 +74,7 @@ static const auto createModel=reinterpret_cast<CreateModel>(0x707350);
 static const auto releaseModel=reinterpret_cast<DestroyModel>(0x7103A0);
 static PreviewRegistry previews;
 static Appearance requestedPreview;
-static bool previewArmed=false;
+static bool previewArmed=false,previewHairMask=false;
 static DWORD previewThread=0;
 static unsigned previewToken=0;
 static State state;
@@ -147,7 +147,10 @@ static const char* __fastcall nameHook(void* unit,void*){
     Player p;
     if(snapshot(p)&&p.unit==reinterpret_cast<std::uintptr_t>(unit)){
         const auto* name=applies(p)?state.body.model()->filename:nameOriginal(unit);
-        return localCapeMotionModel(name);
+        const auto* body=applies(p)?state.body.model():nativeModel(p.native);
+        const auto style=applies(p)?state.body.hairStyle:((p.body>>16)&255);
+        const auto* cape=localCapeMotionModel(name);
+        return p.display==p.native&&body?hairMask::model(cape,p.guid,(body->race-1)*2+body->sex+1,style):cape;
     }
     const auto* name=sharedName(reinterpret_cast<std::uintptr_t>(unit));if(!name)name=nameOriginal(unit);
     const auto* remote=sharedForUnit(reinterpret_cast<std::uintptr_t>(unit));
@@ -212,12 +215,15 @@ static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned f
         if(!snapshot(p)||p.model!=reinterpret_cast<std::uintptr_t>(source)||!p.component||!previews.freeEntry())return nullptr;
         std::array<std::uint32_t,91> descriptor;
         unsigned loaded=0,dirty=1;
-        const bool copyAppearance=read(p.model+0x10,loaded)&&loaded&&
+        const bool allowMask=previewHairMask&&hairMask::activeOwner==p.guid&&hairMask::activeBody==(requestedPreview.race-1)*2+requestedPreview.sex+1&&hairMask::activeStyle==requestedPreview.hairStyle;
+        const bool copyAppearance=(hairMask::activePath.empty()||allowMask)&&read(p.model+0x10,loaded)&&loaded&&
             read(p.component+0x10,dirty)&&!dirty&&read(p.component+0x18,descriptor)&&descriptor[8]==p.model&&
             previewBodyMatches(descriptor,requestedPreview)&&(!applies(p)||state.composed==state.revision);
         // Preserve the stock model/texture clone when the requested body is already visible.
         // A different saved body still needs its own model and fresh compositor.
-        void* model=copyAppearance?cloneModelOriginal(scene,source,flags):createModel(scene,localCapeMotionModel(requestedPreview.model()->filename),flags);
+        const auto* path=localCapeMotionModel(requestedPreview.model()->filename);
+        if(allowMask)path=hairMask::model(path,p.guid,(requestedPreview.race-1)*2+requestedPreview.sex+1,requestedPreview.hairStyle);
+        void* model=copyAppearance?cloneModelOriginal(scene,source,flags):createModel(scene,path,flags);
         if(model){
             previewToken=previews.bind(reinterpret_cast<std::uintptr_t>(model),p.guid,requestedPreview);
             if(auto* entry=previews.find(reinterpret_cast<std::uintptr_t>(model)))entry->copiedAppearance=copyAppearance;
@@ -364,6 +370,7 @@ static int __fastcall beginPreview(void* L){
     Appearance body{values[0],values[1],values[2],values[3],values[4],values[5],values[6]};
     Player p;if(!body.valid())return result(L,-2);
     if(!snapshot(p)||!p.model||!p.component||!previews.freeEntry())return result(L,-1);
+    previewHairMask=isNumber(L,8)&&toNumber(L,8)==1;
     requestedPreview=body;previewThread=GetCurrentThreadId();previewToken=0;previewArmed=true;
     return result(L,1);
 }
@@ -424,6 +431,7 @@ static int __fastcall weaponryProbe(void* L){
 #include "UpdateChecker.h"
 #include "SharingRuntime.h"
 #include "VoiceRenderer.h"
+#include "HairMaskRuntime.h"
 static int __fastcall setCapeMotionLua(void* L){
     unsigned values[5];for(unsigned i=0;i<5;++i){
         if(!isNumber(L,i+1))return result(L,-2);const double v=toNumber(L,i+1);
@@ -450,6 +458,8 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
         registerOriginal("SaureksClosetSetCapeMotion",reinterpret_cast<std::uintptr_t>(&setCapeMotionLua));
+        hairMask::capture=hairMaskRuntime::capture;
+        registerOriginal("SaureksClosetSetHairMask",reinterpret_cast<std::uintptr_t>(&setHairMaskLua));
         registerOriginal("SaureksClosetSetHaircraft",reinterpret_cast<std::uintptr_t>(&setHaircraftLua));
         registerOriginal("SaureksClosetPhysicsVersion",reinterpret_cast<std::uintptr_t>(&physicsVersion));
         registerOriginal("SaureksClosetSetWeaponSlotPhysics",reinterpret_cast<std::uintptr_t>(&setWeaponSlotPhysicsLua));

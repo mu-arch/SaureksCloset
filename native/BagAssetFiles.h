@@ -1,6 +1,7 @@
 #pragma once
 #include "BagCatalog.h"
 #include "CapeMotion.h"
+#include "HairMask.h"
 // Build 5875 disables ordinary loose-file searches at startup. Route only our
 // catalog's shipped bag assets to the client's existing disk-file handle path.
 using ResolveAssetFile=int (__fastcall *)(const char*,char*,unsigned,unsigned,unsigned*,void**);
@@ -22,7 +23,7 @@ static const char* bagAssetFile(const char* filename){
 }
 static int __fastcall resolveAssetFileHook(const char* filename,char* output,unsigned capacity,
                                          unsigned flags,unsigned* kind,void** archive){
-    const auto* path=capeMotion::cachePath(filename)?filename:bagAssetFile(filename);
+    const auto* path=(capeMotion::cachePath(filename)||hairMask::cachePath(filename))?filename:bagAssetFile(filename);
     if(path&&output&&kind){
         const auto length=std::strlen(path);
         const auto attributes=GetFileAttributesA(path);

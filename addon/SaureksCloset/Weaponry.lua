@@ -381,7 +381,7 @@ function V:CopyWardrobeModel(target)
     if self:WeaponRendererAvailable() then
         local c=VanityStudioCharacter;local b=c.enabled and c.body or self:NativeBody()
         if not b then return false end
-        local started,status=pcall(SaureksClosetBeginPreview,b.race,b.sex,b.skin,b.face,b.hairStyle,b.hairColor,b.facial)
+        local started,status=pcall(SaureksClosetBeginPreview,b.race,b.sex,b.skin,b.face,b.hairStyle,b.hairColor,b.facial,self.tab~="body" and 1 or 0)
         if started and (status==-1 or status==-4) then return false end
         if not started or status~=1 then error("Preview is not ready") end
         local copied=pcall(target.SetUnit,target,"player")
