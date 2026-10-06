@@ -53,7 +53,7 @@ for p in addon.rglob('*'):
     if relative.parts[0] == 'Textures':
         include = p.name in {e['texture'] for e in artwork} or p.name == 'ASSETS-LICENSE'
     elif relative.parts[0] == 'Screenshots':
-        include = p.suffix.lower() in ('.png', '.gif') or p.name == 'ASSETS-LICENSE'
+        include = p.suffix.lower() in ('.png', '.gif', '.webm') or p.name == 'ASSETS-LICENSE'
     elif relative.parts[0] == 'CapeMotion':
         include = len(relative.parts) == 2 and (p.name in {f'B{i:02}.m2' for i in range(1,17)} or p.name == 'ASSETS-LICENSE')
     elif relative.parts[0] == 'Models':

@@ -1,4 +1,4 @@
-# Building Saurek's Closet 4.0.11
+# Building Saurek's Closet 4.1.1
 
 The Lua addon is in `addon/SaureksCloset/`. The native renderer uses C++17 and MinHook; generated headers and build signatures are included.
 
@@ -178,3 +178,11 @@ Addon 4.0.11 and renderer 40011 package the combined Settings donation button,
 the supplied transparent signature artwork, and the restored plain-text sign-off.
 Both donation links and the Cash App QR remain in the donation window. The release
 gate checks layout, browser actions, transparent artwork and its source checksum.
+
+### Release 4.1.1
+
+Addon 4.1.1 and renderer 40101 include Haircraft hat placement and optional hair
+fitting, per-slot weapon physics, bag physics controls, and cape motion tuning.
+Transmog sharing controls and sessions remain disabled pending launch. The release
+gate covers hair and scalp preservation, placement controls, physics settings,
+sharing disablement, and shared window alignment.

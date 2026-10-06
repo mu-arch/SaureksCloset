@@ -4,7 +4,7 @@
 
 Saurek proudly presents:
 
-**· Release 4.0.8 · [Download now](https://github.com/mu-arch/SaureksCloset/releases/latest) ·**
+**· Release 4.0.11 · [Download now](https://github.com/mu-arch/SaureksCloset/releases/latest) ·**
 
 Supported on Linux, Windows, and Mac
 

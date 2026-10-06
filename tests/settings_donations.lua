@@ -5,7 +5,7 @@ table.getn=table.getn or function(t) return #t end
 UISpecialFrames={}
 VanityStudioDB={autoCheckUpdates=false}
 local messages,opened,checks={},{},0
-VanityStudio={VERSION="4.0.11",Message=function(self,text) table.insert(messages,text) end}
+VanityStudio={VERSION="4.1.1",Message=function(self,text) table.insert(messages,text) end}
 local methods={}
 local function node(kind,name,parent)
     local n=setmetatable({kind=kind,name=name,parent=parent,children={},scripts={},shown=true}, {__index=methods})

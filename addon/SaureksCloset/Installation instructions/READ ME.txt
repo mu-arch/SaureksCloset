@@ -1,6 +1,6 @@
 SAUREK'S CLOSET - INSTALLATION
 
-Version 4.0.11 requires renderer 40011 (DLL 4.0.11).
+Version 4.1.1 requires renderer 40101 (DLL 4.1.1).
 Simple mode changes your equipped main hand, off hand and ranged slots.
 Check Advanced mode to choose separate carried items and tune placement.
 Both modes preserve your saved choices. See WEAPON-MENU.md.
@@ -21,7 +21,7 @@ fit changes in your unsaved look. Drag either preview to rotate it.
 
 INSTALLING OR UPDATING
 
-Install both the addon and DLL from version 4.0.11, then fully restart the game.
+Install both the addon and DLL from version 4.1.1, then fully restart the game.
 The /reload command cannot replace a loaded DLL. Character equipment icons
 and inventory tooltips now always use real equipment. Cosmetic appearances
 remain visible on the world character and 3D previews.
@@ -47,5 +47,5 @@ The DLL copy in this instructions folder is only for installation;
 WoW will not load it from here. After replacing a DLL, fully restart the
 game. The /reload command only reloads the addon.
 
-Version Details should show addon 4.0.11, loaded DLL 4.0.11, and required
-DLL 4.0.11. These are the compatible versions for this update.
+Version Details should show addon 4.1.1, loaded DLL 4.1.1, and required
+DLL 4.1.1. These are the compatible versions for this update.
