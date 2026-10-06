@@ -140,7 +140,7 @@ Probably not. Warden could in theory detect it, but I would think it's unlikely 
 - Can I disable transmog sharing: YES
 - Does the transmog system send my account name, password, or personal information: NO
 - Can it submit new executable code to or modify the local addon: NO
-- Why can't you use normal addon channels: I don't want servers to be able to see you're using the addon, also I'm adding support for WoW: Forever and I absolutely don't want Blizzard to see you're using the addon, since it violate TOS. Therefore I'm putting everything under this private communication server so there's one system to maintain.
+- Why can't you use normal addon channels: I don't want servers to be able to see you're using the addon, also I'm adding support for WoW: Forever and I absolutely don't want Blizzard to see you're using the addon, since it violates TOS. Therefore, I'm putting everything under this private communication server so there's one system to maintain.
 - Are connections to the server encrypted: YES, but it wouldn't matter if they weren't, no data of any real privacy impact is sent over the network.
 - Will this now or ever do anything that a common sense computer professional would consider privacy violation: NO, the scope of communications with this server are to coordinate the distribution of transmog character object data.
 - Do you collect analytics: NO
