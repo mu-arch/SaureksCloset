@@ -132,7 +132,7 @@ Open any saved look to preview, rename, delete, or activate it. The green eye ma
 
 Saurek's Closet has two main components: the addon and a internal memory coordinator. The addon provides the user interface, configuration, and appearance database, and communicates with the memory coordinator running inside the WoW process.
 
-The memory coordinator precisely connects to specific game rendering functions and inspects or temporarily modifies specific values in memory when the game is preparing to render a character. For example, when the user selects a different cosmetic appearance, the coordinator can substitute the desired appearance data immediately before the rendering operation and, where necessary, restore the original values afterward. This allows the visual appearance to change without permanently altering the character's underlying equipment, gameplay state, or server-side data.
+The memory coordinator precisely connects to specific graphics rendering functions and inspects or temporarily modifies specific values in memory when the game is preparing to render a character. For example, when the user selects a different cosmetic appearance, the coordinator can substitute the desired appearance data immediately before the rendering operation and, where necessary, restore the original values afterward. This allows the visual appearance to change without permanently altering the character's underlying equipment, gameplay state, or server-side data.
 
 ### Can I get banned from a private server for using this?
 
