@@ -85,7 +85,7 @@ function V:SyncHairMask()
     -- the only switch; fitting follows the current hat and saved hat placement.
     local active=self:HairMaskKey() and c.enabled and c.keepHairWithHat
     local ok,status,count,generation=pcall(SaureksClosetSetHairMask,active and 1 or 0,3)
-    self.hairMaskStatus=not ok and "Could not fit hair." or status==0 and "Waiting for the hat model..." or status==2 and "No visible hat to fit." or status==3 and "Loading the fitted hairstyle..." or status==1 and (active and ((count or 0)>0 and "Hair fitted beneath your hat." or "Hair preserved. No safe fit needed or available.") or "Hats use their normal hair visibility.") or status==-6 and "The fitted model did not load. Restart WoW with the updated DLL." or "Could not fit hair. Original hair preserved."
+    self.hairMaskStatus=not ok and "Could not fit hair." or status==0 and "Waiting for the hat model..." or status==2 and "No visible hat to fit." or status==3 and "Loading the fitted hairstyle..." or status==4 and "Hat surface unavailable. Hair is unchanged." or status==1 and (active and ((count or 0)>0 and "Hair fitted beneath your hat." or "Hair preserved. No safe fit needed or available.") or "Hats use their normal hair visibility.") or status==-6 and "The fitted model did not load. Restart WoW with the updated DLL." or "Could not fit hair. Original hair preserved."
     if generation and self.hairMaskGeneration~=generation then
         self.hairMaskGeneration=generation
         if self.InvalidatePreviewModel then self:InvalidatePreviewModel(0,true) end

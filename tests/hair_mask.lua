@@ -17,6 +17,7 @@ c.body.hairStyle=4;V:SyncHairMask();assert(calls[#calls][1]==1 and V:HairMaskKey
 local invalidations=0;V.InvalidatePreviewModel=function() invalidations=invalidations+1 end
 status=0;assert(V:SyncHairMask());assert(string.find(V.hairMaskStatus,'Waiting',1,true))
 status=3;assert(V:SyncHairMask());assert(string.find(V.hairMaskStatus,'Loading',1,true))
+status=4;assert(V:SyncHairMask());assert(string.find(V.hairMaskStatus,"Hat surface unavailable",1,true))
 status=-6;assert(not V:SyncHairMask());assert(string.find(V.hairMaskStatus,'did not load',1,true))
 status=1;generation=2;V:SyncHairMask();V:SyncHairMask();assert(invalidations==1)
 changed=0;V:SyncHairMask();assert(string.find(V.hairMaskStatus,'preserved',1,true))

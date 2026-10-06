@@ -77,7 +77,9 @@ switch. The current hat, hairstyle, body and hat placement determine the fit.
 
 The attachment dispatcher captures the real hat triangle mesh and its fitted
 transform once. Only opaque draw sections establish coverage; transparent
-feathers and effect layers do not. The current head skin matrix is removed to
+feathers and effect layers do not. In MD20 version 256 the render-flag array
+is at header 0x84/0x88. The 0x7c/0x80 pair is a texture-replacement lookup;
+reading it as render flags previously discarded the fishing hat's entire mesh. The current head skin matrix is removed to
 obtain the hat transform in body rest coordinates. Normal synchronization bakes
 a private copy after capture; no fitting runs in the render loop.
 
@@ -98,7 +100,8 @@ World/previews retain the existing owner/body/style isolation. Fitting is local
 and is not transmitted by sharing.
 
 Returned status is 0 while capturing, 1 for loaded/off, 2 for no hat, 3 while
-loading, -2 for invalid/retired inputs, -5 for bake/file failure, and -6 if the
+loading, 4 when no solid hat surface is available (no unchanged copy is
+loaded as a successful fit), -2 for invalid/retired inputs, -5 for bake/file failure, and -6 if the
 private model does not load within five seconds. The second return value counts
 fitted vertices, not deleted triangles. Generation changes invalidate previews.
 

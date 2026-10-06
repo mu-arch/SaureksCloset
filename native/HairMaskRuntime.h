@@ -61,7 +61,9 @@ inline void capture(void* child,const float* input){
     if(!read(header+0x4c,viewsCount)||!viewsCount||viewsCount>16||!read(header+0x50,views)||!views||
        !read(views,ni)||ni>65535||!read(views+4,indices)||!read(views+8,nt)||nt>60000||nt%3||!read(views+12,triangles)||
        !read(views+24,ns)||ns>512||!read(views+28,sections)||!read(views+32,nBatch)||nBatch>2048||!read(views+36,batches)||
-       !read(header+0x7c,nFlags)||nFlags>2048||!read(header+0x80,flags))return;
+       !read(header+0x84,nFlags)||nFlags>2048||!read(header+0x88,flags))return;
+    // MD20 v256: 0x7c/0x80 is the texture-replacement lookup, which may
+    // contain 0xffff. Render flags (four bytes each) are at 0x84/0x88.
     std::vector<bool> opaque(ns,false);
     for(unsigned i=0;i<nBatch;++i){std::uint16_t section=0,flag=0,blend=0;
         if(!read(batches+24*i+4,section)||section>=ns||!read(batches+24*i+10,flag)||flag>=nFlags||!read(flags+4*flag+2,blend))return;
@@ -93,6 +95,7 @@ static int __fastcall setHairMaskLua(void* L){
     if(!id.display){ready=false;clear(p);return reply(L,2);}
     const auto& fit=hatTuningEntries[(id.race-1)*2+id.sex];const bool fitted=bagTuningOwner==p.guid&&fit.enabled;
     if(!ready||!(captured==id)||fitted!=capturedFitEnabled||(fitted&&!sameFit(capturedFit,fit.values))){ready=false;clear(p);return reply(L,0);}
+    if(hatSurface.empty()){changedTriangles=0;clear(p);return reply(L,4);}
     const auto* ordinary=raceModels[(id.race-1)*2+id.sex].filename;
     const auto* cape=localCapeMotionModel(ordinary);const std::string capeKey=cape;
     if(applied==id&&appliedCape==capeKey&&appliedRevision==captureRevision&&!hairMask::activePath.empty())return reply(L,loadedStatus(p));

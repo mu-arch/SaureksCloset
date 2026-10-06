@@ -35,7 +35,7 @@ static void pushNumber(void* p,double v){static_cast<Lua*>(p)->output.push_back(
 static int result(void* p,int v){pushNumber(p,v);return 1;}
 #include "../native/HairMaskRuntime.h"
 static BagMatrix identity(){return {{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};}
-int main(){
+int main(int argc,char** argv){
     namespace fs=std::filesystem;
     auto original=fs::current_path();char temp[]="/tmp/closet-hairmask-runtime-XXXXXX";assert(mkdtemp(temp));
     auto folder=fs::path(temp)/"Interface/AddOns/SaureksCloset/CapeMotion";fs::create_directories(folder);
@@ -45,8 +45,11 @@ int main(){
     store(child+0x1cc,player.model);store(child+0x1d0,11u);store(child+0x10,1u);store(child+0x30,resource);
     std::array<char,260> path{};std::strcpy(path.data(),"Item\\ObjectComponents\\Head\\TestHat");store(resource+0x20,path);
     store(player.model+0x30,bodyResource);store(bodyResource+0x130,header);store(header+0x10c,12u);store(header+0x110,lookup);store(lookup+22,(std::uint16_t)0);store(header+0x104,1u);store(header+0x108,attachments);store(attachments+4,(std::uint16_t)3);store(header+0x34,117u);store(player.model+0x94,palette);store(resource+0x130,hatHeader);store(hatHeader+0x44,8u);store(hatHeader+0x48,vertices);
-    const std::uintptr_t view=21000,indices=22000,triangles=23000,sections=24000,batches=25000,flags=26000;
-    store(hatHeader+0x4c,1u);store(hatHeader+0x50,view);store(view,8u);store(view+4,indices);store(view+8,6u);store(view+12,triangles);store(view+24,1u);store(view+28,sections);store(view+32,1u);store(view+36,batches);store(hatHeader+0x7c,1u);store(hatHeader+0x80,flags);
+    const std::uintptr_t view=100000,indices=200000,triangles=300000,sections=400000,batches=500000,flags=600000;
+    store(hatHeader+0x4c,1u);store(hatHeader+0x50,view);store(view,8u);store(view+4,indices);store(view+8,6u);store(view+12,triangles);store(view+24,1u);store(view+28,sections);store(view+32,1u);store(view+36,batches);store(hatHeader+0x84,1u);store(hatHeader+0x88,flags);
+    // The fishing hat has a texture-replacement lookup at 0x7c/0x80
+    // containing -1. It is NOT the render-flag array at 0x84/0x88.
+    const std::uintptr_t replacements=700000;store(hatHeader+0x7c,3u);store(hatHeader+0x80,replacements);store(replacements+2,(std::uint16_t)0xffff);
     store(sections+8,(std::uint16_t)0);store(sections+10,(std::uint16_t)6);store(batches+4,(std::uint16_t)0);store(batches+10,(std::uint16_t)0);store(flags+2,(std::uint16_t)0);
     for(unsigned i=0;i<8;++i)store(indices+2*i,(std::uint16_t)i);
     unsigned ti=0;for(unsigned v:{1,3,5,3,7,5})store(triangles+2*ti++,(std::uint16_t)v);
@@ -77,8 +80,33 @@ int main(){
     assert(call({0})[0]==1&&hairMask::activePath.empty());unsigned last=reloads;assert(call({0,90,90,95,35})[0]==1&&reloads==last);
     // Alpha feathers cannot masquerade as solid crown coverage.
     assert(call({1,3})[0]==0);store(flags+2,(std::uint16_t)1);hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(hairMaskRuntime::ready&&hairMaskRuntime::hatSurface.empty());
+    assert(call({1,3})[0]==4&&hairMask::activePath.empty());
     // Other owners, effects and previews cannot supply a mask capture.
     hairMaskRuntime::requested=true;hairMaskRuntime::ready=false;store(child+0x1cc,std::uintptr_t(999));hairMaskRuntime::capture(reinterpret_cast<void*>(child),hat.data());assert(!hairMaskRuntime::ready);
+    // Optional integration against a hat extracted from the user's client:
+    // feed its actual serialized draw data through the production capture,
+    // rather than testing build() with an already assembled surface.
+    if(argc>1){
+        hairMask::Bytes asset;assert(capeMotion::readFile(argv[1],asset));
+        const auto u=[&](unsigned p){return hairMask::u32(asset,p);};
+        const auto h=[&](unsigned p){return std::uint16_t(hairMask::u16(asset,p));};
+        const auto av=u(80),nv=u(68),ni=u(av),nt=u(av+8),ns=u(av+24),nb=u(av+32),nf=u(0x84);
+        store(hatHeader+0x44,nv);store(view,ni);store(view+8,nt);store(view+24,ns);store(view+32,nb);store(hatHeader+0x84,nf);
+        for(unsigned i=0;i<nv;++i){hairMask::Point p;for(unsigned k=0;k<3;++k)p[k]=hairMask::number(asset,u(72)+48*i+4*k);store(vertices+48*i,p);}
+        for(unsigned i=0;i<ni;++i)store(indices+2*i,h(u(av+4)+2*i));
+        for(unsigned i=0;i<nt;++i)store(triangles+2*i,h(u(av+12)+2*i));
+        for(unsigned i=0;i<ns;++i){store(sections+32*i+8,h(u(av+28)+32*i+8));store(sections+32*i+10,h(u(av+28)+32*i+10));}
+        for(unsigned i=0;i<nb;++i){store(batches+24*i+4,h(u(av+36)+24*i+4));store(batches+24*i+10,h(u(av+36)+24*i+10));}
+        for(unsigned i=0;i<nf;++i)store(flags+4*i+2,h(u(0x88)+4*i+2));
+        store(child+0x1cc,player.model);allowLoad=true;fit.enabled=false;selectedHair=10;
+        auto nativeHead=identity(),nativeHat=identity();nativeHat[12]=.052003894f;nativeHat[14]=1.896982789f;
+        store(palette+64*3,nativeHead);store(reinterpret_cast<std::uintptr_t>(nativeHat.data()),nativeHat);
+        assert(call({0})[0]==1);assert(call({1,3})[0]==0);
+        hairMaskRuntime::capture(reinterpret_cast<void*>(child),nativeHat.data());
+        assert(hairMaskRuntime::ready&&!hairMaskRuntime::hatSurface.empty());
+        auto result=call({1,3});assert(result[0]==1&&result[1]>0);
+        std::cout<<"PASS: real client hat capture: "<<hairMaskRuntime::hatSurface.size()<<" surface triangles, "<<result[1]<<" fitted hair vertices\n";
+    }
     fs::current_path(original);fs::remove_all(temp);
     std::cout<<"PASS: actual native capture/bake dispatch, isolated disk cache, idempotent sync, fit/hat changes, hidden/disabled restore and owner isolation\n";
 }
