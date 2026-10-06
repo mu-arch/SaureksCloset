@@ -23,6 +23,26 @@ int main(){
     assert(std::fabs(deep*.2f-.01f)<1e-6f);
     const float closeSkin=fitMargin(.1f,.995f,.994f,.01f);
     assert(.995f-closeSkin>.994f&&closeSkin<shallow);
+    // Reported Human Female ponytail: roots 1763/1768/1811 must not collapse
+    // into the crown when a hat is moved across them. These are real vertices
+    // from the shipped model, not a fabricated triangle with ideal topology.
+    {
+        Bytes pony;assert(capeMotion::readFile("addon/SaureksCloset/CapeMotion/B02.m2",pony));
+        const auto vo=u32(pony,72);auto scalp=mesh(pony,1);Point lo=scalp[0][0],hi=lo;
+        for(const auto& tri:scalp)for(const auto& p:tri)for(unsigned k=0;k<3;++k){lo[k]=std::min(lo[k],p[k]);hi[k]=std::max(hi[k],p[k]);}
+        Point center;for(unsigned k=0;k<3;++k)center[k]=(lo[k]+hi[k])*.5f;
+        for(float x:{-.08f,0.f,.08f})for(float z:{-.06f,0.f,.06f}){
+            auto moved=scalp;for(auto& tri:moved)for(auto& p:tri){for(unsigned k=0;k<3;++k)p[k]=center[k]+(p[k]-center[k])*1.1f;p[0]+=x;p[2]+=z;}
+            Bytes out;unsigned changed;assert(build(pony,10,moved,identity(),out,changed));
+            for(unsigned vertex:{1763u,1768u,1811u})assert(std::memcmp(pony.data()+vo+48*vertex,out.data()+vo+48*vertex,48)==0);
+            for(auto pair:{std::array<unsigned,2>{{1746,65}},{{1754,2494}},{{1764,2491}},{{1779,67}},{{1808,55}},{{1814,2496}},{{1815,2497}},{{1816,2498}}})
+                assert(std::memcmp(pony.data()+vo+48*pair[0],out.data()+vo+48*pair[0],48)==0);
+            auto before=mesh(pony,10),after=mesh(out,10);assert(before.size()==after.size());
+            for(unsigned i=0;i<before.size();++i){const auto n=cross(sub(before[i][1],before[i][0]),sub(before[i][2],before[i][0])),m=cross(sub(after[i][1],after[i][0]),sub(after[i][2],after[i][0]));
+                if(dot(n,n)>1e-16f){assert(dot(n,m)>=dot(n,n)*.2499f);assert(dot(m,m)<=dot(n,n)*4.001f);}
+            }
+        }
+    }
     unsigned groups=0,modified=0,skinSections=0;
     for(unsigned body=1;body<=16;++body){char path[100];std::snprintf(path,sizeof(path),"addon/SaureksCloset/CapeMotion/B%02u.m2",body);Bytes base;assert(capeMotion::readFile(path,base));
         auto scalp=mesh(base,1);Point lo=scalp.empty()?Point{}:scalp[0][0],hi=lo;

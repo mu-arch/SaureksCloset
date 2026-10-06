@@ -91,9 +91,14 @@ that reference to hair vertices locate actual hat surfaces. Covered crown hair
 is tucked under those surfaces. Extra inward clearance is limited to 20%
 of the actual overlap (with a 0.0002 model-unit contact epsilon), up to the existing crown
 clearance. This avoids pulling a barely intersecting fringe far under a hat.
-Clearance is further reduced when visible skin is close. Visible skin is a collision floor. The hidden bald scalp is only a
-reference, not a surface that the active hairstyle renders. Hanging lengths
-below the crown are preserved. Missing coverage, missing reference geometry,
+Clearance is further reduced when visible skin is close. Visible skin and the stock scalp volume provide conservative collision floors.
+A hat tuned inside that volume does not shrink the hair into the head. Hanging
+strands and every triangle joining those strands to the crown are pinned.
+Coincident hair/skin seam vertices are pinned even when UV or material seams
+give them separate vertex IDs. Each proposed move is capped at 20% of the
+reference crown height. Faces that fold, lose most of their area, or stretch
+excessively cause their connected changes to roll back; unresolved fits restore
+the original hairstyle. Missing coverage, missing reference geometry,
 and impossible fits preserve the original hair rather than deleting geometry.
 
 The fit changes only eligible vertex positions. All triangles, UVs, normals,
@@ -121,3 +126,8 @@ collision solver. Coarse triangles, moving hair, and unusual/open hats can still
 intersect. Some bodies lack a separate bald scalp and are left unchanged.
 Offline inspection of the actual Human Female fishing-hat meshes supplements
 the tests; it does not replace an in-game visual check.
+
+The ponytail regression uses the shipped Human Female hairstyle 8, checks its
+root and eight skin joins across nine shifted hat surfaces, and rejects face
+folds. The previous fitter fails this test. Unsafe fits may leave overlap rather
+than collapse the ponytail or expose the head.

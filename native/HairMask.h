@@ -56,18 +56,19 @@ inline bool build(const Bytes& base,unsigned hairGroup,const std::vector<Triangl
     if(!nv||nv>=65536||!range(base,vo,nv,48)||!views||views>16||!range(base,viewOffset,views,44))return false;
     std::vector<Triangle> surface;surface.reserve(hat.size());
     for(const auto& t:hat){Triangle rest;for(unsigned j=0;j<3;++j){if(!finite(t[j]))return false;rest[j]=transform(hatToModel,t[j]);if(!finite(rest[j]))return false;}surface.push_back(rest);}
-    std::vector<bool> eligible(nv,false),protectedVertex(nv,false);std::vector<Triangle> scalp,skin;
+    std::vector<bool> eligible(nv,false),protectedVertex(nv,false);std::vector<Triangle> scalp,skin;std::vector<std::array<unsigned,3>> hairFaces;
     for(unsigned view=0;view<views;++view){
         const auto a=viewOffset+view*44,ni=u32(base,a),io=u32(base,a+4),nt=u32(base,a+8),to=u32(base,a+12),ns=u32(base,a+24),so=u32(base,a+28);
         if(ni>65535||nt>65535||ns>512||!range(base,io,ni,2)||!range(base,to,nt,2)||!range(base,so,ns,32))return false;
         for(unsigned s=0;s<ns;++s){const auto section=so+32*s,group=u16(base,section),first=u16(base,section+8),count=u16(base,section+10);
             if(first+count>nt||count%3)return false;
             const bool hair=group==hairGroup&&hairSection(base,a,s);
-            for(unsigned t=first;t<first+count;t+=3){Triangle tri;
+            for(unsigned t=first;t<first+count;t+=3){Triangle tri;std::array<unsigned,3> face{};
                 for(unsigned j=0;j<3;++j){const auto ix=u16(base,to+2*(t+j));if(ix>=ni)return false;const auto vertex=u16(base,io+2*ix);if(vertex>=nv)return false;
-                    (hair?eligible:protectedVertex)[vertex]=true;
+                    (hair?eligible:protectedVertex)[vertex]=true;face[j]=vertex;
                     for(unsigned k=0;k<3;++k)tri[j][k]=number(base,vo+48*vertex+4*k);if(!finite(tri[j]))return false;
                 }
+                if(hair)hairFaces.push_back(face);
                 // The stock bald scalp gives a head reference without guessing
                 // a hat's origin, crown height, or a race-specific cutting plane.
                 if(view==0&&group==1&&!hairSection(base,a,s))scalp.push_back(tri);
@@ -80,25 +81,58 @@ inline bool build(const Bytes& base,unsigned hairGroup,const std::vector<Triangl
     for(const auto& tri:scalp)for(const auto& p:tri)for(unsigned k=0;k<3;++k){lo[k]=std::min(lo[k],p[k]);hi[k]=std::max(hi[k],p[k]);}
     Point center;for(unsigned k=0;k<3;++k)center[k]=(lo[k]+hi[k])*.5f;
     const float clearance=std::max(.002f,std::min(.01f,(hi[2]-lo[2])*.1f));
+    const auto position=[&](const Bytes& bytes,unsigned v){Point p;for(unsigned k=0;k<3;++k)p[k]=number(bytes,vo+48*v+4*k);return p;};
+    // Protect complete strand-root triangles, not just their low endpoints.
+    // Otherwise pulling a ponytail root under the hat folds its long faces.
+    const float headHeight=hi[2]-lo[2];
+    std::vector<bool> strand(nv,false);
+    for(unsigned v=0;v<nv;++v)if(eligible[v]){const auto p=position(base,v);
+        strand[v]=p[2]<lo[2];
+        for(unsigned k=0;k<2;++k){const float edge=(hi[k]-lo[k])*.1f;strand[v]=strand[v]||p[k]<lo[k]-edge||p[k]>hi[k]+edge;}
+    }
+    for(const auto& face:hairFaces)if(strand[face[0]]||strand[face[1]]||strand[face[2]])for(auto v:face)protectedVertex[v]=true;
+    // UV/material seams can duplicate positions with DIFFERENT vertex IDs.
+    // Pin hair where it joins visible skin, and keep duplicate hair copies
+    // together whenever one copy has been protected.
+    std::vector<Point> pins;for(const auto& tri:skin)for(const auto& p:tri)pins.push_back(p);
+    for(unsigned v=0;v<nv;++v)if(eligible[v]&&protectedVertex[v])pins.push_back(position(base,v));
+    for(unsigned v=0;v<nv;++v)if(eligible[v]&&!protectedVertex[v]){const auto p=position(base,v);for(const auto& pin:pins){const auto d=sub(p,pin);if(dot(d,d)<1e-10f){protectedVertex[v]=true;break;}}}
     for(unsigned v=0;v<nv;++v){if(!eligible[v]||protectedVertex[v])continue;
         Point p;for(unsigned k=0;k<3;++k)p[k]=number(base,vo+v*48+k*4);
-        // Keep hanging lengths/ponytails below the crown. An open side without
-        // real hat coverage is also untouched.
-        if(p[2]<lo[2]-(hi[2]-lo[2])*.4f)continue;
         const auto ray=sub(p,center);const float length=std::sqrt(dot(ray,ray));if(length<clearance)continue;
         const float t=nearest(center,ray,surface);if(t>=1.f||t<=0)continue;
         const float skull=nearest(center,ray,scalp),visibleSkin=nearest(center,ray,skin),padding=clearance/length;
         // A hat inside the head is an impossible fit, not permission to erase
         // skin or push hair through the scalp. Leave that region intact.
-        // The bald cap is a reference, not necessarily visible with this
-        // hairstyle. Enforce actual visible skin, not a hidden bald mesh.
-        if((skull<1e9f&&t<=skull*.5f)||t<=.25f||t<=2*padding||
+        // The stock scalp also provides a conservative head-volume floor.
+        // Leave hair alone when a tuned hat sits inside that volume.
+        if(skull>=1e9f||t<=skull+.0005f/length||t<=.25f||t<=2*padding||
            (visibleSkin<1e9f&&t<=visibleSkin+.0005f/length))continue;
-        const float margin=fitMargin(length,t,visibleSkin,clearance);
+        const float floor=std::max(skull,visibleSkin<1e9f?visibleSkin:skull);
+        const float margin=fitMargin(length,t,floor,clearance);
         const float fit=t-margin;
         Point target;for(unsigned k=0;k<3;++k)target[k]=center[k]+ray[k]*fit;
-        std::memcpy(result.data()+vo+v*48,target.data(),12);++changed;
+        // A moved hat is not permission to collapse the crown into the head.
+        const auto move=sub(target,p);if(dot(move,move)>headHeight*headHeight*.04f)continue;
+        std::memcpy(result.data()+vo+v*48,target.data(),12);
     }
+    // Reject folds and severely collapsed faces. Roll back connected changes
+    // until stable; an unresolved fit restores the original, closed hairstyle.
+    bool stable=false;
+    for(unsigned pass=0;pass<8&&!stable;++pass){stable=true;std::vector<bool> restore(nv,false);
+        for(const auto& face:hairFaces){const auto a=position(base,face[0]),b=position(base,face[1]),c=position(base,face[2]);
+            const auto x=position(result,face[0]),y=position(result,face[1]),z=position(result,face[2]);
+            const auto oldNormal=cross(sub(b,a),sub(c,a)),newNormal=cross(sub(y,x),sub(z,x));const float area=dot(oldNormal,oldNormal);
+            if(area>1e-16f&&(dot(oldNormal,newNormal)<area*.25f||dot(newNormal,newNormal)>area*4.f)){
+                for(auto v:face)if(position(result,v)!=position(base,v)){restore[v]=true;stable=false;}
+            }
+        }
+        // Welded copies must also roll back together.
+        std::vector<Point> seams;for(unsigned v=0;v<nv;++v)if(restore[v])seams.push_back(position(base,v));
+        for(unsigned v=0;v<nv;++v)if(eligible[v]){const auto p=position(base,v);for(const auto& seam:seams){const auto d=sub(p,seam);if(dot(d,d)<1e-10f){std::memcpy(result.data()+vo+48*v,base.data()+vo+48*v,12);break;}}}
+    }
+    if(!stable)result=base;
+    for(unsigned v=0;v<nv;++v)if(position(base,v)!=position(result,v))++changed;
     // Triangle/index buffers, skin geometry, UVs, normals and skinning weights
     // are byte-for-byte original. Preserving topology prevents open cut seams.
     return true;
