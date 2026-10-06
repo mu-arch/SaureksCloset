@@ -1,5 +1,8 @@
 -- Nearby appearance sharing. No game chat, addon channels, or position uploads.
 local V=VanityStudio
+-- Temporarily withheld from release. Keep the implementation and saved opt-ins
+-- intact, but expose no controls or background sharing until launch.
+V.SHARING_RELEASE_ENABLED=false
 V.sharingStatusText={
     [0]="Sharing is off.",[1]="Connecting to the sharing service...",[2]="Connected to the sharing service.",
     [3]="Connection lost. Reconnecting...",[-1]="Set up your sharing connection to continue.",
@@ -28,6 +31,18 @@ function V:SharingMetadata()
     return server or "",realm or "",name or "",(version or "1.12.1").." / "..(build or "5875")
 end
 function V:ConfigureSharing()
+    if not self.SHARING_RELEASE_ENABLED then
+        -- A UI reload can leave the DLL's old session running. Explicitly stop
+        -- it without pausing the wardrobe or discarding saved preferences.
+        local stopped=true
+        if self.sharingConfigured~="release-disabled" and type(SaureksClosetConfigureSharing)=="function" then
+            local ok,status=pcall(SaureksClosetConfigureSharing,0,0,"","","","","","")
+            stopped=ok and status==1
+        end
+        self.sharingConfigured=stopped and "release-disabled" or nil
+        self.sharingStatus=0
+        return false
+    end
     local db,c=VanityStudioDB,VanityStudioCharacter
     if not db or not c then return false end
     local broadcast=db.broadcastTransmog and c.enabled and 1 or 0
@@ -52,6 +67,7 @@ function V:ConfigureSharing()
     return true
 end
 function V:SetSharingOption(key,enabled)
+    if not self.SHARING_RELEASE_ENABLED then return false end
     if key~="broadcastTransmog" and key~="receiveTransmog" then return false end
     VanityStudioDB[key]=enabled and true or false
     self.sharingConfigured=nil;self:ConfigureSharing();self:UpdateSharing(true);self:RefreshSharingUI();return true
@@ -73,6 +89,7 @@ function V:SharingSnapshot()
     return values
 end
 function V:UpdateSharing(force)
+    if not self.SHARING_RELEASE_ENABLED then self:ConfigureSharing();return end
     if self.sharingWorldPaused then return end
     if not VanityStudioDB or not VanityStudioCharacter then return end
     if not force and not VanityStudioDB.broadcastTransmog and not VanityStudioDB.receiveTransmog and self.sharingStatus==0 then return end
@@ -89,6 +106,7 @@ function V:RefreshSharingUI()
     if self.sharingStatusLabel then self.sharingStatusLabel:SetText(self.sharingStatusText[self.sharingStatus or 0] or "Sharing is unavailable.") end
 end
 function V:CreateSharingSettings(privacy,label,edit,settingsButton)
+    if not self.SHARING_RELEASE_ENABLED then return end
     label(privacy,"Transmog sharing",38,219,284,24)
     local options={
         {"broadcastTransmog","Broadcast my transmog","Share your appearance with nearby players who have sharing enabled. Edits are sent after five seconds without another change."},
@@ -128,6 +146,7 @@ function V:CreateSharingSettings(privacy,label,edit,settingsButton)
     self:RefreshSharingUI()
 end
 function V:OpenSharingConnection()
+    if not self.SHARING_RELEASE_ENABLED or not self.sharingConnectionWindow then return end
     self.sharingEndpointEdit:SetText(VanityStudioDB.sharingEndpoint or self.SHARING_ENDPOINT or "")
     self.sharingKeyEdit:SetText(VanityStudioCharacter.sharingAccessKey or "")
     self.sharingConnectionWindow:Show()

@@ -6,6 +6,16 @@ GetCVar=function()return "login.example.test"end;GetRealmName=function()return "
 SaureksClosetConfigureSharing=function(...)table.insert(calls,{...});return 1 end
 SaureksClosetUpdateSharing=function(...)table.insert(updates,{...});return 2 end
 dofile('addon/SaureksCloset/Sharing.lua');local V=VanityStudio
+assert(V.SHARING_RELEASE_ENABLED==false)
+VanityStudioDB.broadcastTransmog=true;VanityStudioDB.receiveTransmog=true
+V:InitializeSharing();assert(#calls==1 and calls[1][1]==0 and calls[1][2]==0)
+for i=1,3 do V:UpdateSharing(true) end
+assert(#updates==0 and #calls==1 and not V.sharingWorldPaused)
+assert(not V:SetSharingOption('broadcastTransmog',false))
+assert(VanityStudioDB.broadcastTransmog and VanityStudioDB.receiveTransmog,'withholding the feature preserves preferences')
+V:OpenSharingConnection() -- no window was created, and this must be harmless
+-- A later launch still has the original opt-in behavior.
+V.SHARING_RELEASE_ENABLED=true;VanityStudioDB={};calls={};updates={}
 V:InitializeSharing();assert(not VanityStudioDB.broadcastTransmog and not VanityStudioDB.receiveTransmog);assert(calls[1][1]==0 and calls[1][2]==0)
 V:SetSharingOption('broadcastTransmog',true);assert(calls[2][1]==1 and calls[2][2]==0);assert(calls[2][5]=='login.example.test' and calls[2][8]=='1.12.1 / 5875');assert(updates[1][9]==0 and updates[1][11]==123 and updates[1][24]==42 and updates[1][28]==5)
 V:SetSharingOption('receiveTransmog',true);assert(calls[3][1]==1 and calls[3][2]==1)
@@ -21,4 +31,4 @@ local configure=SaureksClosetConfigureSharing
 SaureksClosetConfigureSharing=function(...)local args={...};if args[1]+args[2]>0 then return -3 end;return configure(...)end
 V.sharingConfigured=nil;V:UpdateSharing();assert(V.sharingStatus==-3 and calls[#calls][1]==0 and calls[#calls][2]==0,'invalid new settings disconnect the old endpoint')
 assert(not V:SetSharingOption('unrelated',true));SaureksClosetConfigureSharing=nil;V:UpdateSharing();assert(V.sharingStatus==-2)
-print('PASS: explicit opt-in, independent send/receive, metadata, hide/inherit, body and weapon snapshots, disabled addon and missing DLL')
+print('PASS: release gate stops saved sessions without losing preferences; future explicit opt-in, independent send/receive, metadata, hide/inherit, body and weapon snapshots, disabled addon and missing DLL')
