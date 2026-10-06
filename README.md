@@ -135,11 +135,11 @@ Probably not. Warden could in theory detect it, but I would think it's unlikely 
 
 - Saurek's Closet has a "Check for updates" feature that queries this Github page to see if an update is available. This feature can be disabled in settings. It's able to do this while other addons cannot because it uses memory injection to take full control of the game client and escape Blizzard's addon jail.
 
-- If you enable transmog broadcasting so other players with the addon can see your custom look: your (1) server address (2) character GUID (3) character name (4) character object data (5) character position is transmitted to my relay server. The relay server compares all character locations on your game server and determines which players to distribute transmog data to based on proximity. I offer this service for free so please consider a donation
+- If you enable transmog broadcasting so other players with the addon can see your custom look: your (1) server address (2) character GUID (3) character name (4) character object data (5) character position is transmitted to my relay server. The relay server compares all character locations on your game server and determines which players to distribute transmog data to based on proximity. I offer this service for free so please consider a donation!
 
 - Can I disable transmog sharing: YES
 - Does the transmog system send my account name, password, or personal information: NO
-- Can it submit new executable code to the addon: NO
+- Can it submit new executable code to or modify the local addon: NO
 - Why can't you use normal addon channels: I don't want servers to be able to see you're using the addon, also I'm adding support for WoW: Forever and I absolutely don't want Blizzard to see you're using the addon, since it violate TOS. Therefore I'm putting everything under this private communication server so there's one system to maintain.
 - Are connections to the server encrypted: YES, but it wouldn't matter if they weren't, no data of any real privacy impact is sent over the network.
 - Will this now or ever do anything that a common sense computer professional would consider privacy violation: NO, the scope of communications with this server are to coordinate the distribution of transmog character object data.
