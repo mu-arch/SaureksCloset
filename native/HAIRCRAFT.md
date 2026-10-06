@@ -92,8 +92,12 @@ is tucked under those surfaces. Extra inward clearance is limited to 20%
 of the actual overlap (with a 0.0002 model-unit contact epsilon), up to the existing crown
 clearance. This avoids pulling a barely intersecting fringe far under a hat.
 Clearance is further reduced when visible skin is close. Visible skin and the stock scalp volume provide conservative collision floors.
-A hat tuned inside that volume does not shrink the hair into the head. Hanging
-strands and every triangle joining those strands to the crown are pinned.
+A hat tuned inside that volume does not shrink the hair into the head. Where
+the open bald-cap reference has no ray intersection, visible skin can still
+provide a valid floor; a missing cap intersection alone no longer disables fit. Hanging
+strand vertices are pinned individually. A crown vertex sharing a triangle
+with a strand may still fit, subject to the head-volume, seam and fold checks.
+Freezing the whole joining triangle previously prevented valid Chapeau trims.
 Coincident hair/skin seam vertices are pinned even when UV or material seams
 give them separate vertex IDs. Each proposed move is capped at 20% of the
 reference crown height. Faces that fold, lose most of their area, or stretch
@@ -131,3 +135,8 @@ The ponytail regression uses the shipped Human Female hairstyle 8, checks its
 root and eight skin joins across nine shifted hat surfaces, and rejects face
 folds. The previous fitter fails this test. Unsafe fits may leave overlap rather
 than collapse the ponytail or expose the head.
+
+The optional real-client runtime fixture also accepts the Chapeau mesh plus a
+second argument to replay the saved 11-degree pitch, .01 up and .015 inset. It
+asserts that the crown adjacent to a strand actually changes, while ponytail
+roots and all eight known scalp joins remain byte-identical.

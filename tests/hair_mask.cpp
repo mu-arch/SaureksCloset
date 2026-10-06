@@ -34,6 +34,9 @@ int main(){
         for(float x:{-.08f,0.f,.08f})for(float z:{-.06f,0.f,.06f}){
             auto moved=scalp;for(auto& tri:moved)for(auto& p:tri){for(unsigned k=0;k<3;++k)p[k]=center[k]+(p[k]-center[k])*1.1f;p[0]+=x;p[2]+=z;}
             Bytes out;unsigned changed;assert(build(pony,10,moved,identity(),out,changed));
+            // Crown adjoining a hanging lock still needs to fit. Pinning the
+            // whole triangle previously made this legitimate trim a no-op.
+            if(x==0&&z==0)assert(std::memcmp(pony.data()+vo+48*1747,out.data()+vo+48*1747,12)!=0);
             for(unsigned vertex:{1763u,1768u,1811u})assert(std::memcmp(pony.data()+vo+48*vertex,out.data()+vo+48*vertex,48)==0);
             for(auto pair:{std::array<unsigned,2>{{1746,65}},{{1754,2494}},{{1764,2491}},{{1779,67}},{{1808,55}},{{1814,2496}},{{1815,2497}},{{1816,2498}}})
                 assert(std::memcmp(pony.data()+vo+48*pair[0],out.data()+vo+48*pair[0],48)==0);

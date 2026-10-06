@@ -99,12 +99,22 @@ int main(int argc,char** argv){
         for(unsigned i=0;i<nb;++i){store(batches+24*i+4,h(u(av+36)+24*i+4));store(batches+24*i+10,h(u(av+36)+24*i+10));}
         for(unsigned i=0;i<nf;++i)store(flags+4*i+2,h(u(0x88)+4*i+2));
         store(child+0x1cc,player.model);allowLoad=true;fit.enabled=false;selectedHair=10;
+        if(argc>2){fit.enabled=true;fit.values={};fit.values.scale=100;fit.values.pitch=11;fit.values.up=.01f;fit.values.inset=.015f;}
         auto nativeHead=identity(),nativeHat=identity();nativeHat[12]=.052003894f;nativeHat[14]=1.896982789f;
         store(palette+64*3,nativeHead);store(reinterpret_cast<std::uintptr_t>(nativeHat.data()),nativeHat);
         assert(call({0})[0]==1);assert(call({1,3})[0]==0);
         hairMaskRuntime::capture(reinterpret_cast<void*>(child),nativeHat.data());
         assert(hairMaskRuntime::ready&&!hairMaskRuntime::hatSurface.empty());
         auto result=call({1,3});assert(result[0]==1&&result[1]>0);
+        if(argc>2){
+            hairMask::Bytes base,baked;assert(capeMotion::readFile((folder/"B02.m2").string(),base));assert(capeMotion::readFile(hairMask::activePath,baked));
+            const auto vo=hairMask::u32(base,72);
+            // Chapeau with the user's saved fit: trim the crown next to a
+            // hanging strand while leaving the ponytail and skin joins intact.
+            assert(std::memcmp(base.data()+vo+48*1747,baked.data()+vo+48*1747,12)!=0);
+            for(unsigned v:{1763u,1768u,1811u,1746u,1754u,1764u,1779u,1808u,1814u,1815u,1816u})
+                assert(std::memcmp(base.data()+vo+48*v,baked.data()+vo+48*v,48)==0);
+        }
         std::cout<<"PASS: real client hat capture: "<<hairMaskRuntime::hatSurface.size()<<" surface triangles, "<<result[1]<<" fitted hair vertices\n";
     }
     fs::current_path(original);fs::remove_all(temp);

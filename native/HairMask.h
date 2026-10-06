@@ -82,15 +82,15 @@ inline bool build(const Bytes& base,unsigned hairGroup,const std::vector<Triangl
     Point center;for(unsigned k=0;k<3;++k)center[k]=(lo[k]+hi[k])*.5f;
     const float clearance=std::max(.002f,std::min(.01f,(hi[2]-lo[2])*.1f));
     const auto position=[&](const Bytes& bytes,unsigned v){Point p;for(unsigned k=0;k<3;++k)p[k]=number(bytes,vo+48*v+4*k);return p;};
-    // Protect complete strand-root triangles, not just their low endpoints.
-    // Otherwise pulling a ponytail root under the hat folds its long faces.
+    // Pin the hanging strand itself. Crown vertices sharing its triangles
+    // may still fit; seam, head-volume and face-fold checks protect the joins.
     const float headHeight=hi[2]-lo[2];
     std::vector<bool> strand(nv,false);
     for(unsigned v=0;v<nv;++v)if(eligible[v]){const auto p=position(base,v);
         strand[v]=p[2]<lo[2];
         for(unsigned k=0;k<2;++k){const float edge=(hi[k]-lo[k])*.1f;strand[v]=strand[v]||p[k]<lo[k]-edge||p[k]>hi[k]+edge;}
     }
-    for(const auto& face:hairFaces)if(strand[face[0]]||strand[face[1]]||strand[face[2]])for(auto v:face)protectedVertex[v]=true;
+    for(unsigned v=0;v<nv;++v)if(strand[v])protectedVertex[v]=true;
     // UV/material seams can duplicate positions with DIFFERENT vertex IDs.
     // Pin hair where it joins visible skin, and keep duplicate hair copies
     // together whenever one copy has been protected.
@@ -106,9 +106,9 @@ inline bool build(const Bytes& base,unsigned hairGroup,const std::vector<Triangl
         // skin or push hair through the scalp. Leave that region intact.
         // The stock scalp also provides a conservative head-volume floor.
         // Leave hair alone when a tuned hat sits inside that volume.
-        if(skull>=1e9f||t<=skull+.0005f/length||t<=.25f||t<=2*padding||
+        if((skull>=1e9f&&visibleSkin>=1e9f)||(skull<1e9f&&t<=skull+.0005f/length)||t<=.25f||t<=2*padding||
            (visibleSkin<1e9f&&t<=visibleSkin+.0005f/length))continue;
-        const float floor=std::max(skull,visibleSkin<1e9f?visibleSkin:skull);
+        const float floor=skull<1e9f?std::max(skull,visibleSkin<1e9f?visibleSkin:skull):visibleSkin;
         const float margin=fitMargin(length,t,floor,clearance);
         const float fit=t-margin;
         Point target;for(unsigned k=0;k<3;++k)target[k]=center[k]+ray[k]*fit;
