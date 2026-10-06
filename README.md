@@ -26,7 +26,7 @@ Saurek's Closet morphs how your character looks on your own client, and for othe
 - **Advanced physics:** Optionally enable modern pre-computed (baked) cape, bag, sheathed weapon physics with no runtime performance cost. Watch as jumping, running, falling, and combat motions realistically deform and swing your equipment on your character!
 - **Get dirty:** Sweat, dust, mud, and blood. It gets all over you, and you'll need to visit an inn, or take a dip to clean it off.
 - **Share your look with others:** If another player has the addon they can see your custom look (if you authorize broadcasting your transmog data)
-
+- **Hair with hats:** No more crop! Wear your hat while still seeing your hairstyle.
 
 ## Take a look inside
 
