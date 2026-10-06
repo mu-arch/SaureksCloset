@@ -127,6 +127,13 @@ World of Warcraft/
 
 Open any saved look to preview, rename, delete, or activate it. The green eye marks the active look. Changes display as **Name (Edited)** until saved. **Save** is greyed out when there are no unsaved edits; rotating the preview does not count as an edit. Switching looks warns before discarding unsaved changes. The dropdown at the top of the window lets you switch saved looks quickly. Right-click the minimap button and choose **Toggle Addon** to turn local appearances on or off. Click and drag in either character preview to rotate the model.
 
+
+### How does this program work?
+
+Saurek's Closet has two main components: the addon and a internal memory coordinator. The addon provides the user interface, configuration, and appearance database, and communicates with the memory coordinator running inside the WoW process.
+
+The memory coordinator precisely connects to specific game rendering functions and inspects or temporarily modifies specific values in memory when the game is preparing to render a character. For example, when the user selects a different cosmetic appearance, the coordinator can substitute the desired appearance data immediately before the rendering operation and, where necessary, restore the original values afterward. This allows the visual appearance to change without permanently altering the character's underlying equipment, gameplay state, or server-side data.
+
 ### Can I get banned from a private server for using this?
 
 Probably not. Warden could in theory detect it, but I would think it's unlikely considering it only changes player object related properties.
