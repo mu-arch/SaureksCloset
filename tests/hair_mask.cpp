@@ -19,6 +19,10 @@ int main(){
     const float shallow=fitMargin(.1f,.995f,1e10f,.01f);
     assert(shallow*.1f<=.000201f&&shallow>0);
     assert((1.f-(.995f-shallow))*.1f<.00071f);
+    // Give meaningful protrusions more cover without enlarging the tiny
+    // fringe epsilon, violating skin clearance or raising the crown limit.
+    const float moderate=fitMargin(.1f,.9f,1e10f,.01f);
+    assert(std::fabs(moderate*.1f-.004f)<1e-6f);
     const float deep=fitMargin(.2f,.5f,1e10f,.01f);
     assert(std::fabs(deep*.2f-.01f)<1e-6f);
     const float closeSkin=fitMargin(.1f,.995f,.994f,.01f);

@@ -42,11 +42,11 @@ inline bool hairSection(const Bytes& b,unsigned view,unsigned section){
     return found;
 }
 // A barely intersecting fringe should not inherit the full crown clearance.
-// Limit the extra inward move to a fifth of the actual overlap, with a small
+// Limit the extra inward move to 40% of the actual overlap, with a small
 // contact epsilon. Deep crown intersections retain the original upper bound.
 inline float fitMargin(float length,float surfaceT,float skinT,float maximum){
     const float overlap=std::max(0.f,(1.f-surfaceT)*length);
-    const float margin=std::min(maximum,std::max(.0002f,overlap*.2f))/length;
+    const float margin=std::min(maximum,std::max(.0002f,overlap*.4f))/length;
     return skinT<1e9f?std::min(margin,(surfaceT-skinT)*.4f):margin;
 }
 inline bool build(const Bytes& base,unsigned hairGroup,const std::vector<Triangle>& hat,const BagMatrix& modelToHat,Bytes& result,unsigned& changed){
