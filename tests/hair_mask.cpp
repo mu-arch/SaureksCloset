@@ -3,59 +3,50 @@
 #include <iostream>
 using namespace hairMask;
 static BagMatrix identity(){return {{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};}
+static std::vector<Triangle> mesh(const Bytes& b,unsigned group,bool skinOnly=false){
+    std::vector<Triangle> out;auto a=u32(b,80),so=u32(b,a+28),io=u32(b,a+4),to=u32(b,a+12),vo=u32(b,72);
+    for(unsigned s=0;s<u32(b,a+24);++s){auto at=so+32*s;if(u16(b,at)!=group||(skinOnly&&hairSection(b,a,s)))continue;
+        for(unsigned t=u16(b,at+8);t<u16(b,at+8)+u16(b,at+10);t+=3){Triangle tri;
+            for(unsigned j=0;j<3;++j){auto v=u16(b,io+2*u16(b,to+2*(t+j)));for(unsigned k=0;k<3;++k)tri[j][k]=number(b,vo+48*v+4*k);}out.push_back(tri);}}
+    return out;
+}
 int main(){
-    Envelope e;e.modelToHat=identity();e.radius={{.1f,.1f,0}};e.bottom=1.65f;e.top=1.85f;
-    assert(valid(defaults())&&!valid({{0,90,95,35}})&&!valid({{90,90,30,35}}));
-    Vertex a,b,c;a.p={{-.2f,0,1.6f}};b.p={{.2f,0,1.6f}};c.p={{0,0,2.f}};a.weights[2]=b.weights[2]=c.weights[2]=255;
-    const auto pieces=cut({a,b,c},e);assert(pieces[0].size()==4&&!pieces[1].empty());
-    for(auto& v:pieces[0])assert(v.p[2]<=e.bottom+.00001f);
-    for(auto& v:pieces[1])assert(v.p[2]>=e.bottom-.00001f&&v.p[2]<=e.top+.00001f);
-    a.p[2]=b.p[2]=c.p[2]=e.bottom;const auto plane=cut({a,b,c},e);assert(plane[0].size()==3&&plane[1].empty());
-    // Rotation/translation of the hat doesn't change clipping in hat space.
-    e.modelToHat={{0,1,0,0,-1,0,0,0,0,0,1,0,.2f,-.3f,0,1}};
-    auto bad=e;bad.radius[0]=0;Bytes none;unsigned count;assert(!build(Bytes(500),2,bad,none,count));
-    unsigned groups=0;
+    Triangle plane{{{{-1,-1,1}},{{1,-1,1}},{{0,1,1}}}};
+    assert(std::fabs(hit({{0,0,0}},{{0,0,2}},plane)-.5f)<1e-6f);
+    assert(hit({{2,0,0}},{{0,0,2}},plane)<0); // uncovered side
+    unsigned groups=0,modified=0,skinSections=0;
     for(unsigned body=1;body<=16;++body){char path[100];std::snprintf(path,sizeof(path),"addon/SaureksCloset/CapeMotion/B%02u.m2",body);Bytes base;assert(capeMotion::readFile(path,base));
-        const unsigned view=u32(base,80),ns=u32(base,view+24),so=u32(base,view+28),vo=u32(base,72);
-        std::vector<unsigned> tested;
-        for(unsigned s=0;s<ns;++s){const auto group=u16(base,so+s*32);if(group<1||group>=100||std::find(tested.begin(),tested.end(),group)!=tested.end())continue;tested.push_back(group);
-            const unsigned io=u32(base,view+4),start=u16(base,so+s*32+4),n=u16(base,so+s*32+6);Point lo{{100,100,100}},hi{{-100,-100,-100}};
-            for(unsigned i=start;i<start+n;++i){const auto at=vo+48*u16(base,io+2*i);for(unsigned k=0;k<3;++k){const auto v=number(base,at+4*k);lo[k]=std::min(lo[k],v);hi[k]=std::max(hi[k],v);}}
-            e.modelToHat=identity();for(unsigned k=0;k<2;++k){e.center[k]=(lo[k]+hi[k])*.5f;e.radius[k]=std::max(.005f,(hi[k]-lo[k])*.3f);}e.bottom=lo[2]+(hi[2]-lo[2])*.4f;e.top=std::max(e.bottom+.001f,hi[2]-.005f);
-            Bytes out;unsigned removed=0;assert(build(base,group,e,out,removed));++groups;
-            assert(u32(out,52)==u32(base,52)&&u32(out,56)==u32(base,56)); // Skeleton untouched.
-            const auto views=u32(out,76),viewsAt=u32(out,80),newVO=u32(out,72),nv=u32(out,68),boneLookup=u32(out,144);
-            for(unsigned v=0;v<views;++v){const auto x=viewsAt+44*v,newIO=u32(out,x+4),oldIO=u32(base,x+4),newTO=u32(out,x+12),oldTO=u32(base,x+12),newSO=u32(out,x+28),oldSO=u32(base,x+28),props=u32(out,x+20);
-                for(unsigned s2=0;s2<u32(out,x+24);++s2){const auto nsec=newSO+32*s2,osec=oldSO+32*s2,nt=u16(out,nsec+10),first=u16(out,nsec+8),bones=u16(out,nsec+14);
-                    if(u16(out,nsec)!=group){assert(nt==u16(base,osec+10));for(unsigned t=0;t<nt;++t)assert(u16(out,newTO+2*(first+t))==u16(base,oldTO+2*(u16(base,osec+8)+t)));continue;}
-                    assert(nt%3==0);
-                    for(unsigned t=0;t<nt;t+=3){bool below=true,above=true;
-                        for(unsigned j=0;j<3;++j){const auto ix=u16(out,newTO+2*(first+t+j));assert(ix<u32(out,x));const auto global=u16(out,newIO+ix*2);assert(global<nv);const auto at=newVO+48*global;const float z=number(out,at+8);below=below&&z<=e.bottom+1e-5f;above=above&&z>=e.bottom-1e-5f&&z<=e.top+1e-5f;
-                            unsigned sum=0;for(unsigned w=0;w<4;++w){const auto weight=out[at+12+w];sum+=weight;if(weight)assert(u16(out,boneLookup+2*(bones+out[props+ix*4+w]))==out[at+16+w]);}assert(sum==255);
-                            if(z>e.bottom+1e-5f)for(unsigned side=0;side<16;++side){const float angle=(side+.5f)*6.28318530718f/16.f;assert(std::cos(angle)*(number(out,at)-e.center[0])/e.radius[0]+std::sin(angle)*(number(out,at+4)-e.center[1])/e.radius[1]<1.0001f);}
-                        }assert(below||above);
-                    }
-                }
-                (void)oldIO;
-            }
-            // Direct plane mode clips every crossing at the plane, with no
-            // crown envelope or protected upper region to leave protruding tips.
-            Envelope planeEnvelope;
-            assert(cuttingPlane({lo,hi,{{lo[0],hi[1],hi[2]}}},identity(),{{50,15,-10}},planeEnvelope));
-            Bytes planeOut;assert(build(base,group,planeEnvelope,planeOut,count));
-            const auto pvo=u32(planeOut,72);
-            for(unsigned viewIndex=0;viewIndex<u32(planeOut,76);++viewIndex){
-                const auto at=u32(planeOut,80)+viewIndex*44,pio=u32(planeOut,at+4),pto=u32(planeOut,at+12),pso=u32(planeOut,at+28);
-                for(unsigned s3=0;s3<u32(planeOut,at+24);++s3){const auto sec=pso+32*s3;if(u16(planeOut,sec)!=group)continue;
-                    for(unsigned t=u16(planeOut,sec+8);t<u16(planeOut,sec+8)+u16(planeOut,sec+10);++t){const auto vi=u16(planeOut,pio+2*u16(planeOut,pto+2*t));Point point{};
-                        for(unsigned k=0;k<3;++k)point[k]=number(planeOut,pvo+48*vi+k*4);
-                        assert(planeDistance(point,planeEnvelope)>=-.00001f);
-                    }
+        auto scalp=mesh(base,1);Point lo=scalp.empty()?Point{}:scalp[0][0],hi=lo;
+        for(auto t:scalp)for(auto p:t)for(unsigned k=0;k<3;++k){lo[k]=std::min(lo[k],p[k]);hi[k]=std::max(hi[k],p[k]);}
+        Point center;for(unsigned k=0;k<3;++k)center[k]=(lo[k]+hi[k])*.5f;
+        auto hat=scalp;for(auto& t:hat)for(auto& p:t)for(unsigned k=0;k<3;++k)p[k]=center[k]+(p[k]-center[k])*1.10f;
+        auto a=u32(base,80),so=u32(base,a+28),vo=u32(base,72),nv=u32(base,68);std::vector<unsigned> tested;
+        for(unsigned s=0;s<u32(base,a+24);++s){auto group=u16(base,so+32*s);if(group<1||group>=100||std::find(tested.begin(),tested.end(),group)!=tested.end())continue;tested.push_back(group);++groups;
+            auto visibleSkin=mesh(base,0,true);auto patches=mesh(base,group,true);visibleSkin.insert(visibleSkin.end(),patches.begin(),patches.end());
+            Bytes out;unsigned changed=0;assert(build(base,group,hat,identity(),out,changed));modified+=changed;
+            // NO topology changes, no erased triangles or new cut boundaries.
+            assert(out.size()==base.size());for(unsigned byte=0;byte<base.size();++byte)if(byte<vo||byte>=vo+nv*48||(byte-vo)%48>=12)assert(out[byte]==base[byte]);
+            // Explicitly protect skin batches even when they share the selected
+            // hair geoset (Human Female 10 includes such a scalp patch).
+            for(unsigned v=0;v<u32(base,76);++v){auto view=u32(base,80)+44*v,sections=u32(base,view+28),io=u32(base,view+4),to=u32(base,view+12);
+                for(unsigned sec=0;sec<u32(base,view+24);++sec){auto at=sections+32*sec;if(u16(base,at)==group&&hairSection(base,view,sec))continue;
+                    if(u16(base,at)==group)++skinSections;
+                    for(unsigned t=u16(base,at+8);t<u16(base,at+8)+u16(base,at+10);++t){auto vertex=u16(base,io+2*u16(base,to+2*t));assert(std::memcmp(base.data()+vo+48*vertex,out.data()+vo+48*vertex,48)==0);}
                 }
             }
-            // Deterministic bake and malformed-file rejection.
-            Bytes again;assert(build(base,group,e,again,count)&&again==out);auto corrupt=base;put(corrupt,72,0xfffffff0);assert(!build(corrupt,group,e,again,count));
+            for(unsigned i=0;i<nv;++i){Point original,fit;for(unsigned k=0;k<3;++k){original[k]=number(base,vo+48*i+4*k);fit[k]=number(out,vo+48*i+4*k);}
+                if(original[2]<lo[2]-(hi[2]-lo[2])*.4f)assert(original==fit); // hanging hair
+                if(original!=fit){auto ray=sub(fit,center);assert(nearest(center,ray,hat)>1.f);const auto skinDistance=nearest(center,ray,visibleSkin);assert(skinDistance>=1e9f||skinDistance<1.f);} // strictly BETWEEN skin and hat
+            }
+            Bytes again;unsigned n=0;assert(build(base,group,hat,identity(),again,n)&&again==out&&n==changed);
+            assert(build(base,group,{},identity(),again,n)&&again==base&&!n);
+            auto unsafe=hat;for(auto& tri:unsafe)for(auto& p:tri)for(unsigned k=0;k<3;++k)p[k]=center[k]+(p[k]-center[k])*.1f;
+            assert(build(base,group,unsafe,identity(),again,n)&&again==base&&!n); // deeply inside head: preserve
+            auto moved=identity();moved[12]=2;moved[13]=-3;moved[14]=4;auto localHat=hat;for(auto& t:localHat)for(auto& p:t)p=transform(moved,p);
+            assert(build(base,group,localHat,moved,again,n)&&n==changed); // coordinates follow actual fitted hat
+            auto corrupt=base;capeMotion::put(corrupt,72,0xfffffff0);assert(!build(corrupt,group,hat,identity(),again,n));
         }
     }
-    assert(groups>100);assert(!cachePath("../../bad.m2"));std::cout<<"PASS: "<<groups<<" hairstyle meshes across 16 bodies, every LOD, crown and tilted-plane clipping, protected lower hair, bone weights/palettes, untouched body geometry, deterministic bake and invalid inputs\n";
+    assert(groups>100&&modified>0&&skinSections>0);
+    std::cout<<"PASS: "<<groups<<" hairstyles; protected scalp/materials, closed topology, skin/hat clearance, lower hair, all LODs, unsafe/empty coverage and deterministic fits ("<<modified<<" fitted vertices)\n";
 }

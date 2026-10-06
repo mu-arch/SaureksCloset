@@ -1,11 +1,12 @@
 # Haircraft
 
-Wardrobe → Haircraft offers **Keep hair: On/Off** and **Trim hair**. This is a
+Wardrobe → Haircraft offers **Keep hair: On/Off** and **Adjust hat**. This is a
 per-character preference (`keepHairWithHat`), initially off. It uses the current
 native or customized hairstyle without replacing the selected hat. Turning Keep hair off
 restores ordinary hat visibility. Disabling the addon suspends the effect while
 retaining the preference. The registered wardrobe previews use the same policy.
-Without an enabled mask it restores the whole hairstyle; overlapping geometry remains possible.
+Keep hair also requests automatic fitting beneath the current hat. There is no
+separate trimming window or cutting-plane configuration.
 
 Build 5875 evidence (verified against the installed executable):
 
@@ -59,64 +60,56 @@ when an older DLL is loaded.
 in `tests/weapon_renderer.cpp` cover persistence, resets, body isolation, live
 dispatch, default/disabled behavior, camera invariance and lazy updates.
 
-## Precomputed hair mask
+## Automatic hair fitting
 
-**Trim hair** opens a shared character sheet (the Haircraft Default button has
-been removed). The user-facing mode now cuts all hair above one explicit plane,
-with **Cut height**, **Forward tilt**, and **Side tilt** controls. Cut height is
-0–100% of the hat's vertical bounds; tilts are -80 to 80 degrees in the hat's
-coordinate frame. The initial height is 35%. Apply precomputes intersections
-and keeps the portion of each hair triangle below the plane. Lowering the plane
-cuts more hair. It does not attempt to infer which protrusions belong inside a
-crown. The earlier 16-sided crown mode remains supported by the native API for
-compatibility, but is no longer exposed in the UI.
+The former plane/envelope cutters are removed, including their configuration
+window. A selected hair geoset can contain both hair-material and skin-material
+sections: Human Female group 10 has an eight-vertex scalp patch. Cutting every
+section of that geoset removed part of the head. The new implementation checks
+all material batches and only fits sections using the hair replacement texture
+(type 6). Skin sections and vertices shared with other sections are protected.
 
-Applying an enabled mask also enables Keep hair. Turning the mask off restores
-the complete hairstyle without disabling Keep hair. Profiles are character
-settings keyed by race, sex, hairstyle and active head item, including transmog.
-An old profile's lower cutoff becomes its new plane height. Switching identities
-discards unfinished edits. Hidden hats and a disabled addon suspend the mask.
+`SaureksClosetHairMaskVersion()` returns 3. The new call is
+`SaureksClosetSetHairMask(on,3)`; old enable arguments are rejected. Disable
+calls remain compatible. Lua ignores old saved cutting presets and explicitly
+disables the old bake when paired with an older DLL. Keep hair is the only
+switch. The current hat, hairstyle, body and hat placement determine the fit.
 
-`SaureksClosetHairMaskVersion()` returns 2. The version gates the new controls.
-`SaureksClosetSetHairMask(on,width,depth,top,cutoff,mode,height,pitch,roll)` returns
-status, crossing-triangle count and preview generation. The first five arguments
-retain their legacy meaning; mode 1 selects the explicit plane and its three
-additional values. Status 0 is pending capture, 1 is applied/off, 2 means no
-visible hat, 3 means waiting for the trimmed model to load, -2 invalid inputs,
--3 invalid bounds, -5 bake/file failure, and -6 failure to load within five
-seconds. A successful file write alone no longer reports "applied": the live
-model resource must match the private path. The Lua bridge invalidates its
-preview only when generation changes.
+The attachment dispatcher captures the real hat triangle mesh and its fitted
+transform once. Only opaque draw sections establish coverage; transparent
+feathers and effect layers do not. The current head skin matrix is removed to
+obtain the hat transform in body rest coordinates. Normal synchronization bakes
+a private copy after capture; no fitting runs in the render loop.
 
-The existing attachment dispatcher captures a loaded local head-equipment
-model once when requested. It removes the current head skin matrix from the
-actual hat attachment transform, including target-111 tuning. It does not
-capture spell effects or another character. Once captured, the render hook
-returns immediately; it does not scan meshes or solve collisions each frame.
-The ordinary Lua synchronization path validates the current hat/body/style/fit
-and bakes only when those, the mask parameters, or cape motion change.
+A stock bald scalp, where present, establishes the crown reference. Rays from
+that reference to hair vertices locate actual hat surfaces. Covered crown hair
+is tucked under those surfaces, with clearance reduced when visible skin is
+close. Visible skin is a collision floor. The hidden bald scalp is only a
+reference, not a surface that the active hairstyle renders. Hanging lengths
+below the crown are preserved. Missing coverage, missing reference geometry,
+and impossible fits preserve the original hair rather than deleting geometry.
 
-`HairMask.h` clips polygons at the selected plane, interpolating position,
-normals, texture UVs and skin weights at new edges. The older crown mode
-estimates its envelope from the upper 65% of hat vertices. Every M2 view receives valid new indices, vertex
-properties and bone-palette mappings. Only sections matching the active hair
-geoset are replaced. Body/face/ear sections, skeletons, animation tracks,
-materials, textures and attachment records remain intact. Model bounds remain
-conservative. Invalid/oversized data fails without loading a partial model.
+The fit changes only eligible vertex positions. All triangles, UVs, normals,
+skinning weights, skin patches, skeletons, attachments and animation tracks are
+unchanged. It does not create open cutting boundaries. Existing cape motion
+bakes remain the source when active. Cached `H1_*.m2` files are content-addressed
+and process-allowlisted; shared resources and source files remain untouched.
+World/previews retain the existing owner/body/style isolation. Fitting is local
+and is not transmitted by sharing.
 
-The bake uses the shipped B01-B16 source models, composing with an active cape
-motion bake when necessary. Output is a content-addressed `H1_*.m2` under
-CapeMotion/Cache. Only exact paths generated by this process enter the loose
-file allowlist. Shared resources and source files are never modified. The
-world name hook uses the private model only for the local ordinary character;
-registered live wardrobe previews opt in through BeginPreview's eighth argument.
-Body and saved-look previews use an unmasked model to avoid inheriting a mask
-for a different outfit. Masks are currently local and are not part of sharing.
+Returned status is 0 while capturing, 1 for loaded/off, 2 for no hat, 3 while
+loading, -2 for invalid/retired inputs, -5 for bake/file failure, and -6 if the
+private model does not load within five seconds. The second return value counts
+fitted vertices, not deleted triangles. Generation changes invalidate previews.
 
-Limitations: the plane uses the hat bounds and orientation, so unusual hats
-can need manual height/tilt adjustment. A mask is baked in rest space, so animated
-hair can still cross the plane later. It does not simulate collision or
-repair holes in the hat. Actual client appearance needs visual verification.
-Tests exercise all 148 hair groups in the 16 shipped bodies at every LOD,
-non-hair preservation, lower-cutoff preservation, skin palettes, deterministic
-bakes, runtime dispatch, fit/hat changes, ownership, UI validation and persistence.
+Regression tests cover all 148 hairstyle groups, skin patches inside hair
+geosets, shared vertices, every LOD, unchanged topology, hanging hair, no-coverage
+and impossible-fit fallback, deterministic fits, runtime capture and ownership,
+opaque-section filtering, retired API rejection, old-DLL cleanup, and the
+absence of a trim window under Lua 5.0.
+
+This is a conservative rest-pose fit, not an exact mesh Boolean or an animated
+collision solver. Coarse triangles, moving hair, and unusual/open hats can still
+intersect. Some bodies lack a separate bald scalp and are left unchanged.
+Offline inspection of the actual Human Female fishing-hat meshes supplements
+the tests; it does not replace an in-game visual check.

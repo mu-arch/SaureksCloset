@@ -64,7 +64,7 @@ result=-1;assert(not V:SetHaircraft(false) and c.keepHairWithHat and invalidated
 result=1;assert(not V.haircraftDefault,"Haircraft must not have a Default button");V.haircraftToggle.scripts.OnClick()
 assert(not c.keepHairWithHat and calls[#calls]==0 and invalidated==baseline+2)
 SaureksClosetSetHaircraft=nil;V:RefreshHaircraftPage()
-assert(not V.haircraftToggle.enabled and not V.haircraftMask.enabled)
+assert(not V.haircraftToggle.enabled and not V.haircraftMask)
 assert(not V:SetHaircraft(true) and not c.keepHairWithHat)
 V:SetTab('bags');assert(not V.pagesByName.haircraft:IsShown() and not V.haircraftToggle:IsVisible())
 print('PASS: Haircraft navigation, preview, toggles, defaults, persistence, disable, failed apply and old DLL gating')

@@ -25,7 +25,7 @@ function V:SetHaircraft(keep)
     self:InvalidatePreviewModel(0,true)
     self:RefreshHaircraftPage();return true
 end
-function V:CreateHaircraftPage(p,label,button,enabled,sheet,edit)
+function V:CreateHaircraftPage(p,label,button,enabled)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
     label(p,"Haircraft",33,87,124,18)
     label(p,"Keep your hairstyle visible while wearing hats.",33,115,124,48,true)
@@ -34,7 +34,7 @@ function V:CreateHaircraftPage(p,label,button,enabled,sheet,edit)
     end)
     self.haircraftToggle:SetScript("OnEnter",function()
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Keep hair with hats",1,1,1)
-        GameTooltip:AddLine("Show your current hairstyle, including ponytails, with your equipped or cosmetic hat. This character setting also applies to the wardrobe preview. Some hairstyles may clip through closed helmets.",1,.82,0,true)
+        GameTooltip:AddLine("Show your current hairstyle, including ponytails, with your equipped or cosmetic hat. This character setting also applies to the wardrobe preview. Covered hair is fitted automatically while skin and exposed lower hair are preserved. Hats that sit inside the head may still need Adjust hat.",1,.82,0,true)
         GameTooltip:Show()
     end)
     self.haircraftToggle:SetScript("OnLeave",function() GameTooltip:Hide() end)
@@ -45,13 +45,6 @@ function V:CreateHaircraftPage(p,label,button,enabled,sheet,edit)
         GameTooltip:AddLine("Move, tilt or resize your hat to fit your hairstyle. Adjustments follow your head. Save Fit keeps the placement for this race and gender; Default restores the original fit.",1,.82,0,true);GameTooltip:Show()
     end)
     self.haircraftHat:SetScript("OnLeave",function() GameTooltip:Hide() end)
-    self.haircraftMask=button(p,"Trim hair",33,337,124,function() V:OpenHairMask() end)
-    self.haircraftMask:SetScript("OnEnter",function()
-        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Trim hair around your hat",1,1,1)
-        GameTooltip:AddLine("Bake a reversible cut through the hair at your active transmogged hat. Set the cutting plane height and tilt; hair below the plane remains. Fits are saved separately for each hat, race, gender and hairstyle.",1,.82,0,true);GameTooltip:Show()
-    end)
-    self.haircraftMask:SetScript("OnLeave",function() GameTooltip:Hide() end)
-    if sheet then self:CreateHairMaskWindow(sheet,label,button,edit) end
     self.haircraftEnableControl=enabled
     self:RefreshHaircraftPage()
 end
@@ -60,21 +53,15 @@ function V:RefreshHaircraftPage()
     local available=self:HaircraftAvailable();local c=VanityStudioCharacter
     self.haircraftToggle:SetText(c.keepHairWithHat and "Keep hair: On" or "Keep hair: Off")
     self.haircraftEnableControl(self.haircraftToggle,available)
-    self.haircraftEnableControl(self.haircraftMask,available and self:HairMaskAvailable())
     self.haircraftEnableControl(self.haircraftHat,self:HatTuningAvailable())
     self.haircraftStatus:SetText(not available and "Update the DLL and restart WoW to use Haircraft." or
         not c.enabled and "Enable the addon to see Haircraft." or
-        c.keepHairWithHat and "Hair stays visible. Use Trim hair to hide clipping around your hat." or "Hats use their normal hair visibility.")
+        c.keepHairWithHat and (self.hairMaskStatus or "Fitting hair around your hat...") or "Hats use their normal hair visibility.")
 end
 
-local maskFields={
-    {key="height",title="Cut height",min=0,max=100,default=35,tip="Cut off every part of your hair above this plane. Height is measured from the bottom to the top of the hat. Lower values cut more hair; hair below the plane stays intact."},
-    {key="pitch",title="Forward tilt",min=-80,max=80,default=0,tip="Tilt the cutting plane forward or backward, in degrees, relative to your hat."},
-    {key="roll",title="Side tilt",min=-80,max=80,default=0,tip="Tilt the cutting plane from side to side, in degrees, relative to your hat."}
-}
 function V:HairMaskAvailable()
     if type(SaureksClosetSetHairMask)~="function" or type(SaureksClosetHairMaskVersion)~="function" then return false end
-    local ok,version=pcall(SaureksClosetHairMaskVersion);return ok and type(version)=="number" and version>=2
+    local ok,version=pcall(SaureksClosetHairMaskVersion);return ok and type(version)=="number" and version>=3
 end
 function V:HairMaskKey()
     local c=VanityStudioCharacter;local b=c.enabled and c.body or self:NativeBody()
@@ -85,85 +72,25 @@ function V:HairMaskKey()
     if not id or id<=0 then return nil end
     return b.race..":"..b.sex..":"..(b.hairStyle or 0)..":"..id
 end
-function V:HairMaskConfig(key)
-    local saved=(VanityStudioCharacter.hairMasks or {})[key or ""] or {};local out={enabled=saved.enabled and true or false}
-    for _,field in ipairs(maskFields) do
-        local n=tonumber(saved[field.key] or (field.key=="height" and saved.cutoff));if not n or n~=n then n=field.default end
-        out[field.key]=math.floor(math.max(field.min,math.min(field.max,n))+.5)
-    end
-    return out
-end
 function V:SyncHairMask()
-    if not self:HairMaskAvailable() or self.sharingWorldPaused then return false end
-    local key=self:HairMaskKey();local config=self:HairMaskConfig(key);local c=VanityStudioCharacter
-    local active=key and c.enabled and c.keepHairWithHat and config.enabled
-    local ok,status,count,generation=pcall(SaureksClosetSetHairMask,active and 1 or 0,90,90,95,35,1,config.height,config.pitch,config.roll)
-    self.hairMaskStatus=not ok and "Could not apply hair mask." or status==0 and "Waiting for the hat model..." or status==2 and "No visible hat to fit." or status==3 and "Loading the trimmed hair model..." or status==1 and (active and ((count or 0)>0 and "Hair mask applied." or "No hair crosses the plane. Lower Cut height.") or "Hair mask is off.") or status==-3 and "Cannot locate a cutting plane for this hat." or status==-6 and "The trimmed model did not load. Restart WoW with the updated DLL." or "Could not bake the mask. Check the DLL and model files."
+    if self.sharingWorldPaused then return false end
+    if not self:HairMaskAvailable() then
+        -- Stop an already-loaded destructive bake with an older DLL too.
+        if type(SaureksClosetSetHairMask)=="function" then pcall(SaureksClosetSetHairMask,0,90,90,95,35) end
+        self.hairMaskStatus="Update the DLL and restart WoW for automatic hair fitting."
+        return false
+    end
+    local c=VanityStudioCharacter
+    -- Old per-hat plane settings intentionally have no effect. Keep hair is
+    -- the only switch; fitting follows the current hat and saved hat placement.
+    local active=self:HairMaskKey() and c.enabled and c.keepHairWithHat
+    local ok,status,count,generation=pcall(SaureksClosetSetHairMask,active and 1 or 0,3)
+    self.hairMaskStatus=not ok and "Could not fit hair." or status==0 and "Waiting for the hat model..." or status==2 and "No visible hat to fit." or status==3 and "Loading the fitted hairstyle..." or status==1 and (active and ((count or 0)>0 and "Hair fitted beneath your hat." or "Hair preserved. No safe fit needed or available.") or "Hats use their normal hair visibility.") or status==-6 and "The fitted model did not load. Restart WoW with the updated DLL." or "Could not fit hair. Original hair preserved."
     if generation and self.hairMaskGeneration~=generation then
         self.hairMaskGeneration=generation
         if self.InvalidatePreviewModel then self:InvalidatePreviewModel(0,true) end
     end
-    if self.hairMaskWindow and self.hairMaskWindow:IsShown() then
-        if self.hairMaskKey~=key then self:OpenHairMask() else self.hairMaskMessage:SetText(self.hairMaskStatus) end
-    end
+    self:RefreshHaircraftPage()
     self.hairMaskLastOK=ok and status and status>=0
     return self.hairMaskLastOK
-end
-function V:OpenHairMask()
-    if not self.hairMaskWindow then return end
-    self.hairMaskKey=self:HairMaskKey();self.hairMaskDraft=self:HairMaskConfig(self.hairMaskKey)
-    self.hairMaskToggle:SetChecked(self.hairMaskDraft.enabled)
-    for _,row in ipairs(self.hairMaskRows) do row.editor:SetText(self.hairMaskDraft[row.field.key]);row.editor:ClearFocus() end
-    local available=self.hairMaskKey and self:HairMaskAvailable()
-    self.haircraftEnableControl(self.hairMaskApply,available)
-    self.haircraftEnableControl(self.hairMaskToggle,available)
-    self.hairMaskMessage:SetText(not self.hairMaskKey and "Select a visible hat first." or self.hairMaskStatus or "Lower Cut height, then Apply. Saved for this hat and hairstyle.")
-    self.hairMaskWindow:Show()
-end
-function V:ApplyHairMask()
-    if self.hairMaskKey~=self:HairMaskKey() then self:OpenHairMask();return false end
-    if not self.hairMaskKey or not self:HairMaskAvailable() then return false end
-    local config={enabled=self.hairMaskToggle:GetChecked() and true or false}
-    for _,row in ipairs(self.hairMaskRows) do
-        local n=tonumber(row.editor:GetText());local f=row.field
-        if not n or n~=n or n<f.min or n>f.max then self.hairMaskMessage:SetText("Enter "..f.min.." to "..f.max.." for "..f.title..".");return false end
-        config[f.key]=math.floor(n+.5)
-    end
-    local c=VanityStudioCharacter;c.hairMasks=c.hairMasks or {};local old=c.hairMasks[self.hairMaskKey];local oldKeep=c.keepHairWithHat
-    c.hairMasks[self.hairMaskKey]=config
-    if config.enabled then c.keepHairWithHat=true end
-    if not self:SyncHaircraft() or self.hairMaskLastOK==false then
-        local message=self.hairMaskStatus or "Could not apply hair mask."
-        c.hairMasks[self.hairMaskKey]=old;c.keepHairWithHat=oldKeep;self:SyncHaircraft()
-        self.hairMaskMessage:SetText(message);return false
-    end
-    self:RefreshHaircraftPage();return true
-end
-function V:CreateHairMaskWindow(sheet,label,button,edit)
-    local f=sheet("SaureksClosetHairMask",UIParent,"Hair Mask");self.hairMaskWindow=f;f:Hide();f:SetFrameStrata("DIALOG");f:SetClampedToScreen(true)
-    f:SetPoint("TOPLEFT",self.frame,"TOPRIGHT",-30,0);f:SetMovable(true);f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart",function() this:StartMoving() end);f:SetScript("OnDragStop",function() this:StopMovingOrSizing() end)
-    f.close:SetScript("OnClick",function() f:Hide() end);table.insert(UISpecialFrames,f:GetName())
-    self.hairMaskToggle=CreateFrame("CheckButton","SaureksClosetHairMaskToggle",f,"UICheckButtonTemplate")
-    self.hairMaskToggle:ClearAllPoints();self.hairMaskToggle:SetPoint("TOPLEFT",f,"TOPLEFT",34,-81);self.hairMaskToggle:SetWidth(24);self.hairMaskToggle:SetHeight(24)
-    label(f,"Cut hair above a plane",64,86,248,20,true)
-    label(f,"Hair crossing the plane is cut at its edge. Lower Cut height to trim more.",38,118,286,38,true)
-    self.hairMaskRows={}
-    for i,field in ipairs(maskFields) do
-        local y=171+(i-1)*40;local row={field=field};self.hairMaskRows[i]=row
-        label(f,field.title,38,y+3,130,20,true)
-        row.editor=edit(f,"SaureksClosetHairMaskValue"..i,207,y,62,4)
-        -- Lua 5.0 exhausts generic-for variables. Deferred callbacks use the
-        -- stable per-row field, never the outer loop's `field` upvalue.
-        row.minus=button(f,"-",176,y,24,function() local n=tonumber(row.editor:GetText()) or row.field.default;row.editor:SetText(math.max(row.field.min,n-1)) end)
-        row.plus=button(f,"+",282,y,24,function() local n=tonumber(row.editor:GetText()) or row.field.default;row.editor:SetText(math.min(row.field.max,n+1)) end)
-        row.editor:SetScript("OnEnterPressed",function() V:ApplyHairMask();row.editor:ClearFocus() end)
-        row.editor:SetScript("OnEscapePressed",function() V:OpenHairMask() end)
-        for _,control in ipairs({row.editor,row.minus,row.plus}) do
-            control:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText(row.field.title..(row.field.key=="height" and " (%)" or " (degrees)"));GameTooltip:AddLine(row.field.tip,1,.82,0,true);GameTooltip:Show() end)
-            control:SetScript("OnLeave",function() GameTooltip:Hide() end)
-        end
-    end
-    self.hairMaskMessage=label(f,"",38,334,286,40,true)
-    self.hairMaskApply=button(f,"Apply",206,384,112,function() V:ApplyHairMask() end)
 end

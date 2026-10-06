@@ -272,7 +272,6 @@ function V:SetTab(tab)
     -- The floating tuner belongs to the page that opened it. In particular,
     -- Body previews deliberately hide equipment and cannot host bag fitting.
     if tab~=self.tab and self.bagTunerWindow and self.bagTunerWindow:IsShown() then self.bagTunerWindow:Hide() end
-    if self.hairMaskWindow then self.hairMaskWindow:Hide() end
     if self.CloseBagPlacementEditor then self:CloseBagPlacementEditor() end
     if self.bagPhysicsWindow then self.bagPhysicsWindow:Hide();self.weaponPhysicsWindow:Hide();self.capePhysicsWindow:Hide();self.capeAdvancedWindow:Hide() end
     local wasCharacter=self.pagesByName.armor:IsVisible()
@@ -401,7 +400,6 @@ function V:CreateUI()
     f:SetScript("OnHide",function()
         if UIParent.doublewide==V.frame then UIParent.doublewide=nil end
         V:CloseOutfitMenu();V:CloseOutfitDetails();V:CloseBrowser();V:CloseWeaponOptions();V:CancelDraft()
-        if V.hairMaskWindow then V.hairMaskWindow:Hide() end
         if V.bagPhysicsWindow then V.bagPhysicsWindow:Hide();V.weaponPhysicsWindow:Hide();V.capePhysicsWindow:Hide();V.capeAdvancedWindow:Hide() end
         if V.outfitName then V.outfitName:ClearFocus() end
     end)

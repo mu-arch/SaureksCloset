@@ -10,13 +10,9 @@ inline std::uintptr_t requestedModel=0;
 inline Identity captured{},applied{};
 inline BagTuningValues capturedFit{};
 inline bool capturedFitEnabled=false;
-inline hairMask::Envelope envelope;
-inline std::vector<hairMask::Point> hatVertices;
+inline std::vector<hairMask::Triangle> hatSurface;
 inline BagMatrix modelToHat{};
-inline hairMask::Options options=hairMask::defaults(),appliedOptions=hairMask::defaults();
 inline std::string appliedCape;
-inline unsigned appliedMode=0;
-inline hairMask::PlaneOptions appliedPlane=hairMask::planeDefaults();
 inline unsigned changedTriangles=0,generation=0,captureRevision=0,appliedRevision=0;
 inline std::chrono::steady_clock::time_point loadDeadline;
 inline int loadedStatus(const Player& p){
@@ -58,17 +54,37 @@ inline void capture(void* child,const float* input){
     if(!read(resource+0x130,header)||!read(header+0x44,nv)||nv<3||nv>65535||!read(header+0x48,vertices))return;
     std::vector<hairMask::Point> points;points.reserve(nv);
     for(unsigned i=0;i<nv;++i){hairMask::Point v;if(!read(vertices+48*i,v))return;for(auto n:v)if(!std::isfinite(n))return;points.push_back(v);}
-    hatVertices.swap(points);captured=id;capturedFit=fit.values;capturedFitEnabled=fitted;ready=true;++captureRevision;
+    // Use the resident draw mesh, not its bounding box. Ignore transparent
+    // feathers, ribbons and effect layers: they do not establish solid cover.
+    unsigned viewsCount=0,ni=0,nt=0,ns=0,nBatch=0,nFlags=0;
+    std::uintptr_t views=0,indices=0,triangles=0,sections=0,batches=0,flags=0;
+    if(!read(header+0x4c,viewsCount)||!viewsCount||viewsCount>16||!read(header+0x50,views)||!views||
+       !read(views,ni)||ni>65535||!read(views+4,indices)||!read(views+8,nt)||nt>60000||nt%3||!read(views+12,triangles)||
+       !read(views+24,ns)||ns>512||!read(views+28,sections)||!read(views+32,nBatch)||nBatch>2048||!read(views+36,batches)||
+       !read(header+0x7c,nFlags)||nFlags>2048||!read(header+0x80,flags))return;
+    std::vector<bool> opaque(ns,false);
+    for(unsigned i=0;i<nBatch;++i){std::uint16_t section=0,flag=0,blend=0;
+        if(!read(batches+24*i+4,section)||section>=ns||!read(batches+24*i+10,flag)||flag>=nFlags||!read(flags+4*flag+2,blend))return;
+        if(blend==0)opaque[section]=true;
+    }
+    std::vector<hairMask::Triangle> surface;
+    for(unsigned i=0;i<ns;++i){if(!opaque[i])continue;std::uint16_t first=0,count=0;
+        if(!read(sections+32*i+8,first)||!read(sections+32*i+10,count)||unsigned(first)+count>nt||count%3)return;
+        for(unsigned t=first;t<unsigned(first)+count;t+=3){hairMask::Triangle tri;
+            for(unsigned j=0;j<3;++j){std::uint16_t ix=0,vertex=0;if(!read(triangles+2*(t+j),ix)||ix>=ni||!read(indices+2*ix,vertex)||vertex>=nv)return;tri[j]=points[vertex];}
+            surface.push_back(tri);if(surface.size()>20000)return;
+        }
+    }
+    hatSurface.swap(surface);captured=id;capturedFit=fit.values;capturedFitEnabled=fitted;ready=true;++captureRevision;
 }
 inline void clear(Player& p){if(hairMask::activePath.empty())return;hairMask::activePath.clear();applied={};++generation;if(p.model&&p.display==p.native)refresh(p,true);}
 }
 static int __fastcall setHairMaskLua(void* L){
     using namespace hairMaskRuntime;
     if(!isNumber(L,1))return result(L,-2);const double on=toNumber(L,1);if(on!=0&&on!=1)return result(L,-2);
-    auto next=hairMask::defaults();for(unsigned i=0;i<4;++i){if(!isNumber(L,i+2))return result(L,-2);const auto v=toNumber(L,i+2);if(!std::isfinite(v)||v<0||v>150||v!=std::floor(v))return result(L,-2);next[i]=unsigned(v);}if(!hairMask::valid(next))return result(L,-2);
-    unsigned mode=0;auto plane=hairMask::planeDefaults();
-    if(isNumber(L,6)){const auto v=toNumber(L,6);if(v!=0&&v!=1)return result(L,-2);mode=unsigned(v);}
-    if(mode){for(unsigned i=0;i<3;++i){if(!isNumber(L,7+i))return result(L,-2);const auto v=toNumber(L,7+i);if(!std::isfinite(v)||v< -80||v>100||v!=std::floor(v))return result(L,-2);plane[i]=int(v);}if(!hairMask::validPlane(plane))return result(L,-2);}
+    // Version 3 only fits hair automatically. Old plane/envelope arguments
+    // cannot reactivate destructive clipping, even with an outdated addon.
+    if(on==1&&(!isNumber(L,2)||toNumber(L,2)!=3))return result(L,-2);
     Player p;if(!snapshot(p)||state.busy)return result(L,-1);
     requestedModel=p.model;
     requested=on==1&&haircraft::owner==p.guid&&haircraft::enabled;
@@ -79,16 +95,15 @@ static int __fastcall setHairMaskLua(void* L){
     if(!ready||!(captured==id)||fitted!=capturedFitEnabled||(fitted&&!sameFit(capturedFit,fit.values))){ready=false;clear(p);return reply(L,0);}
     const auto* ordinary=raceModels[(id.race-1)*2+id.sex].filename;
     const auto* cape=localCapeMotionModel(ordinary);const std::string capeKey=cape;
-    if(applied==id&&appliedOptions==next&&appliedMode==mode&&appliedPlane==plane&&appliedCape==capeKey&&appliedRevision==captureRevision&&!hairMask::activePath.empty())return reply(L,loadedStatus(p));
-    if(!(mode?hairMask::cuttingPlane(hatVertices,modelToHat,plane,envelope):hairMask::envelope(hatVertices,modelToHat,next,envelope)))return result(L,-3);
+    if(applied==id&&appliedCape==capeKey&&appliedRevision==captureRevision&&!hairMask::activePath.empty())return reply(L,loadedStatus(p));
     char base[128];std::snprintf(base,sizeof(base),"Interface/AddOns/SaureksCloset/CapeMotion/B%02u.m2",(id.race-1)*2+id.sex+1);
-    hairMask::Bytes source,baked;if(!capeMotion::readFile(capeMotion::pathEqual(cape,ordinary)?base:cape,source)||!hairMask::build(source,id.group,envelope,baked,changedTriangles))return result(L,-5);
-    const auto* path=hairMask::save(baked);if(!path)return result(L,-5);
+    hairMask::Bytes source,baked;if(!capeMotion::readFile(capeMotion::pathEqual(cape,ordinary)?base:cape,source)||!hairMask::build(source,id.group,hatSurface,modelToHat,baked,changedTriangles)){clear(p);return reply(L,-5);}
+    const auto* path=hairMask::save(baked);if(!path){clear(p);return reply(L,-5);}
     const bool changed=hairMask::activePath!=path;
     hairMask::activePath=path;hairMask::activeOwner=p.guid;hairMask::activeBody=(id.race-1)*2+id.sex+1;hairMask::activeStyle=id.style;
-    applied=id;appliedOptions=next;appliedMode=mode;appliedPlane=plane;appliedCape=capeKey;options=next;appliedRevision=captureRevision;if(changed){++generation;loadDeadline=std::chrono::steady_clock::now()+std::chrono::seconds(5);refresh(p,true);}
+    applied=id;appliedCape=capeKey;appliedRevision=captureRevision;if(changed){++generation;loadDeadline=std::chrono::steady_clock::now()+std::chrono::seconds(5);refresh(p,true);}
     Player current;if(snapshot(current))return reply(L,loadedStatus(current));
     return reply(L,1);
 }
 
-static int __fastcall hairMaskVersionLua(void* L){return result(L,2);}
+static int __fastcall hairMaskVersionLua(void* L){return result(L,3);}

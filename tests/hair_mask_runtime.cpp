@@ -45,40 +45,38 @@ int main(){
     store(child+0x1cc,player.model);store(child+0x1d0,11u);store(child+0x10,1u);store(child+0x30,resource);
     std::array<char,260> path{};std::strcpy(path.data(),"Item\\ObjectComponents\\Head\\TestHat");store(resource+0x20,path);
     store(player.model+0x30,bodyResource);store(bodyResource+0x130,header);store(header+0x10c,12u);store(header+0x110,lookup);store(lookup+22,(std::uint16_t)0);store(header+0x104,1u);store(header+0x108,attachments);store(attachments+4,(std::uint16_t)3);store(header+0x34,117u);store(player.model+0x94,palette);store(resource+0x130,hatHeader);store(hatHeader+0x44,8u);store(hatHeader+0x48,vertices);
+    const std::uintptr_t view=21000,indices=22000,triangles=23000,sections=24000,batches=25000,flags=26000;
+    store(hatHeader+0x4c,1u);store(hatHeader+0x50,view);store(view,8u);store(view+4,indices);store(view+8,6u);store(view+12,triangles);store(view+24,1u);store(view+28,sections);store(view+32,1u);store(view+36,batches);store(hatHeader+0x7c,1u);store(hatHeader+0x80,flags);
+    store(sections+8,(std::uint16_t)0);store(sections+10,(std::uint16_t)6);store(batches+4,(std::uint16_t)0);store(batches+10,(std::uint16_t)0);store(flags+2,(std::uint16_t)0);
+    for(unsigned i=0;i<8;++i)store(indices+2*i,(std::uint16_t)i);
+    unsigned ti=0;for(unsigned v:{1,3,5,3,7,5})store(triangles+2*ti++,(std::uint16_t)v);
     unsigned index=0;for(float x:{-.12f,.12f})for(float y:{-.12f,.12f})for(float z:{0.f,.3f})store(vertices+48*index++,hairMask::Point{{x,y,z}});
     auto head=identity(),hat=identity();hat[14]=1.6f;store(palette+64*3,head);store(reinterpret_cast<std::uintptr_t>(hat.data()),hat);
     haircraft::owner=7;haircraft::enabled=true;bagTuningOwner=7;
     auto call=[&](std::vector<double> args){Lua lua{args,{}};setHairMaskLua(&lua);return lua.output;};
-    assert(call({1,90,90,95,35})[0]==0);assert(!reloads);
-    hairMaskRuntime::capture(reinterpret_cast<void*>(child),hat.data());assert(hairMaskRuntime::ready);
-    assert(call({1,90,90,95,35})[0]==1&&reloads==1);assert(!hairMask::activePath.empty());assert(fs::exists(hairMask::activePath));
-    assert(hairMask::cachePath(hairMask::activePath.c_str())&&!hairMask::cachePath("Interface/AddOns/SaureksCloset/CapeMotion/Cache/H1_bad.m2"));
-    for(unsigned i=0;i<10;++i){hairMaskRuntime::capture(reinterpret_cast<void*>(child),hat.data());assert(call({1,90,90,95,35})[0]==1);}assert(reloads==1);
-    auto oldPath=hairMask::activePath;assert(call({1,75,90,95,35})[0]==1&&reloads==2&&hairMask::activePath!=oldPath);
-    // Moving the camera/head together must not change the rest-space bake.
+    assert(call({1,90,90,95,35,1,35,0,0})[0]==-2); // retired destructive API
+    assert(call({1,3})[0]==0);assert(!reloads);
+    hairMaskRuntime::capture(reinterpret_cast<void*>(child),hat.data());assert(hairMaskRuntime::ready&&hairMaskRuntime::hatSurface.size()==2);
+    assert(call({1,3})[0]==1&&reloads==1);assert(!hairMask::activePath.empty());assert(fs::exists(hairMask::activePath));
+    assert(hairMask::cachePath(hairMask::activePath.c_str())&&!hairMask::cachePath("../../bad.m2"));
+    for(unsigned i=0;i<10;++i){hairMaskRuntime::capture(reinterpret_cast<void*>(child),hat.data());assert(call({1,3})[0]==1);}assert(reloads==1);
     auto transformed=identity();transformed[12]=7;transformed[14]=-2;
     auto movedHat=bagMatrixProduct(transformed,hat);store(palette+64*3,transformed);store(reinterpret_cast<std::uintptr_t>(movedHat.data()),movedHat);
-    hairMaskRuntime::ready=false;hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,75,90,95,35})[0]==1);assert(reloads==2);
-    auto stable=hairMask::activePath;assert(stable.find("H1_")!=std::string::npos);
-    // Fit edits request one new capture; completed fits do no render-hook work.
+    hairMaskRuntime::ready=false;hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,3})[0]==1&&reloads==1);
     auto& fit=hatTuningEntries[1];fit.enabled=true;fit.values.scale=100;fit.values.up=.03f;
-    assert(call({1,75,90,95,35})[0]==0);
-    hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,75,90,95,35})[0]==1&&reloads==4&&hairMask::activePath!=stable);
-    assert(call({1,75,90,20,35})[0]==-2&&reloads==4);
-    assert(hairMask::model("original",7,2,0)==hairMask::activePath.c_str());assert(std::string(hairMask::model("original",8,2,0))=="original");assert(std::string(hairMask::model("original",7,1,0))=="original");
-    // A newly equipped/hidden hat cannot retain the previous mask.
-    store(600,124u);assert(call({1,75,90,95,35})[0]==0&&hairMask::activePath.empty());
-    hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,75,90,95,35})[0]==1);
-    store(player.component+0x4a8,0u);assert(call({1,75,90,95,35})[0]==2&&hairMask::activePath.empty());
-    store(player.component+0x4a8,600u);hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,75,90,95,35})[0]==1);
-    // Direct plane mode must be a distinct bake and report real resource loading.
-    assert(call({1,90,90,95,35,1,35,0,0})[0]==1);auto flat=hairMask::activePath;
-    assert(call({1,90,90,95,35,1,35,15,-10})[0]==1&&hairMask::activePath!=flat);
-    assert(call({1,90,90,95,35,1,101,0,0})[0]==-2);
-    allowLoad=false;assert(call({1,90,90,95,35,1,20,0,0})[0]==3);
-    hairMaskRuntime::loadDeadline=std::chrono::steady_clock::now()-std::chrono::seconds(1);
-    assert(call({1,90,90,95,35,1,20,0,0})[0]==-6);
-    assert(call({0,75,90,95,35})[0]==1&&hairMask::activePath.empty());unsigned last=reloads;assert(call({0,75,90,95,35})[0]==1&&reloads==last);
+    assert(call({1,3})[0]==0&&hairMask::activePath.empty());
+    hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,3})[0]==1);
+    assert(hairMask::model("original",7,2,0)==hairMask::activePath.c_str());assert(std::string(hairMask::model("original",8,2,0))=="original");
+    store(600,124u);assert(call({1,3})[0]==0&&hairMask::activePath.empty());
+    hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,3})[0]==1);
+    store(player.component+0x4a8,0u);assert(call({1,3})[0]==2&&hairMask::activePath.empty());
+    store(player.component+0x4a8,600u);allowLoad=false;
+    std::array<char,260> ordinaryName{};std::strcpy(ordinaryName.data(),"Character/Human/Female/HumanFemale");store(bodyResource+0x20,ordinaryName);
+    hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,3})[0]==3);
+    hairMaskRuntime::loadDeadline=std::chrono::steady_clock::now()-std::chrono::seconds(1);assert(call({1,3})[0]==-6);
+    assert(call({0})[0]==1&&hairMask::activePath.empty());unsigned last=reloads;assert(call({0,90,90,95,35})[0]==1&&reloads==last);
+    // Alpha feathers cannot masquerade as solid crown coverage.
+    assert(call({1,3})[0]==0);store(flags+2,(std::uint16_t)1);hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(hairMaskRuntime::ready&&hairMaskRuntime::hatSurface.empty());
     // Other owners, effects and previews cannot supply a mask capture.
     hairMaskRuntime::requested=true;hairMaskRuntime::ready=false;store(child+0x1cc,std::uintptr_t(999));hairMaskRuntime::capture(reinterpret_cast<void*>(child),hat.data());assert(!hairMaskRuntime::ready);
     fs::current_path(original);fs::remove_all(temp);
