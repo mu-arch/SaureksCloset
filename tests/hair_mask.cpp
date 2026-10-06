@@ -14,6 +14,15 @@ int main(){
     Triangle plane{{{{-1,-1,1}},{{1,-1,1}},{{0,1,1}}}};
     assert(std::fabs(hit({{0,0,0}},{{0,0,2}},plane)-.5f)<1e-6f);
     assert(hit({{2,0,0}},{{0,0,2}},plane)<0); // uncovered side
+    // A fringe protruding .0005 model units must not be pulled another .01 inward.
+    // The same maximum remains available for a deeply penetrating crown.
+    const float shallow=fitMargin(.1f,.995f,1e10f,.01f);
+    assert(shallow*.1f<=.000201f&&shallow>0);
+    assert((1.f-(.995f-shallow))*.1f<.00071f);
+    const float deep=fitMargin(.2f,.5f,1e10f,.01f);
+    assert(std::fabs(deep*.2f-.01f)<1e-6f);
+    const float closeSkin=fitMargin(.1f,.995f,.994f,.01f);
+    assert(.995f-closeSkin>.994f&&closeSkin<shallow);
     unsigned groups=0,modified=0,skinSections=0;
     for(unsigned body=1;body<=16;++body){char path[100];std::snprintf(path,sizeof(path),"addon/SaureksCloset/CapeMotion/B%02u.m2",body);Bytes base;assert(capeMotion::readFile(path,base));
         auto scalp=mesh(base,1);Point lo=scalp.empty()?Point{}:scalp[0][0],hi=lo;

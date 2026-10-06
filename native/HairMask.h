@@ -41,6 +41,14 @@ inline bool hairSection(const Bytes& b,unsigned view,unsigned section){
     }
     return found;
 }
+// A barely intersecting fringe should not inherit the full crown clearance.
+// Limit the extra inward move to a fifth of the actual overlap, with a small
+// contact epsilon. Deep crown intersections retain the original upper bound.
+inline float fitMargin(float length,float surfaceT,float skinT,float maximum){
+    const float overlap=std::max(0.f,(1.f-surfaceT)*length);
+    const float margin=std::min(maximum,std::max(.0002f,overlap*.2f))/length;
+    return skinT<1e9f?std::min(margin,(surfaceT-skinT)*.4f):margin;
+}
 inline bool build(const Bytes& base,unsigned hairGroup,const std::vector<Triangle>& hat,const BagMatrix& modelToHat,Bytes& result,unsigned& changed){
     changed=0;BagMatrix hatToModel;if(!bagAffineInverse(modelToHat,hatToModel)||hat.size()>20000)return false;
     if(base.size()<0x144||u32(base,0)!=0x3032444d||u32(base,4)!=256||hairGroup<1||hairGroup>=100)return false;
@@ -86,7 +94,7 @@ inline bool build(const Bytes& base,unsigned hairGroup,const std::vector<Triangl
         // hairstyle. Enforce actual visible skin, not a hidden bald mesh.
         if((skull<1e9f&&t<=skull*.5f)||t<=.25f||t<=2*padding||
            (visibleSkin<1e9f&&t<=visibleSkin+.0005f/length))continue;
-        const float margin=visibleSkin<1e9f?std::min(padding,(t-visibleSkin)*.4f):padding;
+        const float margin=fitMargin(length,t,visibleSkin,clearance);
         const float fit=t-margin;
         Point target;for(unsigned k=0;k<3;++k)target[k]=center[k]+ray[k]*fit;
         std::memcpy(result.data()+vo+v*48,target.data(),12);++changed;

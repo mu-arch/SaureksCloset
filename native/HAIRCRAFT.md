@@ -88,8 +88,10 @@ a private copy after capture; no fitting runs in the render loop.
 
 A stock bald scalp, where present, establishes the crown reference. Rays from
 that reference to hair vertices locate actual hat surfaces. Covered crown hair
-is tucked under those surfaces, with clearance reduced when visible skin is
-close. Visible skin is a collision floor. The hidden bald scalp is only a
+is tucked under those surfaces. Extra inward clearance is limited to 20%
+of the actual overlap (with a 0.0002 model-unit contact epsilon), up to the existing crown
+clearance. This avoids pulling a barely intersecting fringe far under a hat.
+Clearance is further reduced when visible skin is close. Visible skin is a collision floor. The hidden bald scalp is only a
 reference, not a surface that the active hairstyle renders. Hanging lengths
 below the crown are preserved. Missing coverage, missing reference geometry,
 and impossible fits preserve the original hair rather than deleting geometry.
