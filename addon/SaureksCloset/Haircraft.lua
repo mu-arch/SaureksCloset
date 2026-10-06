@@ -25,6 +25,16 @@ function V:SetHaircraft(keep)
     self:InvalidatePreviewModel(0,true)
     self:RefreshHaircraftPage();return true
 end
+function V:SetHairTrimming(trim)
+    local c=VanityStudioCharacter;local previous=c.trimHair
+    c.trimHair=trim and true or false
+    if not self:SyncHairMask() then
+        local message=self.hairMaskStatus or "Could not change hair trimming."
+        c.trimHair=previous;self:SyncHairMask()
+        self:Message(message);self:RefreshHaircraftPage();return false
+    end
+    self:RefreshHaircraftPage();return true
+end
 function V:CreateHaircraftPage(p,label,button,enabled)
     p:SetFrameLevel(self.frame:GetFrameLevel()+12)
     label(p,"Haircraft",33,87,124,18)
@@ -34,7 +44,7 @@ function V:CreateHaircraftPage(p,label,button,enabled)
     end)
     self.haircraftToggle:SetScript("OnEnter",function()
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Keep hair with hats",1,1,1)
-        GameTooltip:AddLine("Show your current hairstyle, including ponytails, with your equipped or cosmetic hat. This character setting also applies to the wardrobe preview. Covered hair is fitted automatically while skin and exposed lower hair are preserved. Hats that sit inside the head may still need Adjust hat.",1,.82,0,true)
+        GameTooltip:AddLine("Show your current hairstyle, including ponytails, with your equipped or cosmetic hat. This character setting also applies to the wardrobe preview. Enable Trim hair to automatically fit covered hair while preserving skin and exposed lower hair. Hats that sit inside the head may still need Adjust hat.",1,.82,0,true)
         GameTooltip:Show()
     end)
     self.haircraftToggle:SetScript("OnLeave",function() GameTooltip:Hide() end)
@@ -45,6 +55,16 @@ function V:CreateHaircraftPage(p,label,button,enabled)
         GameTooltip:AddLine("Move, tilt or resize your hat to fit your hairstyle. Adjustments follow your head. Save Fit keeps the placement for this race and gender; Default restores the original fit.",1,.82,0,true);GameTooltip:Show()
     end)
     self.haircraftHat:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    self.haircraftTrim=CreateFrame("CheckButton","SaureksClosetHaircraftTrim",p,"UICheckButtonTemplate")
+    self.haircraftTrim:ClearAllPoints();self.haircraftTrim:SetPoint("TOPLEFT",p,"TOPLEFT",33,-334)
+    self.haircraftTrim:SetWidth(24);self.haircraftTrim:SetHeight(24)
+    label(p,"Trim hair",61,338,96,20,true)
+    self.haircraftTrim:SetScript("OnClick",function() V:SetHairTrimming(this:GetChecked()) end)
+    self.haircraftTrim:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Trim hair",1,1,1)
+        GameTooltip:AddLine("Automatically fit hair beneath your hat when Keep hair is on. Turn this off to show your full, untrimmed hairstyle. Saved for this character.",1,.82,0,true);GameTooltip:Show()
+    end)
+    self.haircraftTrim:SetScript("OnLeave",function() GameTooltip:Hide() end)
     self.haircraftEnableControl=enabled
     self:RefreshHaircraftPage()
 end
@@ -54,9 +74,11 @@ function V:RefreshHaircraftPage()
     self.haircraftToggle:SetText(c.keepHairWithHat and "Keep hair: On" or "Keep hair: Off")
     self.haircraftEnableControl(self.haircraftToggle,available)
     self.haircraftEnableControl(self.haircraftHat,self:HatTuningAvailable())
+    self.haircraftTrim:SetChecked(c.trimHair~=false)
+    self.haircraftEnableControl(self.haircraftTrim,available and self:HairMaskAvailable())
     self.haircraftStatus:SetText(not available and "Update the DLL and restart WoW to use Haircraft." or
         not c.enabled and "Enable the addon to see Haircraft." or
-        c.keepHairWithHat and (self.hairMaskStatus or "Fitting hair around your hat...") or "Hats use their normal hair visibility.")
+        c.keepHairWithHat and (c.trimHair==false and "Hair stays visible. Trimming is off." or self.hairMaskStatus or "Fitting hair around your hat...") or "Hats use their normal hair visibility.")
 end
 
 function V:HairMaskAvailable()
@@ -81,11 +103,11 @@ function V:SyncHairMask()
         return false
     end
     local c=VanityStudioCharacter
-    -- Old per-hat plane settings intentionally have no effect. Keep hair is
-    -- the only switch; fitting follows the current hat and saved hat placement.
-    local active=self:HairMaskKey() and c.enabled and c.keepHairWithHat
+    -- Preserve the previous automatic behavior until this character chooses
+    -- otherwise. Old per-hat cutting-plane settings remain unused.
+    local active=self:HairMaskKey() and c.enabled and c.keepHairWithHat and c.trimHair~=false
     local ok,status,count,generation=pcall(SaureksClosetSetHairMask,active and 1 or 0,3)
-    self.hairMaskStatus=not ok and "Could not fit hair." or status==0 and "Waiting for the hat model..." or status==2 and "No visible hat to fit." or status==3 and "Loading the fitted hairstyle..." or status==4 and "Hat surface unavailable. Hair is unchanged." or status==1 and (active and ((count or 0)>0 and "Hair fitted beneath your hat." or "Hair preserved. No safe fit needed or available.") or "Hats use their normal hair visibility.") or status==-6 and "The fitted model did not load. Restart WoW with the updated DLL." or "Could not fit hair. Original hair preserved."
+    self.hairMaskStatus=not ok and "Could not fit hair." or status==0 and "Waiting for the hat model..." or status==2 and "No visible hat to fit." or status==3 and "Loading the fitted hairstyle..." or status==4 and "Hat surface unavailable. Hair is unchanged." or status==1 and (active and ((count or 0)>0 and "Hair fitted beneath your hat." or "Hair preserved. No safe fit needed or available.") or (c.keepHairWithHat and (c.trimHair==false and "Hair stays visible. Trimming is off." or "No visible hat to fit.") or "Hats use their normal hair visibility.")) or status==-6 and "The fitted model did not load. Restart WoW with the updated DLL." or "Could not fit hair. Original hair preserved."
     if generation and self.hairMaskGeneration~=generation then
         self.hairMaskGeneration=generation
         if self.InvalidatePreviewModel then self:InvalidatePreviewModel(0,true) end

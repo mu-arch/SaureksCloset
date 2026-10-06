@@ -11,6 +11,12 @@ V:SyncHairMask()
 assert(calls[#calls][1]==1 and calls[#calls][2]==3 and #calls[#calls]==2)
 assert(not V.haircraftMask and not V.hairMaskWindow and not V.CreateHairMaskWindow and not V.OpenHairMask and not V.haircraftDefault)
 assert(V:HairMaskKey()=='1:1:3:501')
+assert(V.haircraftTrim:GetChecked()) -- existing users retain automatic fitting
+assert(V:SetHairTrimming(false));assert(c.trimHair==false and c.keepHairWithHat and calls[#calls][1]==0)
+V:RefreshHaircraftPage();V:SyncHairMask();assert(not V.haircraftTrim:GetChecked() and calls[#calls][1]==0)
+assert(string.find(V.haircraftStatus:GetText(),'Trimming is off',1,true))
+assert(V:SetHairTrimming(true));assert(c.trimHair and c.keepHairWithHat and calls[#calls][1]==1)
+status=-5;assert(not V:SetHairTrimming(false));assert(c.trimHair and V.haircraftTrim:GetChecked());status=1
 -- Automatic fitting follows current hat without requiring a saved config.
 c.selected[1]=502;V:SyncHairMask();assert(calls[#calls][1]==1 and V:HairMaskKey()=='1:1:3:502')
 c.body.hairStyle=4;V:SyncHairMask();assert(calls[#calls][1]==1 and V:HairMaskKey()=='1:1:4:502')
@@ -23,7 +29,8 @@ status=1;generation=2;V:SyncHairMask();V:SyncHairMask();assert(invalidations==1)
 changed=0;V:SyncHairMask();assert(string.find(V.hairMaskStatus,'preserved',1,true))
 c.enabled=false;V:SyncHairMask();assert(calls[#calls][1]==0)
 c.enabled=true;c.keepHairWithHat=false;V:SyncHairMask();assert(calls[#calls][1]==0)
-c.keepHairWithHat=true;c.selected[1]=0;V:SyncHairMask();assert(calls[#calls][1]==0)
+c.keepHairWithHat=true;c.trimHair=false;c.selected[1]=502;V:SyncHairMask();assert(calls[#calls][1]==0)
+c.trimHair=true;c.selected[1]=0;V:SyncHairMask();assert(calls[#calls][1]==0)
 -- An old DLL must be actively told to discard its already-applied plane bake.
 SaureksClosetHairMaskVersion=function() return 2 end
 assert(not V:HairMaskAvailable() and not V:SyncHairMask());assert(calls[#calls][1]==0 and calls[#calls][2]==90)
