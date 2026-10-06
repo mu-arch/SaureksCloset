@@ -6,7 +6,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[1]
 lua_tests = [
-    'haircraft', 'hat_tuner', 'hair_mask',
+    'haircraft', 'hat_tuner', 'hair_mask', 'hair_mask_callbacks',
     'physics', 'sheet_close_alignment', 'body_renderer_version', 'body_arrow_loading', 'body_preview_equipment', 'preview_item_loading',
     'bags_list_ui', 'bag_instances', 'bag_tuner', 'wardrobe_save', 'preview_drag',
     'weapon_full_page', 'held_weapon_tuner', 'tuner_tooltips', 'tuner_controls', 'sharing', 'sharing_ui', 'updates', 'settings_donations', 'armor_recovery', 'bag_placement_editor',

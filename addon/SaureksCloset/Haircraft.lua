@@ -152,12 +152,14 @@ function V:CreateHairMaskWindow(sheet,label,button,edit)
         local y=171+(i-1)*40;local row={field=field};self.hairMaskRows[i]=row
         label(f,field.title,38,y+3,130,20,true)
         row.editor=edit(f,"SaureksClosetHairMaskValue"..i,207,y,62,4)
-        row.minus=button(f,"-",176,y,24,function() local n=tonumber(row.editor:GetText()) or field.default;row.editor:SetText(math.max(field.min,n-1)) end)
-        row.plus=button(f,"+",282,y,24,function() local n=tonumber(row.editor:GetText()) or field.default;row.editor:SetText(math.min(field.max,n+1)) end)
-        row.editor:SetScript("OnEnterPressed",function() V:ApplyHairMask();this:ClearFocus() end)
+        -- Lua 5.0 exhausts generic-for variables. Deferred callbacks use the
+        -- stable per-row field, never the outer loop's `field` upvalue.
+        row.minus=button(f,"-",176,y,24,function() local n=tonumber(row.editor:GetText()) or row.field.default;row.editor:SetText(math.max(row.field.min,n-1)) end)
+        row.plus=button(f,"+",282,y,24,function() local n=tonumber(row.editor:GetText()) or row.field.default;row.editor:SetText(math.min(row.field.max,n+1)) end)
+        row.editor:SetScript("OnEnterPressed",function() V:ApplyHairMask();row.editor:ClearFocus() end)
         row.editor:SetScript("OnEscapePressed",function() V:OpenHairMask() end)
         for _,control in ipairs({row.editor,row.minus,row.plus}) do
-            control:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText(field.title.." (%)");GameTooltip:AddLine(field.tip,1,.82,0,true);GameTooltip:Show() end)
+            control:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText(row.field.title.." (%)");GameTooltip:AddLine(row.field.tip,1,.82,0,true);GameTooltip:Show() end)
             control:SetScript("OnLeave",function() GameTooltip:Hide() end)
         end
     end
