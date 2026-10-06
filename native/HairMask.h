@@ -2,6 +2,7 @@
 #include "CapeMotion.h"
 #include "BagCoordinates.h"
 #include <algorithm>
+#include <mutex>
 
 // Bake a private M2. Keep the source and all non-hair geometry untouched.
 namespace hairMask {
@@ -14,7 +15,23 @@ inline bool valid(const Options& v){return v[0]>=30&&v[0]<=150&&v[1]>=30&&v[1]<=
 inline void put16(Bytes& b,unsigned at,unsigned v){b[at]=v&255;b[at+1]=(v>>8)&255;}
 inline float number(const Bytes& b,unsigned p){float f;std::memcpy(&f,b.data()+p,4);return f;}
 inline Point transform(const BagMatrix& m,const Point& p){Point q{};for(unsigned i=0;i<3;++i)q[i]=m[12+i]+m[i]*p[0]+m[4+i]*p[1]+m[8+i]*p[2];return q;}
-struct Envelope {BagMatrix modelToHat{};Point center{},radius{};float bottom=0,top=0;};
+using PlaneOptions=std::array<int,3>; // height %, forward tilt degrees, side tilt degrees
+inline PlaneOptions planeDefaults(){return {{35,0,0}};}
+inline bool validPlane(const PlaneOptions& p){return p[0]>=0&&p[0]<=100&&p[1]>=-80&&p[1]<=80&&p[2]>=-80&&p[2]<=80;}
+struct Envelope {BagMatrix modelToHat{};Point center{},radius{},normal{{0,0,1}};float bottom=0,top=0,offset=0;bool planeOnly=false;};
+inline bool cuttingPlane(const std::vector<Point>& hat,const BagMatrix& modelToHat,const PlaneOptions& values,Envelope& out){
+    if(hat.size()<3||!validPlane(values))return false;
+    Point lo=hat[0],hi=lo;
+    for(const auto& p:hat)for(unsigned a=0;a<3;++a){if(!std::isfinite(p[a]))return false;lo[a]=std::min(lo[a],p[a]);hi[a]=std::max(hi[a],p[a]);}
+    const float height=hi[2]-lo[2];if(height>10)return false;
+    out={};out.modelToHat=modelToHat;out.planeOnly=true;out.bottom=lo[2];out.top=std::max(lo[2]+.001f,hi[2]);out.radius={{1,1,1}};
+    const float pitch=values[1]*.01745329252f,roll=values[2]*.01745329252f;
+    out.normal={{std::sin(pitch)*std::cos(roll),-std::sin(roll),std::cos(pitch)*std::cos(roll)}};
+    out.center={{(lo[0]+hi[0])*.5f,(lo[1]+hi[1])*.5f,lo[2]+height*values[0]*.01f}};
+    for(unsigned a=0;a<3;++a)out.offset+=out.center[a]*out.normal[a];
+    return true;
+}
+inline float planeDistance(const Point& p,const Envelope& e){const auto q=transform(e.modelToHat,p);return e.offset-e.normal[0]*q[0]-e.normal[1]*q[1]-e.normal[2]*q[2];}
 inline bool envelope(const std::vector<Point>& hat,const BagMatrix& modelToHat,const Options& options,Envelope& out){
     if(hat.size()<3||!valid(options))return false;
     Point lo=hat[0],hi=lo;
@@ -37,6 +54,7 @@ template<class Distance> Polygon clip(const Polygon& poly,Distance distance){
     for(const auto& current:poly){const float dc=distance(current.p);if((dc>=0)!=(dp>=0))out.push_back(mix(previous,current,dp/(dp-dc)));if(dc>=0)out.push_back(current);previous=current;dp=dc;}return out;
 }
 inline std::array<Polygon,2> cut(const Polygon& triangle,const Envelope& e){
+    if(e.planeOnly)return {{clip(triangle,[&](const Point& p){return planeDistance(p,e);}),{}}};
     bool allBelow=true;for(const auto& v:triangle)if(transform(e.modelToHat,v.p)[2]>e.bottom)allBelow=false;
     if(allBelow)return {{triangle,{}}};
     auto below=clip(triangle,[&](const Point& p){return e.bottom-transform(e.modelToHat,p)[2];});
@@ -66,6 +84,7 @@ inline bool encode(const Vertex& v,const Bytes& base,unsigned lookup,unsigned bo
 }
 inline bool build(const Bytes& base,unsigned hairGroup,const Envelope& env,Bytes& result,unsigned& removed){
     removed=0;BagMatrix inverse;if(!bagAffineInverse(env.modelToHat,inverse)||!std::isfinite(env.bottom)||!std::isfinite(env.top)||env.top<=env.bottom)return false;
+    if(env.planeOnly){if(!std::isfinite(env.offset))return false;float length=0;for(auto n:env.normal){if(!std::isfinite(n))return false;length+=n*n;}if(std::fabs(length-1.f)>.001f)return false;}
     for(unsigned a=0;a<2;++a)if(!std::isfinite(env.center[a])||!std::isfinite(env.radius[a])||env.radius[a]<=0)return false;
     if(base.size()<0x144||u32(base,0)!=0x3032444d||u32(base,4)!=256||hairGroup<1||hairGroup>=100)return false;
     const auto nv=u32(base,68),vo=u32(base,72),views=u32(base,76),viewOffset=u32(base,80),nb=u32(base,140),lookup=u32(base,144);
@@ -80,7 +99,7 @@ inline bool build(const Bytes& base,unsigned hairGroup,const Envelope& env,Bytes
             if(u16(base,s)!=hairGroup){triangles.insert(triangles.end(),base.begin()+to+first*2,base.begin()+to+(first+count)*2);continue;}
             found=true;const unsigned boneCount=u16(base,s+12),boneStart=u16(base,s+14),start=indices.size()/2;if(boneStart+boneCount>nb)return false;
             for(unsigned t=first;t<first+count;t+=3){Polygon original;for(unsigned j=0;j<3;++j){const auto ix=u16(base,to+2*(t+j));if(ix>=ni)return false;const auto vertex=u16(base,io+ix*2);if(vertex>=nv)return false;Vertex v;if(!decode(base,vo+vertex*48,v))return false;original.push_back(v);}
-                const auto pieces=cut(original,env);if(view==0){for(const auto& v:original){const auto q=transform(env.modelToHat,v.p);bool keep=q[2]<=env.bottom;if(!keep){keep=q[2]<=env.top;for(unsigned side=0;side<16&&keep;++side){const float angle=(side+.5f)*6.28318530718f/16.f;keep=std::cos(angle)*(q[0]-env.center[0])/env.radius[0]+std::sin(angle)*(q[1]-env.center[1])/env.radius[1]<=1.00001f;}}if(!keep){++removed;break;}}}
+                const auto pieces=cut(original,env);if(view==0){for(const auto& v:original){const auto q=transform(env.modelToHat,v.p);bool keep=q[2]<=env.bottom;if(!keep){keep=q[2]<=env.top;for(unsigned side=0;side<16&&keep;++side){const float angle=(side+.5f)*6.28318530718f/16.f;keep=std::cos(angle)*(q[0]-env.center[0])/env.radius[0]+std::sin(angle)*(q[1]-env.center[1])/env.radius[1]<=1.00001f;}}if(env.planeOnly)keep=planeDistance(v.p,env)>=-.00001f;if(!keep){++removed;break;}}}
                 for(const auto& poly:pieces){if(poly.size()<3)continue;const unsigned begin=indices.size()/2;for(const auto& vertex:poly){const auto global=vertices.size()/48;if(global>=65535||indices.size()/2>=65535)return false;indices.push_back(global&255);indices.push_back(global>>8);if(!encode(vertex,base,lookup,boneStart,boneCount,vertices,properties))return false;}
                     for(unsigned j=1;j+1<poly.size();++j)for(auto ix:{begin,begin+j,begin+j+1}){triangles.push_back(ix&255);triangles.push_back(ix>>8);}}
             }
@@ -93,8 +112,11 @@ inline bool build(const Bytes& base,unsigned hairGroup,const Envelope& env,Bytes
 }
 // Exact allowlist of files generated by this process, never arbitrary paths.
 inline std::map<std::string,std::string> generated;
-inline bool cachePath(const char* path){if(!path)return false;for(const auto& e:generated)if(capeMotion::pathEqual(e.second.c_str(),path))return true;return false;}
+inline std::mutex generatedMutex;
+inline bool cachePath(const char* path){if(!path)return false;std::lock_guard<std::mutex> lock(generatedMutex);for(const auto& e:generated)if(capeMotion::pathEqual(e.second.c_str(),path))return true;return false;}
 inline const char* save(const Bytes& bytes){
+    // The native asset loader can query the allowlist on its worker thread.
+    std::lock_guard<std::mutex> lock(generatedMutex);
     char key[32];std::snprintf(key,sizeof(key),"%08x_%08x",capeMotion::crc(bytes),unsigned(bytes.size()));auto it=generated.find(key);if(it!=generated.end())return it->second.c_str();
     const char* dir="Interface/AddOns/SaureksCloset/CapeMotion/Cache";
 #ifdef _WIN32

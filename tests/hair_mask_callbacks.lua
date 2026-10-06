@@ -34,7 +34,7 @@ for _,row in ipairs(rows) do
     for _,control in ipairs({row.editor,row.minus,row.plus}) do
         local callback=control:GetScript('OnEnter');exhaust(callback)
         this=control;callback()
-        assert(GameTooltip.title==row.field.title..' (%)' and GameTooltip.tip==row.field.tip)
+        assert(GameTooltip.title==row.field.title..(row.field.key=='height' and ' (%)' or ' (degrees)') and GameTooltip.tip==row.field.tip)
         control:GetScript('OnLeave')()
     end
     for _,control in ipairs({row.minus,row.plus}) do exhaust(control:GetScript('OnClick')) end

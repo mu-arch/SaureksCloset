@@ -38,9 +38,24 @@ int main(){
                 }
                 (void)oldIO;
             }
+            // Direct plane mode clips every crossing at the plane, with no
+            // crown envelope or protected upper region to leave protruding tips.
+            Envelope planeEnvelope;
+            assert(cuttingPlane({lo,hi,{{lo[0],hi[1],hi[2]}}},identity(),{{50,15,-10}},planeEnvelope));
+            Bytes planeOut;assert(build(base,group,planeEnvelope,planeOut,count));
+            const auto pvo=u32(planeOut,72);
+            for(unsigned viewIndex=0;viewIndex<u32(planeOut,76);++viewIndex){
+                const auto at=u32(planeOut,80)+viewIndex*44,pio=u32(planeOut,at+4),pto=u32(planeOut,at+12),pso=u32(planeOut,at+28);
+                for(unsigned s3=0;s3<u32(planeOut,at+24);++s3){const auto sec=pso+32*s3;if(u16(planeOut,sec)!=group)continue;
+                    for(unsigned t=u16(planeOut,sec+8);t<u16(planeOut,sec+8)+u16(planeOut,sec+10);++t){const auto vi=u16(planeOut,pio+2*u16(planeOut,pto+2*t));Point point{};
+                        for(unsigned k=0;k<3;++k)point[k]=number(planeOut,pvo+48*vi+k*4);
+                        assert(planeDistance(point,planeEnvelope)>=-.00001f);
+                    }
+                }
+            }
             // Deterministic bake and malformed-file rejection.
             Bytes again;assert(build(base,group,e,again,count)&&again==out);auto corrupt=base;put(corrupt,72,0xfffffff0);assert(!build(corrupt,group,e,again,count));
         }
     }
-    assert(groups>100);assert(!cachePath("../../bad.m2"));std::cout<<"PASS: "<<groups<<" hairstyle meshes across 16 bodies, every LOD, true clipping, protected lower hair, bone weights/palettes, untouched body geometry, deterministic bake and invalid inputs\n";
+    assert(groups>100);assert(!cachePath("../../bad.m2"));std::cout<<"PASS: "<<groups<<" hairstyle meshes across 16 bodies, every LOD, crown and tilted-plane clipping, protected lower hair, bone weights/palettes, untouched body geometry, deterministic bake and invalid inputs\n";
 }

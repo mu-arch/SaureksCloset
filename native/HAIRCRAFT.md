@@ -62,19 +62,31 @@ dispatch, default/disabled behavior, camera invariance and lazy updates.
 ## Precomputed hair mask
 
 **Trim hair** opens a shared character sheet (the Haircraft Default button has
-been removed). Enable the mask, adjust crown width/depth, top height and lower
-cutoff, then Apply. Values are percentages of the estimated hat crown/bounds.
+been removed). The user-facing mode now cuts all hair above one explicit plane,
+with **Cut height**, **Forward tilt**, and **Side tilt** controls. Cut height is
+0–100% of the hat's vertical bounds; tilts are -80 to 80 degrees in the hat's
+coordinate frame. The initial height is 35%. Apply precomputes intersections
+and keeps the portion of each hair triangle below the plane. Lowering the plane
+cuts more hair. It does not attempt to infer which protrusions belong inside a
+crown. The earlier 16-sided crown mode remains supported by the native API for
+compatibility, but is no longer exposed in the UI.
+
 Applying an enabled mask also enables Keep hair. Turning the mask off restores
 the complete hairstyle without disabling Keep hair. Profiles are character
 settings keyed by race, sex, hairstyle and active head item, including transmog.
-Switching identities discards an unfinished editor draft. Hidden hats and a
-disabled addon suspend the mask; existing saved fits remain available.
+An old profile's lower cutoff becomes its new plane height. Switching identities
+discards unfinished edits. Hidden hats and a disabled addon suspend the mask.
 
-`SaureksClosetSetHairMask(on,width,depth,top,cutoff)` returns status, number of
-hair triangles crossing the bounds in the first view, and a preview generation.
-Status 0 is pending composition/capture, 1 is applied/off, 2 means no visible
-hat, -2 invalid inputs, -3 an unsuitable crown, and -5 a bake/file failure.
-The Lua bridge invalidates its preview only when the generation changes.
+`SaureksClosetHairMaskVersion()` returns 2. The version gates the new controls.
+`SaureksClosetSetHairMask(on,width,depth,top,cutoff,mode,height,pitch,roll)` returns
+status, crossing-triangle count and preview generation. The first five arguments
+retain their legacy meaning; mode 1 selects the explicit plane and its three
+additional values. Status 0 is pending capture, 1 is applied/off, 2 means no
+visible hat, 3 means waiting for the trimmed model to load, -2 invalid inputs,
+-3 invalid bounds, -5 bake/file failure, and -6 failure to load within five
+seconds. A successful file write alone no longer reports "applied": the live
+model resource must match the private path. The Lua bridge invalidates its
+preview only when generation changes.
 
 The existing attachment dispatcher captures a loaded local head-equipment
 model once when requested. It removes the current head skin matrix from the
@@ -84,12 +96,9 @@ returns immediately; it does not scan meshes or solve collisions each frame.
 The ordinary Lua synchronization path validates the current hat/body/style/fit
 and bakes only when those, the mask parameters, or cape motion change.
 
-`HairMask.h` estimates the crown from the upper 65% of hat vertices (excluding
-low brim vertices), then uses a sixteen-sided oval plus upper/lower planes.
-This is an approximate envelope, not an exact Boolean against the hat surface.
-The lower portion of each hair triangle is retained. The upper portion is
-clipped against the envelope, interpolating position, normals, texture UVs and
-skin weights at new edges. Every M2 view receives valid new indices, vertex
+`HairMask.h` clips polygons at the selected plane, interpolating position,
+normals, texture UVs and skin weights at new edges. The older crown mode
+estimates its envelope from the upper 65% of hat vertices. Every M2 view receives valid new indices, vertex
 properties and bone-palette mappings. Only sections matching the active hair
 geoset are replaced. Body/face/ear sections, skeletons, animation tracks,
 materials, textures and attachment records remain intact. Model bounds remain
@@ -104,9 +113,9 @@ registered live wardrobe previews opt in through BeginPreview's eighth argument.
 Body and saved-look previews use an unmasked model to avoid inheriting a mask
 for a different outfit. Masks are currently local and are not part of sharing.
 
-Limitations: irregular/open hats, high ornaments and sparsely modeled crowns
-can need manual parameter adjustment. A mask is baked in rest space, so animated
-hair can still cross the envelope later. It does not simulate collision or
+Limitations: the plane uses the hat bounds and orientation, so unusual hats
+can need manual height/tilt adjustment. A mask is baked in rest space, so animated
+hair can still cross the plane later. It does not simulate collision or
 repair holes in the hat. Actual client appearance needs visual verification.
 Tests exercise all 148 hair groups in the 16 shipped bodies at every LOD,
 non-hair preservation, lower-cutoff preservation, skin palettes, deterministic

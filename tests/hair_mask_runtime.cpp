@@ -19,7 +19,13 @@ static const RaceModel* nativeModel(unsigned id){for(const auto& r:raceModels)if
 static unsigned selectedHair=2;
 static unsigned hairGroup(void*){return selectedHair;}
 static unsigned reloads=0;
-static void refresh(Player&,bool model){assert(model);++reloads;}
+static bool allowLoad=true;
+static void refresh(Player& p,bool model){assert(model);++reloads;
+    if(allowLoad&&!hairMask::activePath.empty()){
+        std::uintptr_t resource=0;assert(read(p.model+0x30,resource));std::array<char,260> name{};
+        auto path=hairMask::activePath;path.resize(path.size()-3);std::strcpy(name.data(),path.c_str());store(resource+0x20,name);store(p.model+0x10,1u);
+    }
+}
 static const char* localCapeMotionModel(const char* p){return p;}
 struct {bool busy=false;}state;
 struct Lua {std::vector<double> input,output;};
@@ -65,6 +71,13 @@ int main(){
     hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,75,90,95,35})[0]==1);
     store(player.component+0x4a8,0u);assert(call({1,75,90,95,35})[0]==2&&hairMask::activePath.empty());
     store(player.component+0x4a8,600u);hairMaskRuntime::capture(reinterpret_cast<void*>(child),movedHat.data());assert(call({1,75,90,95,35})[0]==1);
+    // Direct plane mode must be a distinct bake and report real resource loading.
+    assert(call({1,90,90,95,35,1,35,0,0})[0]==1);auto flat=hairMask::activePath;
+    assert(call({1,90,90,95,35,1,35,15,-10})[0]==1&&hairMask::activePath!=flat);
+    assert(call({1,90,90,95,35,1,101,0,0})[0]==-2);
+    allowLoad=false;assert(call({1,90,90,95,35,1,20,0,0})[0]==3);
+    hairMaskRuntime::loadDeadline=std::chrono::steady_clock::now()-std::chrono::seconds(1);
+    assert(call({1,90,90,95,35,1,20,0,0})[0]==-6);
     assert(call({0,75,90,95,35})[0]==1&&hairMask::activePath.empty());unsigned last=reloads;assert(call({0,75,90,95,35})[0]==1&&reloads==last);
     // Other owners, effects and previews cannot supply a mask capture.
     hairMaskRuntime::requested=true;hairMaskRuntime::ready=false;store(child+0x1cc,std::uintptr_t(999));hairMaskRuntime::capture(reinterpret_cast<void*>(child),hat.data());assert(!hairMaskRuntime::ready);

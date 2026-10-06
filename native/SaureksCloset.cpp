@@ -459,6 +459,7 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
         registerOriginal("SaureksClosetSetCapeMotion",reinterpret_cast<std::uintptr_t>(&setCapeMotionLua));
         hairMask::capture=hairMaskRuntime::capture;
+        registerOriginal("SaureksClosetHairMaskVersion",reinterpret_cast<std::uintptr_t>(&hairMaskVersionLua));
         registerOriginal("SaureksClosetSetHairMask",reinterpret_cast<std::uintptr_t>(&setHairMaskLua));
         registerOriginal("SaureksClosetSetHaircraft",reinterpret_cast<std::uintptr_t>(&setHaircraftLua));
         registerOriginal("SaureksClosetPhysicsVersion",reinterpret_cast<std::uintptr_t>(&physicsVersion));
