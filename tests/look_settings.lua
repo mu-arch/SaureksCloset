@@ -57,7 +57,9 @@ assert(V:LoadOutfit('A',true))
 assert(native['110:1:1'].up==.15 and weapon[1]==1 and weapon[2]==77 and cape[3]==55)
 assert(not V:HasUnsavedLookChanges())
 V.placementTunerSlot=110
+assert(not V:CanRevertLookItemPlacement(V:GetBagTunerState()))
 assert(V:SetBagTunerValue('up',.4))
+assert(V:CanRevertLookItemPlacement(V:GetBagTunerState()))
 assert(V:HasUnsavedLookChanges() and V:ActiveSavedLookName()=='A')
 assert(a.settings.placements.fits['110:1:1'].values.up==.15 and b.settings.placements.fits['110:1:1'].values.up==.15)
 assert(VanityStudioCharacter.unsaved.settings.placements.fits['110:1:1'].values.up==.4)
@@ -96,6 +98,16 @@ assert(V:LoadOutfit('A',true));assert(weapon[2]==120 and slots[108][1]==2 and ca
 -- Revert restores the named look's item, not a global fit or another slot.
 V.placementTunerSlot=110;assert(V:SetBagTunerValue('up',.6));assert(V:RevertLookItemPlacement())
 assert(native['110:1:1'].up==.4 and native['111:1:1'].up==.2)
+assert(not V:CanRevertLookItemPlacement(V:GetBagTunerState()))
+local revertState=V:GetBagTunerState()
+local pendingEditor={editing=true,targetKey=revertState.key,field={key='up'},relativeOffset=.4,GetText=function() return '0' end}
+V.bagTunerWindow={rows={{editor=pendingEditor}}}
+assert(not V:CanRevertLookItemPlacement(revertState),'Relative zero matches the saved fit')
+pendingEditor.GetText=function() return '.1' end
+assert(V:CanRevertLookItemPlacement(revertState),'Uncommitted position edits enable Revert')
+pendingEditor.editing=false
+assert(not V:CanRevertLookItemPlacement(revertState))
+V.bagTunerWindow=nil
 -- Reload preserves unsaved edits (including bag drafts), without saving over A.
 V.placementTunerSlot=111;assert(V:SetBagTunerValue('up',.35))
 V.placementTunerSlot=nil;V.placementTunerBag=1;assert(V:SetBagTunerValue('up',.3))
@@ -125,6 +137,7 @@ editor.editing=nil
 V.weaponPhysicsRows=nil
 -- An empty/new look gets built-ins rather than carrying previous look settings.
 V:ClearAll();assert(not VanityStudioCharacter.weaponPhysics and next(VanityStudioCharacter.placements.fits)==nil)
+assert(not V:CanRevertLookItemPlacement({available=true,bag=110}))
 assert(V:SaveOutfit('Fresh',false));assert(next(VanityStudioDB.outfits.Fresh.settings.placements.fits)==nil)
 -- Migration never refreshes existing snapshots from another character/global fit.
 local preserved=V:Copy(VanityStudioDB.outfits)

@@ -232,6 +232,17 @@ check(tuner:IsShown() and V.placementTunerBag==first.id and not tuner.emptySlot,
 check(not tuner.savedState,"Bottom saved/default-fit label is removed")
 check(not tuner.save and not tuner.export,"Placement tuner uses the main Save button and has no Export action")
 check(tuner.load.anchor[5]==tuner.reset.anchor[5],"Revert and Default share the bottom action row")
+check(tuner.load.text=="Revert Changes" and tuner.reset.text=="Default","Tuner actions have the requested captions")
+check(tuner.load.closetPanel and tuner.reset.closetPanel,"Both tuner actions use standard red WoW buttons")
+local savedCanRevert=V.CanRevertLookItemPlacement
+for _,changed in ipairs({false,true,false}) do
+    V.CanRevertLookItemPlacement=function() return changed end
+    V:RefreshBagTunerUI()
+    check(tuner.load.enabled==changed and tuner.load.closetEnabled==changed,"Revert is enabled only with placement changes")
+    check(getglobal(tuner.load:GetName().."Left").texture[1]=="Interface\\Buttons\\UI-Panel-Button-"..(changed and "Up" or "Disabled"),"Revert uses native red/grey artwork for its state")
+end
+V.CanRevertLookItemPlacement=savedCanRevert;V:RefreshBagTunerUI()
+
 check(tuner.modelSelector:IsVisible() and tuner.mountSelector:IsVisible(),"Model and starting position are integrated into the tuner")
 click(tuner.modelSelector)
 local picker=tuner.modelPicker

@@ -112,6 +112,23 @@ function V:SavedLookItemFit(state)
     local saved=store and store.fits and store.fits[keyFor(state.bag,state.race,state.sex)]
     return saved and saved.values,true
 end
+function V:CanRevertLookItemPlacement(state)
+    local values,found=self:SavedLookItemFit(state)
+    if not found then return false end
+    local baseline=values or self:BagTunerDefaults(state.bag,state.race,state.sex)
+    if not validValues(baseline,state.bag) then return false end
+    local current=self:Copy(state.values)
+    -- Include unfinished typing so Revert can discard it without applying it.
+    for _,row in ipairs(self.bagTunerWindow and self.bagTunerWindow.rows or {}) do
+        local e=row.editor
+        if e.editing and e.targetKey==state.key then
+            local n=tonumber(e:GetText())
+            if not n or n~=n then return true end
+            current[e.field.key]=n+(e.relativeOffset or 0)
+        end
+    end
+    return not validValues(current,state.bag) or not sameValues(current,baseline)
+end
 function V:RevertLookItemPlacement()
     local state=self:GetBagTunerState();if not state.available then return false,state.status end
     local values,found=self:SavedLookItemFit(state)

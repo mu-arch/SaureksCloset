@@ -191,8 +191,7 @@ function V:RefreshBagTunerUI()
         row.caption:SetAlpha(available and 1 or .45)
         f.enableControl(row.minus,available);f.enableControl(row.plus,available);f.enableControl(row.reset,available)
     end
-    local _,canRevert=self:SavedLookItemFit(state)
-    f.enableControl(f.load,available and canRevert)
+    f.enableControl(f.load,available and self:CanRevertLookItemPlacement(state))
     f.enableControl(f.reset,available)
     if f.place then
         if bag then f.place:Show() else f.place:Hide() end
@@ -527,7 +526,15 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled,redB
         tooltip(f.place,"Drag to place this bag on a body guide. Its back faces toward the player. Use the fitting controls afterward to adjust for clothing.")
     end
     local function action(name,text,x,y,method)
-        local b=settingsButton(f,text,x,y,145,function()
+        local b=redButton(f,text,x,y,145,function()
+            if not this.closetEnabled then return end
+            local reverting=method=="RevertLookItemPlacement"
+            if reverting then
+                for _,row in ipairs(V.bagTunerWindow.rows) do
+                    row.editor.editing=nil;row.editor.cancelCommit=true;row.editor:ClearFocus();row.editor.cancelCommit=nil
+                end
+                V.bagTunerWindow.invalidInput=nil;V.bagTunerWindow.invalidEditor=nil
+            end
             for _,row in ipairs(V.bagTunerWindow.rows) do
                 if row.editor.editing then
                     local accepted=V:CommitBagTunerEditor(row.editor);row.editor:ClearFocus()
@@ -539,13 +546,13 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled,redB
             if ok then V.bagTunerWindow.message=nil;V.bagTunerWindow.messageTime=nil
             else showMessage(err or "The fit could not be changed.") end
             V:RefreshBagTunerUI()
-        end,.75)
+        end)
         f[name]=b
     end
-    action("load","Revert Item",186,392,"RevertLookItemPlacement")
+    action("load","Revert Changes",186,392,"RevertLookItemPlacement")
     action("reset","Default",31,392,"ResetBagTunerFit")
     tooltip(f.load,"Restore this item's placement from the active saved look. Other items and physics settings stay unchanged.")
-    tooltip(f.reset,"Restore this item's built-in placement in the current look only. The main Save button keeps the change; Revert Item restores its saved placement.")
+    tooltip(f.reset,"Restore this item's built-in placement in the current look only. The main Save button keeps the change; Revert Changes restores its saved placement.")
     self:RefreshBagTunerUI()
 end
 function V:OpenBagSlotTuner(slot)
