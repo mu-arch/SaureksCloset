@@ -1,4 +1,4 @@
--- Weapon fits retain their account profiles; bag-instance fits belong to looks.
+-- All placement fits belong to the current look; account fits are migration-only.
 local V=VanityStudio
 V.bagTunerFields={
     {key="left",label="Lateral shift",step=.005,min=-1,max=1,decimals=4,help="Move across the character's left-right axis. Positive moves left; negative moves right."},
@@ -63,12 +63,64 @@ function V:BagTuningAvailable()
     return ok and type(version)=="number" and version>=30510
 end
 function V:BagTunerStore()
-    VanityStudioDB=VanityStudioDB or {}
-    if VanityStudioDB.bagTuning==nil then VanityStudioDB.bagTuning={schema=1,enabled=true,fits={}} end
-    local store=VanityStudioDB.bagTuning
+    local c=VanityStudioCharacter
+    if c.placements==nil then
+        local old=not c.lookSettingsVersion and VanityStudioDB and VanityStudioDB.bagTuning
+        c.placements=self:Copy(old or {schema=1,enabled=true,fits={}})
+    end
+    local store=c.placements
     -- Preserve unknown future formats; never overwrite saved fitting work.
     if type(store)~="table" or store.schema~=1 or type(store.fits)~="table" then return nil end
     return store
+end
+function V:CapturePlacementDrafts(look)
+    local store=look.settings.placements
+    if not store or store.schema~=1 or type(store.fits)~="table" then return end
+    for key,values in pairs(self.bagTunerDrafts or {}) do
+        local _,_,target,race,sex=string.find(key,"^(%d+):(%d+):(%d+)$")
+        target=tonumber(target);race=tonumber(race);sex=tonumber(sex)
+        if validIdentity(target,race,sex) and validValues(values,target) then
+            store.fits[key]={schema=1,bag=target,race=race,sex=sex,values=self:Copy(values),renderer=rendererVersion()}
+        end
+    end
+    for _,bag in ipairs(look.weapons.bags or {}) do
+        bag.fits=bag.fits or {}
+        for race=1,8 do for sex=0,1 do
+            local draft=self.bagTunerDrafts and self.bagTunerDrafts[self:BagDraftKey(bag,race,sex)]
+            if validValues(draft,200+bag.id) then bag.fits[race..":"..sex]=self:Copy(draft) end
+        end end
+    end
+end
+function V:PlacementChanged()
+    if self.LookSettingsChanged then self:LookSettingsChanged() end
+    self:SyncBagTuning()
+end
+function V:SavedLookItemFit(state)
+    local name=self.ActiveSavedLookName and self:ActiveSavedLookName()
+    local look=name and self:GetOutfit(name)
+    if not look or not state.available or not state.bag then return nil,false end
+    if state.bag>=201 and state.bag<=208 then
+        local current=instanceFor(state.bag)
+        for _,bag in ipairs(look.weapons and look.weapons.bags or {}) do
+            if current and bag.id==current.id and bag.model==current.model and bag.mount==current.mount then
+                return bag.fits and bag.fits[state.race..":"..state.sex],true
+            end
+        end
+        return nil,false
+    end
+    local store=look.settings and look.settings.placements
+    local saved=store and store.fits and store.fits[keyFor(state.bag,state.race,state.sex)]
+    return saved and saved.values,true
+end
+function V:RevertLookItemPlacement()
+    local state=self:GetBagTunerState();if not state.available then return false,state.status end
+    local values,found=self:SavedLookItemFit(state)
+    if not found then return false,"This item has no placement in the saved look yet." end
+    self.bagTunerDrafts[state.key]=self:Copy(values or self:BagTunerDefaults(state.bag,state.race,state.sex))
+    self:PlacementChanged();return true
+end
+function V:SaveTunerLook()
+    return self:SaveWardrobeLook()
 end
 function V:BagTunerSaved(bag,race,sex)
     local instance=instanceFor(bag)
@@ -162,7 +214,7 @@ function V:GetBagTunerState()
     result.title=name.." - "..VanityStudioRaces[race][1]..(sex==0 and " Male" or " Female")
     result.values=self:Copy(self.bagTunerDrafts[key]);result.saved=saved~=nil
     result.dirty=not sameValues(result.values,saved and saved.values or defaults);result.enabled=store.enabled~=false
-    result.status=result.dirty and "Unsaved changes - this session only." or ""
+    result.status=result.dirty and "Placement edited. Save Look to keep these changes." or ""
     if not result.enabled then result.status="Live tuning is off. The built-in fits are in use."
     elseif not VanityStudioCharacter.enabled then result.status="Enable the wardrobe to see placement changes."
     elseif bag==1 and (not VanityStudioCharacter.weapons or VanityStudioCharacter.weapons.backBag~=1) then result.status="Select Runecloth Bag to see changes."
@@ -179,11 +231,12 @@ function V:SetBagTunerValue(key,value)
     if type(value)~="number" or not (value>=low and value<=high) then
         return false,"Enter a number from "..low.." to "..high.."."
     end
-    self.bagTunerDrafts[state.key][key]=value;self:SyncBagTuning();return true
+    if state.values[key]==value then return true end
+    self.bagTunerDrafts[state.key][key]=value;self:PlacementChanged();return true
 end
 function V:SetBagTunerEnabled(enabled)
     local store=self:BagTunerStore();if not store then return false end
-    store.enabled=enabled and true or false;self:SyncBagTuning();return true
+    store.enabled=enabled and true or false;self:PlacementChanged();return true
 end
 function V:SetBagTunerPaused(paused)
     self.bagTunerPaused=paused and true or false;self:SyncBagTuning();return true
@@ -199,14 +252,15 @@ function V:SaveBagTunerFit()
     end
     local saved={schema=1,bag=state.bag,race=state.race,sex=state.sex,values=self:Copy(state.values),renderer=rendererVersion(),savedAt=timestamp()}
     self:BagTunerStore().fits[state.key]=saved
-    self:Message("Placement fit saved for "..VanityStudioRaces[state.race][1]..(state.sex==0 and " Male" or " Female")..". Log out or /reload to write SavedVariables; Export makes a report now.")
+    self:PlacementChanged()
+    self:Message("Placement applied to this look. Save Look to update its saved copy.")
     return true
 end
 function V:LoadBagTunerFit()
     local state=self:GetBagTunerState();if not state.available then return false,state.status end
     local saved=self:BagTunerSaved(state.bag,state.race,state.sex)
     if not saved then return false,"No saved fit for this placement, race, and gender yet." end
-    self.bagTunerDrafts[state.key]=self:Copy(saved.values);self:SyncBagTuning();return true
+    self.bagTunerDrafts[state.key]=self:Copy(saved.values);self:PlacementChanged();return true
 end
 function V:ResetBagTunerField(key)
     local known=false
@@ -216,12 +270,12 @@ function V:ResetBagTunerField(key)
     local defaults=self:BagTunerDefaults(state.bag,state.race,state.sex)
     if not defaults then return false,"The built-in placement fit is not ready yet." end
     self.bagTunerDrafts[state.key][key]=defaults[key]
-    self:SyncBagTuning();return true
+    self:PlacementChanged();return true
 end
 function V:ResetBagTunerFit()
     local state=self:GetBagTunerState();if not state.available then return false,state.status end
     self.bagTunerDrafts[state.key]=self:BagTunerDefaults(state.bag,state.race,state.sex)
-    self:SyncBagTuning();return true
+    self:PlacementChanged();return true
 end
 local function quote(text)
     text=string.gsub(tostring(text or ""),"\\","\\\\");text=string.gsub(text,'"','\\"')
@@ -253,6 +307,6 @@ function V:ExportBagTunerFits()
         local ok,value=pcall(WriteFile,"SaureksCloset-bag-fits.json","w",text);written=ok and value~=false
     end
     self:Message(written and "Export saved: VanillaHelpersData/SaureksCloset-bag-fits.json in the game folder."
-        or "Copy the export text. It is also stored in VanityStudioDB.bagTuning.lastExport for the next logout or /reload.")
+        or "Copy the export text. It is also stored in VanityStudioCharacter.placements.lastExport for the next logout or /reload.")
     return text
 end

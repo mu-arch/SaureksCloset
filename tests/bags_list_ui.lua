@@ -130,6 +130,7 @@ function V:Copy(value)
 end
 V.CloseOutfitMenu=function() end;V.CloseOutfitDetails=function() end;V.CloseBrowser=function() end
 V.CancelDraft=function() end;V.TrackUnsaved=function() end
+V.HasUnsavedLookChanges=function() return true end
 local syncs=0;V.SyncWeapons=function() syncs=syncs+1 end
 V.Message=function(self,message) self.lastMessage=message end
 V.HidePreviewUntilReady=function() end;V.InvalidatePreviewModel=function() end

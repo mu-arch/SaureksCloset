@@ -6,7 +6,7 @@ local state={available=true,enabled=true,key="bag:1",bag=201,race=1,sex=1,
     values={left=0,inset=0,up=-.03,pitch=0,roll=0,yaw=0,scale=85}}
 local defaults=copy(state.values)
 VanityStudioCharacter={enabled=true}
-VanityStudio={bagPlacementEditing=true,placementTunerBag=1,bagTunerDrafts={},
+VanityStudio={PlacementChanged=function(self) self:SyncBagTuning() end,bagPlacementEditing=true,placementTunerBag=1,bagTunerDrafts={},
     Copy=function(self,t) return copy(t) end,
     BagInstance=function(self,id) return id==bag.id and bag or nil end,
     GetBagTunerState=function(self) state.values=self.bagTunerDrafts[state.key] or state.values;return state end,

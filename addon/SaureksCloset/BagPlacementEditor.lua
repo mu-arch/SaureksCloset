@@ -71,7 +71,7 @@ function V:MoveBagPlacement(dx,dy,height,rotation)
         values.pitch=defaults.pitch;values.roll=0
     end
     self.bagTunerDrafts[state.key]=values
-    self:SyncBagTuning()
+    self:PlacementChanged()
     return true
 end
 function V:CloseBagPlacementEditor()

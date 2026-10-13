@@ -6,7 +6,7 @@ and Olive. **Slim Leather Bag** includes Brown, Dark Brown and Tan.
 
 1. Open **Bags**. All five slots are always visible. Click an empty slot to open its tuner and visual model picker. The slot stays empty until you choose a bag; closing the picker does not add anything.
 2. Choose a style by its bag icon, then choose its **Start** position in the tuner: Back, Left hip or Right hip. Use the **Color** swatches for Mageweave and Slim Leather bags. Click **Model** to change styles later. Escape closes the model picker while keeping the tuner open.
-3. Click **Place on model**. Left-drag in the preview to move the bag around the body guide; right-drag to turn the player. The bag faces inward as you place it. Click **Done**, then fine-tune position, rotation and size if needed. **Save Fit** stores those values with this bag in the current look.
+3. Click **Place on model**. Left-drag in the preview to move the bag around the body guide; right-drag to turn the player. The bag faces inward as you place it. Click **Done**, then fine-tune position, rotation and size if needed. **Save Look** saves all current placement and physics changes to the active saved look. For a new look, choose its name in Saved Looks. **Revert Item** restores only this item's saved placement; **Default** restores its built-in placement in the current look.
 4. All five slots fit on one page. Click a filled slot or its bag icon to tune it; the active slot is highlighted in gold. The small close button empties only that slot. Other bags keep their positions in the list, and empty slots can be filled in any order.
 5. Click the wardrobe **Save** button to update the active saved look, including your latest tuner changes. For a new look, Save opens **Saved Looks** for naming.
 
@@ -72,3 +72,8 @@ then fully restart the game. The /reload command cannot replace a loaded DLL.
 The centered **Show bags** checkbox above navigation hides or restores all
 cosmetic bags. This character preference survives reloads and leaves bag
 models, colors, placements, drafts and saved looks intact.
+
+Weapon and hat positions, live tuning, and weapon/cape physics are also saved per look.
+Weapon **Look defaults** apply only to slots in that look; custom slot settings remain independent.
+Existing looks receive a one-time copy of the previous settings so their fits are preserved.
+Switching looks restores the selected look's settings and warns before discarding unsaved changes.

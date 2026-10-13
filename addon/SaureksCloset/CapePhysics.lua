@@ -28,6 +28,16 @@ function V:CapePhysicsConfig()
     end
     return config
 end
+function V:HasCapePhysicsDraft()
+    if not self.capePhysicsDraft then return false end
+    local saved=self:CapePhysicsConfig()
+    for key,value in pairs(saved) do if self.capePhysicsDraft[key]~=value then return true end end
+    return false
+end
+function V:CapeDraftChanged()
+    if self.RefreshWardrobeSaveButton then self:RefreshWardrobeSaveButton() end
+    if self.activeOutfitLabel then self.activeOutfitLabel:SetText(self:ActiveOutfitText()) end
+end
 function V:SyncCapePhysics()
     if not self:CapePhysicsAvailable() or self.sharingWorldPaused then return false end
     local config=self:CapePhysicsConfig()
@@ -44,11 +54,13 @@ function V:ApplyCapePhysics(reset)
         VanityStudioCharacter.capeMotion=previous
         self.capePhysicsStatus:SetText("Could not apply. Check the DLL and cape files.");self.capeAdvancedStatus:SetText("Could not apply. Check the DLL and cape files.");return false
     end
+    if self.LookSettingsChanged then self:LookSettingsChanged() end
     self:RefreshCapePhysics(true)
     if self.InvalidatePreviewModel then self:InvalidatePreviewModel() end
     return true
 end
 function V:RefreshCapePhysics(reset)
+    if reset then self.capePhysicsDraft=nil end
     if not self.capePhysicsRows then return end
     if reset or not self.capePhysicsDraft then self.capePhysicsDraft=self:CapePhysicsConfig() end
     local available=self:CapePhysicsAvailable();local config=self.capePhysicsDraft
@@ -73,6 +85,7 @@ function V:RefreshCapePhysics(reset)
         if reset then self.capeAdvancedStatus:SetText("");self.capeAdvancedInvalid=nil end
     end
     self.capePhysicsRefreshing=nil
+    self:CapeDraftChanged()
 end
 function V:CreateCapePhysicsWindow(window,section,label,settingsButton,enable,help,edit,redButton)
     self.capePhysicsWindow=window("SaureksClosetCapePhysics","Cape Physics")
@@ -82,7 +95,7 @@ function V:CreateCapePhysicsWindow(window,section,label,settingsButton,enable,he
     label(f,"Custom motion",63,85,154,20,true)
     redButton(f,"Advanced",232,80,96,function() V:RefreshCapePhysics();V.capePhysicsWindow:Hide();V.capeAdvancedWindow:Show() end)
     self.capePhysicsToggle:SetScript("OnClick",function() V.capePhysicsDraft.enabled=this:GetChecked() and true or false;V:RefreshCapePhysics() end)
-    help(self.capePhysicsToggle,"Cape motion","Adjust the existing cape animation, without live cloth simulation or collisions. The upper attachment and character animations stay native. Click Apply to use your changes.")
+    help(self.capePhysicsToggle,"Cape motion","Adjust the existing cape animation, without live cloth simulation or collisions. The upper attachment and character animations stay native. Click Apply to use your changes for this look; Save Look keeps them in the saved copy.")
     self.capePhysicsRows={}
     for i,entry in ipairs(controls) do
         local row=section(f,34,116+(i-1)*57,296,52,false);row.key=entry[1];self.capePhysicsRows[i]=row
@@ -94,14 +107,14 @@ function V:CreateCapePhysicsWindow(window,section,label,settingsButton,enable,he
         for _,suffix in ipairs({"Low","High","Text"}) do local t=getglobal(row.slider:GetName()..suffix);if t then t:Hide() end end
         row.slider:SetScript("OnValueChanged",function()
             local amount=math.floor(this:GetValue()+.5);row.amount:SetText(amount.."%")
-            if not V.capePhysicsRefreshing and this.closetEnabled then V.capePhysicsDraft[row.key]=amount end
+            if not V.capePhysicsRefreshing and this.closetEnabled then V.capePhysicsDraft[row.key]=amount;V:CapeDraftChanged() end
         end)
         help(row.slider,entry[2],entry[3].." 100% is the original motion; 0% holds the lower cape at that animation's average pose while it follows your body. Click Apply when ready.")
     end
     self.capePhysicsStatus=label(f,"",38,345,288,27,true)
     self.capePhysicsDefault=settingsButton(f,"Default",38,378,138,function() V:ApplyCapePhysics(true) end)
     self.capePhysicsApply=settingsButton(f,"Apply",190,378,138,function() V:ApplyCapePhysics() end)
-    help(self.capePhysicsDefault,"Default cape motion","Restore the original cape animations and reset every amount to 100%.")
+    help(self.capePhysicsDefault,"Default cape motion","Restore original cape motion for this look only; Save Look keeps the reset.")
     self:CreateCapeAdvancedWindow(window,section,label,settingsButton,help,edit,redButton)
     self:RefreshCapePhysics(true)
 end
@@ -144,7 +157,8 @@ function V:CreateCapeAdvancedWindow(window,section,label,settingsButton,help,edi
         local title=label(row,control.title,9,7,142,20,true);title:SetFont("Fonts\\FRIZQT__.TTF",10)
         row.editor=edit(row,"SaureksClosetCapeAdvancedValue"..i,184,8,55,16);row.editor.control=control;row.editor:SetJustifyH("CENTER")
         label(row,control.key=="lean" and "deg" or "%",242,8,15,18,true)
-        row.editor:SetScript("OnEditFocusGained",function() this.editing=true;this.draft=V.capePhysicsDraft end)
+        row.editor:SetScript("OnEditFocusGained",function() this.editing=true;this.initialText=this:GetText();this.draft=V.capePhysicsDraft end)
+        row.editor:SetScript("OnTextChanged",function() if this.editing and V.RefreshLookEditState then V:RefreshLookEditState() end end)
         row.editor:SetScript("OnEditFocusLost",function() V:CommitCapeAdvancedEditor(this) end)
         row.editor:SetScript("OnEnterPressed",function() V:CommitCapeAdvancedEditor(this);this:ClearFocus() end)
         row.editor:SetScript("OnEscapePressed",function() this.editing=nil;this:ClearFocus();V:RefreshCapePhysics() end)

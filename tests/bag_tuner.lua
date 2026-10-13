@@ -37,11 +37,11 @@ local state=V:GetBagTunerState();assert(state.available and state.key=="1:2:0" a
 assert(not state.saved and not state.dirty and native[state.key].pitch==15)
 local previousCalls=calls;V:GetBagTunerState();V:SyncBagTuning();assert(calls==previousCalls)
 assert(V:SetBagTunerValue("up",.1));assert(native[state.key].up==.1 and V:GetBagTunerState().dirty)
-assert(not next(VanityStudioDB.bagTuning.fits)) -- Edits are not silently saved.
+assert(not next(VanityStudioCharacter.placements.fits)) -- Edits are not silently saved.
 for _,invalid in ipairs({-.01,201,1/0,0/0}) do assert(not V:SetBagTunerValue("scale",invalid)) end
 assert(not V:SetBagTunerValue("inset",2));assert(not V:SetBagTunerValue("unknown",0));assert(not V:SetBagTunerValue("up",".2"))
 assert(native[state.key].up==.1 and native[state.key].scale==85)
-assert(V:SaveBagTunerFit());local saved=VanityStudioDB.bagTuning.fits[state.key]
+assert(V:SaveBagTunerFit());local saved=VanityStudioCharacter.placements.fits[state.key]
 assert(saved.values.up==.1 and saved.renderer==30510 and not V:GetBagTunerState().dirty)
 V:SetBagTunerValue("up",.2);assert(saved.values.up==.1) -- No aliasing the saved data.
 V:LoadBagTunerFit();assert(native[state.key].up==.1)
@@ -76,7 +76,7 @@ V:SetBagTunerValue("left",.2);assert(not next(native))
 V:SetBagTunerValue("pitch",23);assert(V:ResetBagTunerField("pitch"))
 local inactive=V:GetBagTunerState()
 assert(inactive.values.pitch==10 and inactive.values.left==.2 and not next(native))
-assert(VanityStudioDB.bagTuning.fits[female.key].values.left==.15)
+assert(VanityStudioCharacter.placements.fits[female.key].values.left==.15)
 
 V:SetBagTunerEnabled(true);assert(native[female.key].left==.2)
 -- Reload writes only saved fits back to the DLL, resuming motion and dropping drafts.
@@ -95,19 +95,19 @@ actual={race=2,sex=0};V:GetBagTunerState()
 fail=true;V:SetBagTunerValue("yaw",17);assert(V.bagTunerError and native[state.key].yaw==0)
 fail=false;V:SyncBagTuning();assert(not V.bagTunerError and native[state.key].yaw==17)
 -- Bad stored rows never reach the renderer, and future store formats survive.
-VanityStudioDB.bagTuning.fits["1:7:1"]={schema=1,bag=1,race=7,sex=1,values={scale=0/0}}
+VanityStudioCharacter.placements.fits["1:7:1"]={schema=1,bag=1,race=7,sex=1,values={scale=0/0}}
 V:InitializeBagTuning();assert(not native["1:7:1"])
-local old=VanityStudioDB.bagTuning;VanityStudioDB.bagTuning={schema=99,fits={valuable="future data"}}
+local old=VanityStudioCharacter.placements;VanityStudioCharacter.placements={schema=99,fits={valuable="future data"}}
 assert(not V:GetBagTunerState().available);V:SyncBagTuning();assert(not next(native))
-assert(VanityStudioDB.bagTuning.fits.valuable=="future data")
-VanityStudioDB.bagTuning=old;V:InitializeBagTuning()
+assert(VanityStudioCharacter.placements.fits.valuable=="future data")
+VanityStudioCharacter.placements=old;V:InitializeBagTuning()
 version=30509;assert(not V:GetBagTunerState().available);version=30510
 -- Export contains both saved profiles and the current unsaved draft. A fixed
 -- optional file target supports collecting data without changing source files.
 V:SetBagTunerValue("yaw",23);saved.savedAt='Quoted "date"\n\1';saved.renderer=0/0
 local written
 function WriteFile(path,mode,text) assert(path=="SaureksCloset-bag-fits.json" and mode=="w");written=text;return true end
-local exported=V:ExportBagTunerFits();assert(exported==written and exported==VanityStudioDB.bagTuning.lastExport)
+local exported=V:ExportBagTunerFits();assert(exported==written and exported==VanityStudioCharacter.placements.lastExport)
 assert(string.find(exported,'"yaw": 23.000000',1,true) and string.find(exported,'"yaw": 0.000000',1,true))
 assert(string.find(exported,'\\u0001',1,true) and not string.find(exported,"nan"))
 WriteFile=function() error("writer unavailable") end

@@ -52,6 +52,89 @@ function V:Copy(source)
     return result
 end
 
+-- Character fields are the working copy only. Saved looks own independent snapshots.
+local lookSettingKeys={"placements","weaponPhysics","weaponBounce","weaponRocking","weaponJumpLift","weaponPhysicsSlots","capeMotion"}
+function V:CaptureLookSettings()
+    local settings={}
+    for _,key in ipairs(lookSettingKeys) do
+        local value=VanityStudioCharacter[key]
+        settings[key]=type(value)=="table" and self:Copy(value) or value
+    end
+    settings.placements=settings.placements or {schema=1,enabled=true,fits={}}
+    settings.placements.lastExport=nil
+    return settings
+end
+function V:ApplyLookSettings(settings)
+    settings=settings or {}
+    for _,key in ipairs(lookSettingKeys) do
+        local value=settings[key]
+        VanityStudioCharacter[key]=type(value)=="table" and self:Copy(value) or value
+    end
+    VanityStudioCharacter.placements=VanityStudioCharacter.placements or {schema=1,enabled=true,fits={}}
+end
+function V:InitializeLookSettings()
+    local c=VanityStudioCharacter
+    -- Import once; retain the old account data as a backup, never a live fallback.
+    if not c.placements then
+        c.placements=self:Copy(not c.lookSettingsVersion and VanityStudioDB.bagTuning or {schema=1,enabled=true,fits={}})
+        if not next(c.placements) then c.placements={schema=1,enabled=true,fits={}} end
+    end
+    local legacy=self:CaptureLookSettings()
+    for _,look in pairs(VanityStudioDB.outfits) do
+        if not look.settings then look.settings=self:Copy(legacy);look.version=4 end
+    end
+    if c.unsaved then
+        if not c.unsaved.settings then c.unsaved.settings=self:Copy(legacy);c.unsaved.version=4 end
+        if c.activeUnsaved then
+            self:ApplyLookSettings(c.unsaved.settings)
+            if c.unsaved.weapons then c.weapons=self:NormalizeWeapons(c.unsaved.weapons) end
+        end
+    end
+    c.lookSettingsVersion=1
+end
+function V:LookSettingsChanged()
+    self:TrackUnsaved()
+    self.detailPreviewSignature=nil
+    self:RefreshLookEditState()
+end
+function V:RefreshLookEditState()
+    if self.RefreshWardrobeSaveButton then self:RefreshWardrobeSaveButton() end
+    if self.activeOutfitLabel then self.activeOutfitLabel:SetText(self:ActiveOutfitText()) end
+end
+function V:HasPendingLookEditors()
+    for _,rows in ipairs({self.bagTunerWindow and self.bagTunerWindow.rows or {},self.weaponPhysicsRows or {},self.capeAdvancedRows or {}}) do
+        for _,row in ipairs(rows) do
+            local e=row.editor
+            if e and e.editing and (e.initialText==nil or e:GetText()~=e.initialText) then return true end
+        end
+    end
+    return self.HasCapePhysicsDraft and self:HasCapePhysicsDraft() or false
+end
+function V:DiscardLookEditors()
+    -- Clear edit flags BEFORE hiding controls: focus-lost callbacks must not
+    -- commit the previous look's value into the next look (even the same slot).
+    for _,rows in ipairs({self.bagTunerWindow and self.bagTunerWindow.rows or {},self.weaponPhysicsRows or {},self.capeAdvancedRows or {}}) do
+        for _,row in ipairs(rows) do if row.editor then
+            row.editor.editing=nil;row.editor.cancelCommit=true;row.editor:ClearFocus();row.editor.cancelCommit=nil
+        end end
+    end
+    if self.CloseBagPlacementEditor then self:CloseBagPlacementEditor() end
+    self.bagTunerDrafts={};self.bagTunerPaused=false;self.bagTunerTargetKey=nil
+    self.weaponPhysicsInvalid=nil;self.capeAdvancedInvalid=nil;self.capePhysicsDraft=nil
+    local tuner=self.bagTunerWindow
+    if tuner then
+        tuner.relativeOrigin=nil;tuner.relativeKey=nil;tuner.targetKey=nil;tuner.invalidInput=nil;tuner.invalidEditor=nil;tuner.message=nil
+    end
+    for _,name in ipairs({"bagTunerWindow","bagPhysicsWindow","weaponPhysicsWindow","capePhysicsWindow","capeAdvancedWindow"}) do
+        if self[name] then self[name]:Hide() end
+    end
+end
+function V:SyncLookSettings()
+    if self.SyncBagTuning then self:SyncBagTuning() end
+    if self.SyncPhysics then self:SyncPhysics() end
+    if self.RefreshCapePhysics then self:RefreshCapePhysics(true) end
+end
+
 function V:Message(message)
     if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cffffcf79Saurek's Closet:|r " .. message) end
 end
@@ -107,6 +190,7 @@ function V:Initialize()
     for name,outfit in pairs(VanityStudioDB.outfits) do
         if not outfit.slots then VanityStudioDB.outfits[name] = {version=2,slots=self:Copy(outfit)} end
     end
+    self:InitializeLookSettings()
     if c.body then c.body = self:NormalizeBody(c.body) end
     -- First run has no body override. Populate real appearance values as soon
     -- as the player is available, without activating body customization.
@@ -245,6 +329,7 @@ function V:ClearAll()
     if self.CancelLookChange then self:CancelLookChange() end
     self:CancelDraft()
     if self.DiscardBagDrafts then self:DiscardBagDrafts() end
+    self:DiscardLookEditors();self:ApplyLookSettings()
     VanityStudioCharacter.selected = {}
     VanityStudioCharacter.weapons = {}
     self.editingBody=nil
@@ -252,6 +337,7 @@ function V:ClearAll()
     VanityStudioCharacter.activeOutfit = nil
     VanityStudioCharacter.activeUnsaved = nil
     VanityStudioCharacter.outfitDirty = nil
+    self:SyncLookSettings()
     self.pending = {}
     self.errors = {}
     self:Sync()
@@ -300,7 +386,9 @@ end
 
 function V:CurrentLook()
     local c=VanityStudioCharacter
-    return {version=3,slots=self:Copy(c.selected),weapons=self:Copy(c.weapons),body=c.body and self:Copy(c.body)}
+    local look={version=4,slots=self:Copy(c.selected),weapons=self:Copy(c.weapons),body=c.body and self:Copy(c.body),settings=self:CaptureLookSettings()}
+    if self.CapturePlacementDrafts then self:CapturePlacementDrafts(look) end
+    return look
 end
 function V:TrackUnsaved()
     local c=VanityStudioCharacter
@@ -315,7 +403,7 @@ function V:ActiveSavedLookName()
 end
 function V:HasUnsavedLookChanges()
     local c=VanityStudioCharacter
-    return (c.activeUnsaved and c.unsaved~=nil) or self.draft~=nil or
+    return (c.activeUnsaved and c.unsaved~=nil) or self.draft~=nil or self:HasPendingLookEditors() or
         (self.HasUnsavedBagFits and self:HasUnsavedBagFits()) or false
 end
 function V:NeedsLookChangeConfirmation(name)
@@ -350,6 +438,16 @@ function V:ValidateOutfitName(name,existing)
     return name
 end
 function V:PrepareLookForSave()
+    for _,row in ipairs(self.bagTunerWindow and self.bagTunerWindow.rows or {}) do
+        if row.editor.editing then
+            local ok=self:CommitBagTunerEditor(row.editor);row.editor:ClearFocus()
+            if not ok then return false,"Correct the placement value before saving this look." end
+        end
+    end
+    if self.bagTunerWindow and self.bagTunerWindow.invalidInput then return false,"Correct the placement value before saving this look." end
+    if self.CommitWeaponPhysicsEditors and not self:CommitWeaponPhysicsEditors() then return false,"Correct the weapon physics value before saving this look." end
+    if self.CommitCapeAdvancedEditors and not self:CommitCapeAdvancedEditors() then return false,"Correct the cape physics value before saving this look." end
+    if self.HasCapePhysicsDraft and self:HasCapePhysicsDraft() and not self:ApplyCapePhysics() then return false,"The cape settings could not be applied." end
     if self.draft and not self:CommitDraft() then return false,"The preview could not be applied. Check the selected appearance." end
     if self.SaveBagDraftFits and self:SaveBagDraftFits() then self:TrackUnsaved() end
     return true
@@ -366,7 +464,8 @@ function V:SaveOutfit(name,replace,key)
     -- Every active-look save captures the latest preview and bag fits. Copies
     -- of inactive looks continue to use their stored snapshot unchanged.
     local look=active and self:CurrentLook() or self:GetOutfit(key)
-    VanityStudioDB.outfits[clean]={version=3,slots=self:Copy(look.slots),weapons=self:Copy(look.weapons),body=look.body and self:Copy(look.body),updatedAt=time and time() or 0}
+    VanityStudioDB.outfits[clean]={version=4,slots=self:Copy(look.slots),weapons=self:Copy(look.weapons),body=look.body and self:Copy(look.body),settings=self:Copy(look.settings),updatedAt=time and time() or 0}
+    if active then self:ApplyLookSettings(look.settings) end
     if key==self.UNSAVED or (active and c.activeUnsaved) then c.unsaved=nil end
     if active then c.activeOutfit=clean;c.activeUnsaved=nil;c.outfitDirty=nil end
     if active and self.CancelLookChange then self:CancelLookChange() end
@@ -415,6 +514,7 @@ function V:LoadOutfit(name,discardChanges)
     if c.body and not self:BodyAvailable() then c.body=previousBody;self:Message("The race renderer is missing. Restart the game before loading this combo.");return false end
     if self:SyncBody()==false then c.body=previousBody;self:Message(self.bodyError);return false end
     self:CancelDraft()
+    self:DiscardLookEditors();self:ApplyLookSettings(outfit.settings)
     self.editingBody=nil;self:InvalidatePreviewModel(.25,true)
     if self.DiscardBagDrafts then self:DiscardBagDrafts() end
     c.selected=selected;c.weapons=self:NormalizeWeapons(outfit.weapons)
@@ -422,7 +522,7 @@ function V:LoadOutfit(name,discardChanges)
     c.activeUnsaved=name==self.UNSAVED and true or nil
     c.activeOutfit=name~=self.UNSAVED and name or nil;c.outfitDirty=c.activeUnsaved
     if discardChanges and name~=self.UNSAVED then c.unsaved=nil end
-    self.pending={};self.errors={};self:Sync();self:Refresh();return true
+    self.pending={};self.errors={};self:Sync();self:SyncLookSettings();self:Refresh();return true
 end
 
 function V:CycleOutfit(direction)

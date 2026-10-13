@@ -26,7 +26,7 @@ CreateFrame=function(_,name) return widget(name) end
 UIParent=widget();UISpecialFrames={}
 GameTooltip={SetOwner=noop,ClearLines=noop,AddLine=noop,Show=noop,Hide=noop}
 VanityStudioCharacter={enabled=true}
-VanityStudio={frame=widget(),slotNames={},bagModelChoices={},placementTunerSlot=101}
+VanityStudio={HasUnsavedLookChanges=function() return true end,frame=widget(),slotNames={},bagModelChoices={},placementTunerSlot=101}
 local V=VanityStudio
 dofile("addon/SaureksCloset/BagTuner.lua")
 dofile("addon/SaureksCloset/BagTunerUI.lua")

@@ -191,8 +191,9 @@ function V:RefreshBagTunerUI()
         row.caption:SetAlpha(available and 1 or .45)
         f.enableControl(row.minus,available);f.enableControl(row.plus,available);f.enableControl(row.reset,available)
     end
-    f.enableControl(f.save,available)
-    f.enableControl(f.load,available and state.saved)
+    f.enableControl(f.save,available and self:HasUnsavedLookChanges())
+    local _,canRevert=self:SavedLookItemFit(state)
+    f.enableControl(f.load,available and canRevert)
     f.enableControl(f.reset,available)
     f.enableControl(f.export,available)
     if f.place then
@@ -465,8 +466,9 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled,redB
         e.field=field;e:SetJustifyH("CENTER")
         e:SetScript("OnEditFocusGained",function()
             local state=V:GetBagTunerState()
-            this.editing=true;this.targetKey=state.key;this.relativeOffset=V:BagTunerDisplayOffset(this.field,state)
+            this.editing=true;this.initialText=this:GetText();this.targetKey=state.key;this.relativeOffset=V:BagTunerDisplayOffset(this.field,state)
         end)
+        e:SetScript("OnTextChanged",function() if this.editing and V.RefreshLookEditState then V:RefreshLookEditState() end end)
         e:SetScript("OnEditFocusLost",function()
             -- Reset is deliberately independent of every other unfinished field.
             -- Mouse focus may move before OnClick; retain that draft until its
@@ -542,14 +544,14 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled,redB
         end,.75)
         f[name]=b
     end
-    action("save","Save Fit",31,362,"SaveBagTunerFit")
-    action("load","Load Saved",186,362,"LoadBagTunerFit")
-    action("reset","Reset",31,392,"ResetBagTunerFit")
+    action("save","Save Look",31,362,"SaveTunerLook")
+    action("load","Revert Item",186,362,"RevertLookItemPlacement")
+    action("reset","Default",31,392,"ResetBagTunerFit")
     f.export=settingsButton(f,"Export",186,392,145,function() V:OpenBagTunerExport() end,.75)
-    tooltip(f.save,"Save this fit for the current placement, race and gender. Saved fits remain available after restarting the game.")
-    tooltip(f.load,"Replace the current draft with the last fit saved for this placement, race and gender.")
-    tooltip(f.reset,"Restore the current draft to the program's default fit. Your previously saved fit remains available.")
-    tooltip(f.export,"Open a copyable report containing the current draft and all your saved fits, ready to send for implementation.")
+    tooltip(f.save,"Save all current changes to the active saved look, including physics and item positions. For a new look, choose a name in Saved Looks.")
+    tooltip(f.load,"Restore this item's placement from the active saved look. Other items and physics settings stay unchanged.")
+    tooltip(f.reset,"Restore this item's built-in placement in the current look only. Save Look keeps the change; Revert Item restores its saved placement.")
+    tooltip(f.export,"Open a copyable report containing the current draft and this look's fits, ready to send for implementation.")
     self:RefreshBagTunerUI()
 end
 function V:OpenBagSlotTuner(slot)
