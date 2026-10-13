@@ -95,7 +95,7 @@ function V:CreateCapePhysicsWindow(window,section,label,settingsButton,enable,he
     label(f,"Custom motion",63,85,154,20,true)
     redButton(f,"Advanced",232,80,96,function() V:RefreshCapePhysics();V.capePhysicsWindow:Hide();V.capeAdvancedWindow:Show() end)
     self.capePhysicsToggle:SetScript("OnClick",function() V.capePhysicsDraft.enabled=this:GetChecked() and true or false;V:RefreshCapePhysics() end)
-    help(self.capePhysicsToggle,"Cape motion","Adjust the existing cape animation, without live cloth simulation or collisions. The upper attachment and character animations stay native. Click Apply to use your changes for this look; Save Look keeps them in the saved copy.")
+    help(self.capePhysicsToggle,"Cape motion","Adjust the existing cape animation, without live cloth simulation or collisions. The upper attachment and character animations stay native. Click Apply to use your changes for this look; Save keeps them in the saved copy.")
     self.capePhysicsRows={}
     for i,entry in ipairs(controls) do
         local row=section(f,34,116+(i-1)*57,296,52,false);row.key=entry[1];self.capePhysicsRows[i]=row
@@ -114,7 +114,7 @@ function V:CreateCapePhysicsWindow(window,section,label,settingsButton,enable,he
     self.capePhysicsStatus=label(f,"",38,345,288,27,true)
     self.capePhysicsDefault=settingsButton(f,"Default",38,378,138,function() V:ApplyCapePhysics(true) end)
     self.capePhysicsApply=settingsButton(f,"Apply",190,378,138,function() V:ApplyCapePhysics() end)
-    help(self.capePhysicsDefault,"Default cape motion","Restore original cape motion for this look only; Save Look keeps the reset.")
+    help(self.capePhysicsDefault,"Default cape motion","Restore original cape motion for this look only; Save keeps the reset.")
     self:CreateCapeAdvancedWindow(window,section,label,settingsButton,help,edit,redButton)
     self:RefreshCapePhysics(true)
 end

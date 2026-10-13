@@ -119,9 +119,6 @@ function V:RevertLookItemPlacement()
     self.bagTunerDrafts[state.key]=self:Copy(values or self:BagTunerDefaults(state.bag,state.race,state.sex))
     self:PlacementChanged();return true
 end
-function V:SaveTunerLook()
-    return self:SaveWardrobeLook()
-end
 function V:BagTunerSaved(bag,race,sex)
     local instance=instanceFor(bag)
     if instance then
@@ -214,7 +211,7 @@ function V:GetBagTunerState()
     result.title=name.." - "..VanityStudioRaces[race][1]..(sex==0 and " Male" or " Female")
     result.values=self:Copy(self.bagTunerDrafts[key]);result.saved=saved~=nil
     result.dirty=not sameValues(result.values,saved and saved.values or defaults);result.enabled=store.enabled~=false
-    result.status=result.dirty and "Placement edited. Save Look to keep these changes." or ""
+    result.status=result.dirty and "Placement edited. Use the main Save button to keep these changes." or ""
     if not result.enabled then result.status="Live tuning is off. The built-in fits are in use."
     elseif not VanityStudioCharacter.enabled then result.status="Enable the wardrobe to see placement changes."
     elseif bag==1 and (not VanityStudioCharacter.weapons or VanityStudioCharacter.weapons.backBag~=1) then result.status="Select Runecloth Bag to see changes."
@@ -253,7 +250,7 @@ function V:SaveBagTunerFit()
     local saved={schema=1,bag=state.bag,race=state.race,sex=state.sex,values=self:Copy(state.values),renderer=rendererVersion(),savedAt=timestamp()}
     self:BagTunerStore().fits[state.key]=saved
     self:PlacementChanged()
-    self:Message("Placement applied to this look. Save Look to update its saved copy.")
+    self:Message("Placement applied to this look. Use the main Save button to update its saved copy.")
     return true
 end
 function V:LoadBagTunerFit()

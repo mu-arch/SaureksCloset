@@ -191,11 +191,9 @@ function V:RefreshBagTunerUI()
         row.caption:SetAlpha(available and 1 or .45)
         f.enableControl(row.minus,available);f.enableControl(row.plus,available);f.enableControl(row.reset,available)
     end
-    f.enableControl(f.save,available and self:HasUnsavedLookChanges())
     local _,canRevert=self:SavedLookItemFit(state)
     f.enableControl(f.load,available and canRevert)
     f.enableControl(f.reset,available)
-    f.enableControl(f.export,available)
     if f.place then
         if bag then f.place:Show() else f.place:Hide() end
         f.enableControl(f.place,available and state.enabled and VanityStudioCharacter.enabled and bag~=nil)
@@ -472,7 +470,7 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled,redB
         e:SetScript("OnEditFocusLost",function()
             -- Reset is deliberately independent of every other unfinished field.
             -- Mouse focus may move before OnClick; retain that draft until its
-            -- own Enter/Reset or an explicit Save/Export action handles it.
+            -- own Enter/Reset or an main Save action handles it.
             if not this.cancelCommit and V.bagTunerWindow.resetHover then return end
             if not this.cancelCommit then V:CommitBagTunerEditor(this) end
             this.editing=nil
@@ -544,14 +542,10 @@ function V:CreateBagTunerUI(sheet,section,label,edit,settingsButton,enabled,redB
         end,.75)
         f[name]=b
     end
-    action("save","Save Look",31,362,"SaveTunerLook")
-    action("load","Revert Item",186,362,"RevertLookItemPlacement")
+    action("load","Revert Item",186,392,"RevertLookItemPlacement")
     action("reset","Default",31,392,"ResetBagTunerFit")
-    f.export=settingsButton(f,"Export",186,392,145,function() V:OpenBagTunerExport() end,.75)
-    tooltip(f.save,"Save all current changes to the active saved look, including physics and item positions. For a new look, choose a name in Saved Looks.")
     tooltip(f.load,"Restore this item's placement from the active saved look. Other items and physics settings stay unchanged.")
-    tooltip(f.reset,"Restore this item's built-in placement in the current look only. Save Look keeps the change; Revert Item restores its saved placement.")
-    tooltip(f.export,"Open a copyable report containing the current draft and this look's fits, ready to send for implementation.")
+    tooltip(f.reset,"Restore this item's built-in placement in the current look only. The main Save button keeps the change; Revert Item restores its saved placement.")
     self:RefreshBagTunerUI()
 end
 function V:OpenBagSlotTuner(slot)
@@ -598,59 +592,4 @@ function V:OpenPlacementTuner(slot)
     self.bagTunerWindow.message=nil;self.bagTunerWindow.messageTime=nil
     self.bagTunerWindow:Show();self:RefreshBagTunerUI()
     if slot>=108 then self:RefreshPreview() end
-end
-function V:OpenBagTunerExport()
-    if not self.bagTunerWindow then return end
-    for _,row in ipairs(self.bagTunerWindow.rows) do
-        if row.editor.editing then
-            local accepted=self:CommitBagTunerEditor(row.editor);row.editor:ClearFocus()
-            if not accepted then self.bagTunerWindow.invalidInput=nil;return end
-        end
-    end
-    if self.bagTunerWindow.invalidInput then self.bagTunerWindow.invalidInput=nil;return end
-    local export=self:ExportBagTunerFits()
-    if type(export)~="string" then
-        showMessage("The current placement fit is not available for export.");self:RefreshBagTunerUI();return
-    end
-    if not self.bagTunerExportWindow then
-        local f=CreateFrame("Frame","SaureksClosetBagTunerExport",UIParent)
-        self.bagTunerExportWindow=f;f:Hide()
-        f:SetWidth(530);f:SetHeight(410);f:SetPoint("CENTER",UIParent,"CENTER",0,0)
-        f:SetFrameStrata("DIALOG");f:SetClampedToScreen(true);f:SetMovable(true);f:EnableMouse(true)
-        f:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile=true,tileSize=32,edgeSize=32,insets={left=11,right=12,top=12,bottom=11}})
-        f:RegisterForDrag("LeftButton")
-        f:SetScript("OnDragStart",function() this:StartMoving() end)
-        f:SetScript("OnDragStop",function() this:StopMovingOrSizing() end)
-        local title=f:CreateFontString(nil,"OVERLAY","GameFontNormal")
-        title:SetPoint("TOP",f,"TOP",0,-19);title:SetText("Placement Fit Export")
-        local close=CreateFrame("Button","SaureksClosetBagTunerExportClose",f,"UIPanelCloseButton")
-        close:SetPoint("TOPRIGHT",f,"TOPRIGHT",-6,-6)
-        close:SetScript("OnClick",function() V.bagTunerExportWindow:Hide() end)
-        local instructions=f:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
-        instructions:SetPoint("TOPLEFT",f,"TOPLEFT",23,-45);instructions:SetWidth(474);instructions:SetHeight(30)
-        instructions:SetJustifyH("LEFT");instructions:SetText("Press Ctrl+C to copy these fitting values. Save the text or send it for implementation.")
-        local scroll=CreateFrame("ScrollFrame","SaureksClosetBagTunerExportScroll",f,"UIPanelScrollFrameTemplate")
-        scroll:SetPoint("TOPLEFT",f,"TOPLEFT",23,-83);scroll:SetWidth(462);scroll:SetHeight(294)
-        local e=CreateFrame("EditBox","SaureksClosetBagTunerExportText",scroll)
-        f.editor=e;f.scroll=scroll
-        e:SetPoint("TOPLEFT",scroll,"TOPLEFT",0,0)
-        e:SetWidth(455);e:SetHeight(294);e:SetMultiLine(true);e:SetAutoFocus(false)
-        e:SetFontObject(GameFontHighlightSmall);e:SetMaxLetters(0)
-        e:SetScript("OnEscapePressed",function() V.bagTunerExportWindow:Hide() end)
-        e:SetScript("OnTextChanged",function()
-            ScrollingEdit_OnTextChanged(V.bagTunerExportWindow.scroll)
-        end)
-        e:SetScript("OnCursorChanged",function()
-            ScrollingEdit_OnCursorChanged(arg1,arg2,arg3,arg4)
-        end)
-        e:SetScript("OnUpdate",function() ScrollingEdit_OnUpdate(V.bagTunerExportWindow.scroll) end)
-        scroll:SetScrollChild(e)
-        f:SetScript("OnHide",function() this.editor:ClearFocus() end)
-        table.insert(UISpecialFrames,f:GetName())
-    end
-    local f=self.bagTunerExportWindow
-    f.editor:SetText(export);f:Show()
-    f.editor:SetFocus();f.editor:HighlightText()
-    f.editor.cursorOffset=nil;f.scroll:SetVerticalScroll(0)
 end

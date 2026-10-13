@@ -212,7 +212,7 @@ check(tuner.positionMode.anchor[4]+tuner.positionMode.width==331 and tuner.posit
 check(not overlaps(tuner.positionMode,tuner.live) and not overlaps(tuner.positionMode,tuner.rows[1].editor),"Mode button cannot overlap live tuning or numeric fields")
 click(V.bagRows[4].choose)
 check(tuner.emptySlot==4 and tuner:IsShown() and table.getn(V:GetBags())==0,"Opening an empty slot does not create or equip a default bag")
-check(tuner.modelPicker:IsShown() and not tuner.save.enabled and not tuner.reset.enabled and not tuner.live.enabled,"Empty slot opens the visual picker with fitting actions disabled")
+check(tuner.modelPicker:IsShown() and not tuner.reset.enabled and not tuner.live.enabled,"Empty slot opens the visual picker with fitting actions disabled")
 check(not tuner.positionMode.enabled,"Empty slots cannot switch placement modes")
 for _,row in ipairs(tuner.rows) do check(row.editor:GetText()=="","Empty slot has no legacy fit values") end
 local staleEmpty=tuner.modelPicker.rows[1]
@@ -230,6 +230,8 @@ check(first and not V:BagInSlot(4) and first.mount=="back","Model selection crea
 check(V.tab=="bags" and V.pagesByName.bags:IsVisible() and not V.model:IsVisible(),"Choosing a bag stays on the Bags page")
 check(tuner:IsShown() and V.placementTunerBag==first.id and not tuner.emptySlot,"Selecting a model turns the empty slot into its placement tuner")
 check(not tuner.savedState,"Bottom saved/default-fit label is removed")
+check(not tuner.save and not tuner.export,"Placement tuner uses the main Save button and has no Export action")
+check(tuner.load.anchor[5]==tuner.reset.anchor[5],"Revert and Default share the bottom action row")
 check(tuner.modelSelector:IsVisible() and tuner.mountSelector:IsVisible(),"Model and starting position are integrated into the tuner")
 click(tuner.modelSelector)
 local picker=tuner.modelPicker
@@ -293,7 +295,7 @@ local function inTuner(widget,description)
     check(x-tx>=23 and x-tx+w<=341,description.." exceeds tuner width")
     check(y-ty>=70 and y-ty+h<=436,description.." exceeds tuner content height")
 end
-local controls={tuner.modelSelector,tuner.mountSelector,tuner.colorChoices,tuner.status,tuner.live,tuner.save,tuner.load,tuner.reset,tuner.export}
+local controls={tuner.modelSelector,tuner.mountSelector,tuner.colorChoices,tuner.status,tuner.live,tuner.load,tuner.reset}
 for _,row in ipairs(tuner.rows) do table.insert(controls,row.editor.parent) end
 for i,control in ipairs(controls) do
     inTuner(control,"Tuner control "..i)

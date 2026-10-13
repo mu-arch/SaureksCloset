@@ -9,7 +9,7 @@ The Cloth Pouch includes Burgundy, Navy, Ochre and Olive color options.
 Click an empty slot to open its visual model picker and tuner. A bag is added
 only after you choose its model. Choose a color and Back, Left hip or Right hip,
 then adjust its fit. All five slots stay visible; removing one leaves it empty.
-Save Look stores physics and item positions with the current look. See BAGS-MENU.md.
+Save stores physics and item positions with the current look. See BAGS-MENU.md.
 The wardrobe Save button updates your active saved look, including live previews
 and bag tuning. New looks open Saved Looks for naming. Edited looks retain their
 name with (Edited), and switching looks warns before discarding unsaved changes.
