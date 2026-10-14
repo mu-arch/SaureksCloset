@@ -1,4 +1,4 @@
-# Building Saurek's Closet 4.1.1
+# Building Saurek's Closet 4.1.2
 
 The Lua addon is in `addon/SaureksCloset/`. The native renderer uses C++17 and MinHook; generated headers and build signatures are included.
 
@@ -186,3 +186,12 @@ fitting, per-slot weapon physics, bag physics controls, and cape motion tuning.
 Transmog sharing controls and sessions remain disabled pending launch. The release
 gate covers hair and scalp preservation, placement controls, physics settings,
 sharing disablement, and shared window alignment.
+
+### Release 4.1.2
+
+Addon 4.1.2 and renderer 40102 save physics and item placements with each look.
+Existing looks inherit independent copies of the previous settings. The main Save
+button captures placement and physics edits; the tuner provides Default and
+Revert Changes using standard red buttons, with Revert disabled for unchanged
+placements. Tests cover migration, reloads, independent snapshots, look switching,
+unfinished editors, native reset dispatch, and button states.

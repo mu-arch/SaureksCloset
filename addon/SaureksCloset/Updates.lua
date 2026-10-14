@@ -1,5 +1,5 @@
 local V=VanityStudio
-V.REQUIRED_RENDERER=40101
+V.REQUIRED_RENDERER=40102
 local goldenVersionCheck="Interface\\Buttons\\UI-CheckBox-Check"
 local negativeVersionMark="Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 local function rememberVersionCheck()

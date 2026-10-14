@@ -17,7 +17,7 @@ dofile('addon/SaureksCloset/CapePhysics.lua')
 local V=VanityStudio
 VanityStudioRaces={};for race=1,8 do VanityStudioRaces[race]={'Race '..race} end
 local native,slots,weapon,cape={},{},nil,nil
-SaureksClosetRendererVersion=function() return 40101 end
+SaureksClosetRendererVersion=function() return 40102 end
 SaureksClosetGetBagFitDefaults=function(target) return 1,0,0,0,0,0,0,target>=201 and 85 or 100 end
 SaureksClosetSetBagFit=function(target,race,sex,on,left,inset,up,pitch,roll,yaw,scale)
     native[target..':'..race..':'..sex]=on==1 and {left=left,up=up,scale=scale} or nil;return 1

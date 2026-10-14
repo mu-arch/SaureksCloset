@@ -4,7 +4,7 @@
 
 Saurek proudly presents:
 
-**· Release 4.0.11 · [Download now](https://github.com/mu-arch/SaureksCloset/releases/latest) ·**
+**· Release 4.1.1 · [Download now](https://github.com/mu-arch/SaureksCloset/releases/latest) ·**
 
 Supported on Linux, Windows, and Mac
 
@@ -26,7 +26,7 @@ Saurek's Closet morphs how your character looks on your own client, and for othe
 - **Advanced physics:** Optionally enable modern pre-computed (baked) cape, bag, sheathed weapon physics with no runtime performance cost. Watch as jumping, running, falling, and combat motions realistically deform and swing your equipment on your character!
 - **Get dirty:** Sweat, dust, mud, and blood. It gets all over you, and you'll need to visit an inn, or take a dip to clean it off.
 - **Share your look with others:** If another player has the addon they can see your custom look (if you authorize broadcasting your transmog data)
-
+- **Hair with hats:** No more crop! Wear your hat while still seeing your hairstyle.
 
 ## Take a look inside
 
@@ -37,9 +37,9 @@ Saurek's Closet morphs how your character looks on your own client, and for othe
 ### Visible Bags with dynamic physics
 
 - Five fixed bag slots, six model choices, four Mageweave Bag colors, and three Slim Leather Bag colors. Choose each bag by its icon, then tune it on the back or either hip.
-- Bags stay consistently sized for realism. A Runecloth bag on a gnome would take up their whole back, versus a Tauren that could comfortably fit 4 or more. In the bag precision tuner you can adjust their size if you want to.
+- Bags stay consistently sized for realism. A Runecloth bag on a gnome would take up their whole back, versus a Tauren that could comfortably fit 4 or more. In the placement tuner you can adjust their size if you want to.
 - Hard physics: Hard leather bags rock and bounce realistically, as if they had weight. Jumping/falling causes the bag to tilt and fly up in the air realistically.
-- Soft physics: cloth bags are simulated with different sized cubes jostling around inside the bags in Blender, using motion vectors extracted from all race and gender combos performing different animations. The resulting bag movements are recoded and baked into the game. This makes it appear as if advanced source engine style physics are utilized with no runtime cost.
+- Soft physics: Cloth bags stretch and deform based on your character movements.
 - Intelligent strap creation (Not shown in demo gifs) the addon computes a strap line from each bag to the players shoulder and draws it over the player texture in memory.
 
 <table>
@@ -127,15 +127,30 @@ World of Warcraft/
 
 Open any saved look to preview, rename, delete, or activate it. The green eye marks the active look. Changes display as **Name (Edited)** until saved. **Save** is greyed out when there are no unsaved edits; rotating the preview does not count as an edit. Switching looks warns before discarding unsaved changes. The dropdown at the top of the window lets you switch saved looks quickly. Right-click the minimap button and choose **Toggle Addon** to turn local appearances on or off. Click and drag in either character preview to rotate the model.
 
+
+### How does this program work?
+
+Saurek's Closet has two main components: the addon and a internal memory coordinator. The addon provides the user interface, configuration, and appearance database, and communicates with the memory coordinator running inside the WoW process.
+
+The memory coordinator precisely connects to specific graphics rendering functions and inspects or temporarily modifies specific values in memory when the game is preparing to render a character. For example, when the user selects a different cosmetic appearance, the coordinator can substitute the desired appearance data immediately before the rendering operation and, where necessary, restore the original values afterward. This allows the visual appearance to change without permanently altering the character's underlying equipment, gameplay state, or server-side data.
+
 ### Can I get banned from a private server for using this?
 
 Probably not. Warden could in theory detect it, but I would think it's unlikely considering it only changes player object related properties.
 
-If you enable transmog broadcasting so other players with the addon can see your custom look: the server can see you are using Saurek's Closet.
-
 ### Privacy Notes
 
 - Saurek's Closet has a "Check for updates" feature that queries this Github page to see if an update is available. This feature can be disabled in settings. It's able to do this while other addons cannot because it uses memory injection to take full control of the game client and escape Blizzard's addon jail.
+
+- If you enable transmog broadcasting so other players with the addon can see your custom look: your (1) server address (2) character GUID (3) character name (4) character object data (5) character position is transmitted to my relay server. The relay server compares all character locations on your game server and determines which players to distribute transmog data to based on proximity. I offer this service for free so please consider a donation!
+
+- Can I disable transmog sharing: YES
+- Does the transmog system send my account name, password, or personal information: NO
+- Can it submit new executable code to or modify the local addon: NO
+- Why can't you use normal addon channels: I don't want servers to be able to see you're using the addon, also I'm adding support for WoW: Forever and I absolutely don't want Blizzard to see you're using the addon, since it violates TOS. Therefore, I'm putting everything under this private communication server so there's one system to maintain.
+- Are connections to the server encrypted: YES, but it wouldn't matter if they weren't, no data of any real privacy impact is sent over the network.
+- Will this now or ever do anything that a common sense computer professional would consider privacy violation: NO, the scope of communications with this server are to coordinate the distribution of transmog character object data.
+- Do you collect analytics: NO
 
 ## Notice to users of World of Warcraft addons in general
 
