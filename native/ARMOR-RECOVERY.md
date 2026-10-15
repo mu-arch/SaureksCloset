@@ -1,4 +1,4 @@
-# Armor visual recovery (4.1.2)
+# Armor visual recovery (4.2.1)
 
 A client model or inventory update can restore real armor while VanillaHelpers'
 visible-item fields and the addon's applied cache still contain the requested

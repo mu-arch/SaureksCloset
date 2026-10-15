@@ -1,4 +1,4 @@
-# Building Saurek's Closet 4.1.2
+# Building Saurek's Closet 4.2.1
 
 The Lua addon is in `addon/SaureksCloset/`. The native renderer uses C++17 and MinHook; generated headers and build signatures are included.
 
@@ -195,3 +195,13 @@ button captures placement and physics edits; the tuner provides Default and
 Revert Changes using standard red buttons, with Revert disabled for unchanged
 placements. Tests cover migration, reloads, independent snapshots, look switching,
 unfinished editors, native reset dispatch, and button states.
+
+### Release 4.2.1
+
+Addon 4.2.1 and renderer 40201 add Wardrobe → Mounts with 109 native mount
+appearances, searchable icons, pagination, selection highlighting and Original
+reset. Mount choices belong to saved looks and use VanillaHelpers
+SetUnitMountDisplayID while a real mounted aura is present. The release gate
+covers catalog completeness, icon selection, saved-look isolation, on-foot
+safety, dismount/taxi/disable/zoning cleanup, API failures, and 1.12 search focus
+events. Quickslot borders use the same artwork geometry as equipment icons.

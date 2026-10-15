@@ -3,7 +3,7 @@ local V=VanityStudio
 -- Replace the bag-list test's state stub with the real persistence/dispatch.
 dofile('addon/SaureksCloset/BagTuner.lua')
 SaureksClosetSetHaircraft=function() return 1 end
-SaureksClosetRendererVersion=function() return 40102 end
+SaureksClosetRendererVersion=function() return 40201 end
 local native={}
 SaureksClosetGetBagFitDefaults=function(target,race,sex) return 1,0,0,0,0,0,0,100 end
 SaureksClosetSetBagFit=function(target,race,sex,enabled,left,inset,up,pitch,roll,yaw,scale)
