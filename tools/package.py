@@ -61,7 +61,7 @@ for p in addon.rglob('*'):
     elif relative.parts[0] == 'Installation instructions':
         include = p.suffix.lower() in ('.txt', '.dll')
     else:
-        include = len(relative.parts) == 1 and (p.suffix.lower() in ('.lua', '.xml', '.toc', '.md') or p.name in ('LICENSE', 'ASSETS-LICENSE'))
+        include = len(relative.parts) == 1 and (p.suffix.lower() in ('.lua', '.xml', '.toc', '.md') or p.name in ('LICENSE', 'ASSETS-LICENSE', 'MOUNTS-SOURCE.json'))
     if include:
         payload['SaureksCloset/' + relative.as_posix()] = p
 assert 'SaureksCloset/README.md' in payload

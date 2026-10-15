@@ -1,0 +1,1184 @@
+{
+  "schema": 1,
+  "client": "Windows 1.12.1 build 5875",
+  "count": 109,
+  "source": "https://github.com/cmangos/classic-db",
+  "revision": "22b51464f1625f6ef6275771de1f5466c6f5d19e",
+  "dump": "Full_DB/ClassicDB_1_12_1_z2815.sql.gz",
+  "sha256": "4f92db520868ab4e566726f68b5b2e380ae781209beaf22237b4f7f04600d0c0",
+  "scope": "Every SPELL_AURA_MOUNTED appearance in the client, including retired and event/test mounts; deduplicated by display ID. No later-expansion or server-custom models.",
+  "dbc": {
+    "Spell.dbc": "913d01c0376d88310ed4a44ea1115f30fd8be15af64ce304f4f17b6bc51cf15b",
+    "SpellIcon.dbc": "938e8c333fe914938994fc331c04655d7eb5719bc2d1b29eaf5fad4239abdfdc",
+    "CreatureDisplayInfo.dbc": "aa6dbb0601f5abec1bb21b8ee96bd7f1e695948410835a06f7ab4257c2d4cf8b",
+    "CreatureModelData.dbc": "e973e78ea0894d2afc802b06db0ed2d7c77238671df7235e9f744791d54256c9"
+  },
+  "entries": [
+    {
+      "id": 1166,
+      "name": "Arctic Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteDireWolf",
+      "model": "Creature\\DireWolf\\RidingDireWolf.mdx",
+      "spells": [
+        581,
+        16081
+      ]
+    },
+    {
+      "id": 14372,
+      "name": "Black Battlestrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\PvPMechaStrider.mdx",
+      "spells": [
+        22719
+      ]
+    },
+    {
+      "id": 15677,
+      "name": "Black Qiraji Battle Tank",
+      "icon": "Interface\\Icons\\INV_Misc_QirajiCrystal_05",
+      "model": "Creature\\RidingSilithid\\RidingSilithid.mdx",
+      "spells": [
+        25863,
+        26655
+      ]
+    },
+    {
+      "id": 15678,
+      "name": "Black Qiraji Battle Tank",
+      "icon": "Interface\\Icons\\INV_Misc_QirajiCrystal_04",
+      "model": "Creature\\RidingSilithid\\RidingSilithid.mdx",
+      "spells": [
+        25953,
+        31700
+      ]
+    },
+    {
+      "id": 2784,
+      "name": "Black Ram",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\RidingRam.mdx",
+      "spells": [
+        6896,
+        17461
+      ]
+    },
+    {
+      "id": 2402,
+      "name": "Black Stallion",
+      "icon": "Interface\\Icons\\Ability_Mount_NightmareHorse",
+      "model": "Creature\\RidingHorse\\RidingHorse.mdx",
+      "spells": [
+        470
+      ]
+    },
+    {
+      "id": 14348,
+      "name": "Black War Kodo",
+      "icon": "Interface\\Icons\\Ability_Mount_Kodo_01",
+      "model": "Creature\\Kodobeast\\KodoBeastPvPT2.mdx",
+      "spells": [
+        22718
+      ]
+    },
+    {
+      "id": 14577,
+      "name": "Black War Ram",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\PVPRidingRam.mdx",
+      "spells": [
+        22720
+      ]
+    },
+    {
+      "id": 14388,
+      "name": "Black War Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\PvPRidingRaptor.mdx",
+      "spells": [
+        22721
+      ]
+    },
+    {
+      "id": 14337,
+      "name": "Black War Steed",
+      "icon": "Interface\\Icons\\Ability_Mount_NightmareHorse",
+      "model": "Creature\\RidingHorse\\RidingHorsePvPT2.mdx",
+      "spells": [
+        22717
+      ]
+    },
+    {
+      "id": 14330,
+      "name": "Black War Tiger",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackPanther",
+      "model": "Creature\\FrostSabre\\PVPRidingFrostSabre.mdx",
+      "spells": [
+        22723
+      ]
+    },
+    {
+      "id": 14334,
+      "name": "Black War Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackDireWolf",
+      "model": "Creature\\DireWolf\\PvPRidingDireWolf.mdx",
+      "spells": [
+        22724
+      ]
+    },
+    {
+      "id": 207,
+      "name": "Black Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackDireWolf",
+      "model": "Creature\\DireWolf\\RidingDireWolf.mdx",
+      "spells": [
+        578
+      ]
+    },
+    {
+      "id": 6569,
+      "name": "Blue Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\MechaStrider.mdx",
+      "spells": [
+        10969
+      ]
+    },
+    {
+      "id": 10671,
+      "name": "Blue Skeletal Horse",
+      "icon": "Interface\\Icons\\Ability_Mount_Undeadhorse",
+      "model": "Creature\\UndeadHorse\\RidingUndeadHorse.mdx",
+      "spells": [
+        17463
+      ]
+    },
+    {
+      "id": 2404,
+      "name": "Brown Horse",
+      "icon": "Interface\\Icons\\Ability_Mount_RidingHorse",
+      "model": "Creature\\RidingHorse\\RidingHorse.mdx",
+      "spells": [
+        458
+      ]
+    },
+    {
+      "id": 11641,
+      "name": "Brown Kodo",
+      "icon": "Interface\\Icons\\INV_Misc_Head_Tauren_02",
+      "model": "Creature\\Kodobeast\\RidingKodo.mdx",
+      "spells": [
+        18363,
+        18990
+      ]
+    },
+    {
+      "id": 2785,
+      "name": "Brown Ram",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\RidingRam.mdx",
+      "spells": [
+        6899
+      ]
+    },
+    {
+      "id": 10672,
+      "name": "Brown Skeletal Horse",
+      "icon": "Interface\\Icons\\Ability_Mount_Undeadhorse",
+      "model": "Creature\\UndeadHorse\\RidingUndeadHorse.mdx",
+      "spells": [
+        17464
+      ]
+    },
+    {
+      "id": 6474,
+      "name": "Brown Tallstrider",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\Tallstrider\\TallStrider.mdx",
+      "spells": [
+        10800
+      ]
+    },
+    {
+      "id": 2328,
+      "name": "Brown Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackDireWolf",
+      "model": "Creature\\DireWolf\\RidingDireWolf.mdx",
+      "spells": [
+        6654
+      ]
+    },
+    {
+      "id": 14584,
+      "name": "Charger",
+      "icon": "Interface\\Icons\\Ability_Mount_Charger",
+      "model": "Creature\\WarHorse\\PVPWarHorse.mdx",
+      "spells": [
+        23214
+      ]
+    },
+    {
+      "id": 2405,
+      "name": "Chestnut Mare",
+      "icon": "Interface\\Icons\\Ability_Mount_RidingHorse",
+      "model": "Creature\\RidingHorse\\RidingHorse.mdx",
+      "spells": [
+        6648
+      ]
+    },
+    {
+      "id": 15293,
+      "name": "Chromatic Mount",
+      "icon": "Interface\\Icons\\Ability_BullRush",
+      "model": "Creature\\Drake\\Drake.mdx",
+      "spells": [
+        3363,
+        24576
+      ]
+    },
+    {
+      "id": 2327,
+      "name": "Dire Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteDireWolf",
+      "model": "Creature\\DireWolf\\RidingDireWolf.mdx",
+      "spells": [
+        6653
+      ]
+    },
+    {
+      "id": 14554,
+      "name": "Dreadsteed",
+      "icon": "Interface\\Icons\\Ability_Mount_Dreadsteed",
+      "model": "Creature\\Nightmare\\Gorgon101.mdx",
+      "spells": [
+        23161
+      ]
+    },
+    {
+      "id": 4806,
+      "name": "Emerald Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\RidingRaptor.mdx",
+      "spells": [
+        8395
+      ]
+    },
+    {
+      "id": 2346,
+      "name": "Felsteed",
+      "icon": "Interface\\Icons\\Spell_Nature_Swiftness",
+      "model": "Creature\\Nightmare\\Nightmare.mdx",
+      "spells": [
+        5784
+      ]
+    },
+    {
+      "id": 9475,
+      "name": "Fluorescent Green Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\MechaStrider.mdx",
+      "spells": [
+        15780,
+        17458
+      ]
+    },
+    {
+      "id": 2787,
+      "name": "Frost Ram",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\RidingRam.mdx",
+      "spells": [
+        6897,
+        17460
+      ]
+    },
+    {
+      "id": 9695,
+      "name": "Frostsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteTiger",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        16056
+      ]
+    },
+    {
+      "id": 14776,
+      "name": "Frostwolf Howler",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteDireWolf",
+      "model": "Creature\\DireWolf\\PvPRidingDireWolf.mdx",
+      "spells": [
+        23509
+      ]
+    },
+    {
+      "id": 9714,
+      "name": "Golden Sabercat",
+      "icon": "Interface\\Icons\\Ability_Mount_JungleTiger",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        16060
+      ]
+    },
+    {
+      "id": 12246,
+      "name": "Gray Kodo",
+      "icon": "Interface\\Icons\\Ability_Mount_Kodo_01",
+      "model": "Creature\\Kodobeast\\RidingKodo.mdx",
+      "spells": [
+        18989
+      ]
+    },
+    {
+      "id": 2736,
+      "name": "Gray Ram",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\RidingRam.mdx",
+      "spells": [
+        6777
+      ]
+    },
+    {
+      "id": 6475,
+      "name": "Gray Tallstrider",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\Tallstrider\\TallStrider.mdx",
+      "spells": [
+        10801
+      ]
+    },
+    {
+      "id": 2320,
+      "name": "Gray Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteDireWolf",
+      "model": "Creature\\DireWolf\\RidingDireWolf.mdx",
+      "spells": [
+        459
+      ]
+    },
+    {
+      "id": 14578,
+      "name": "Great Brown Kodo",
+      "icon": "Interface\\Icons\\Ability_Mount_Kodo_03",
+      "model": "Creature\\Kodobeast\\KodoBeastPvPT2.mdx",
+      "spells": [
+        23249
+      ]
+    },
+    {
+      "id": 14579,
+      "name": "Great Gray Kodo",
+      "icon": "Interface\\Icons\\Ability_Mount_Kodo_01",
+      "model": "Creature\\Kodobeast\\KodoBeastPvPT2.mdx",
+      "spells": [
+        23248
+      ]
+    },
+    {
+      "id": 14349,
+      "name": "Great White Kodo",
+      "icon": "Interface\\Icons\\Ability_Mount_Kodo_01",
+      "model": "Creature\\Kodobeast\\KodoBeastPvPT2.mdx",
+      "spells": [
+        23247
+      ]
+    },
+    {
+      "id": 12245,
+      "name": "Green Kodo",
+      "icon": "Interface\\Icons\\Ability_Mount_Kodo_02",
+      "model": "Creature\\Kodobeast\\RidingKodo.mdx",
+      "spells": [
+        18991
+      ]
+    },
+    {
+      "id": 10661,
+      "name": "Green Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\MechaStrider.mdx",
+      "spells": [
+        17453
+      ]
+    },
+    {
+      "id": 15679,
+      "name": "Green Qiraji Battle Tank",
+      "icon": "Interface\\Icons\\INV_Misc_QirajiCrystal_03",
+      "model": "Creature\\RidingSilithid\\RidingSilithid.mdx",
+      "spells": [
+        26056
+      ]
+    },
+    {
+      "id": 10720,
+      "name": "Green Skeletal Warhorse",
+      "icon": "Interface\\Icons\\Ability_Mount_Undeadhorse",
+      "model": "Creature\\MountedDeathKnight\\RidingUndeadWarHorse.mdx",
+      "spells": [
+        17465
+      ]
+    },
+    {
+      "id": 10666,
+      "name": "Icy Blue Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\MechaStrider.mdx",
+      "spells": [
+        17459
+      ]
+    },
+    {
+      "id": 6471,
+      "name": "Ivory Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\RidingRaptor.mdx",
+      "spells": [
+        10795,
+        17450
+      ]
+    },
+    {
+      "id": 4807,
+      "name": "Ivory Tallstrider",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\Tallstrider\\TallStrider.mdx",
+      "spells": [
+        8396
+      ]
+    },
+    {
+      "id": 247,
+      "name": "Large Timber Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackDireWolf",
+      "model": "Creature\\DireWolf\\RidingDireWolf.mdx",
+      "spells": [
+        580
+      ]
+    },
+    {
+      "id": 6469,
+      "name": "Mottled Red Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\RidingRaptor.mdx",
+      "spells": [
+        16084
+      ]
+    },
+    {
+      "id": 15791,
+      "name": "Mouth Tentacle",
+      "icon": "Interface\\Icons\\Temp",
+      "model": "Creature\\MouthofKathune01\\MouthofKathune01.mdx",
+      "spells": [
+        26332
+      ]
+    },
+    {
+      "id": 9991,
+      "name": "Nightsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackPanther",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        10787,
+        16055
+      ]
+    },
+    {
+      "id": 6468,
+      "name": "Obsidian Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\Raptor\\Raptor.mdx",
+      "spells": [
+        10798
+      ]
+    },
+    {
+      "id": 2408,
+      "name": "Palomino Stallion",
+      "icon": "Interface\\Icons\\Ability_Mount_RidingHorse",
+      "model": "Creature\\RidingHorse\\RidingHorse.mdx",
+      "spells": [
+        471,
+        16082
+      ]
+    },
+    {
+      "id": 6476,
+      "name": "Pink Tallstrider",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\Tallstrider\\TallStrider.mdx",
+      "spells": [
+        10802
+      ]
+    },
+    {
+      "id": 2409,
+      "name": "Pinto Horse",
+      "icon": "Interface\\Icons\\Ability_Mount_RidingHorse",
+      "model": "Creature\\RidingHorse\\RidingHorse.mdx",
+      "spells": [
+        472
+      ]
+    },
+    {
+      "id": 4805,
+      "name": "Primal Leopard",
+      "icon": "Interface\\Icons\\Ability_Mount_JungleTiger",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        10788,
+        16058
+      ]
+    },
+    {
+      "id": 10662,
+      "name": "Purple Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\MechaStrider.mdx",
+      "spells": [
+        17455
+      ]
+    },
+    {
+      "id": 10721,
+      "name": "Purple Skeletal Warhorse",
+      "icon": "Interface\\Icons\\Ability_Mount_Undeadhorse",
+      "model": "Creature\\MountedDeathKnight\\RidingUndeadWarHorse.mdx",
+      "spells": [
+        23246
+      ]
+    },
+    {
+      "id": 6477,
+      "name": "Purple Tallstrider",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\Tallstrider\\TallStrider.mdx",
+      "spells": [
+        10803
+      ]
+    },
+    {
+      "id": 10664,
+      "name": "Red & Blue Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\MechaStrider.mdx",
+      "spells": [
+        17456
+      ]
+    },
+    {
+      "id": 9473,
+      "name": "Red Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\MechaStrider.mdx",
+      "spells": [
+        10873
+      ]
+    },
+    {
+      "id": 15681,
+      "name": "Red Qiraji Battle Tank",
+      "icon": "Interface\\Icons\\INV_Misc_QirajiCrystal_02",
+      "model": "Creature\\RidingSilithid\\RidingSilithid.mdx",
+      "spells": [
+        26054
+      ]
+    },
+    {
+      "id": 10670,
+      "name": "Red Skeletal Horse",
+      "icon": "Interface\\Icons\\Ability_Mount_Undeadhorse",
+      "model": "Creature\\UndeadHorse\\RidingUndeadHorse.mdx",
+      "spells": [
+        17462
+      ]
+    },
+    {
+      "id": 10719,
+      "name": "Red Skeletal Warhorse",
+      "icon": "Interface\\Icons\\Ability_Mount_Undeadhorse",
+      "model": "Creature\\MountedDeathKnight\\RidingUndeadWarHorse.mdx",
+      "spells": [
+        22722
+      ]
+    },
+    {
+      "id": 2326,
+      "name": "Red Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackDireWolf",
+      "model": "Creature\\DireWolf\\RidingDireWolf.mdx",
+      "spells": [
+        579,
+        16080
+      ]
+    },
+    {
+      "id": 1991,
+      "name": "Reindeer",
+      "icon": "Interface\\Icons\\INV_Misc_QuestionMark",
+      "model": "Creature\\Stag\\Stag.mdx",
+      "spells": [
+        25675
+      ]
+    },
+    {
+      "id": 15902,
+      "name": "Reindeer",
+      "icon": "Interface\\Icons\\INV_Misc_Branch_01",
+      "model": "Creature\\ReinDeer\\ReinDeerMount.mdx",
+      "spells": [
+        25858,
+        25859
+      ]
+    },
+    {
+      "id": 17158,
+      "name": "Riding Turtle",
+      "icon": "Interface\\Icons\\Ability_Hunter_Pet_Turtle",
+      "model": "Creature\\RidingTurtle\\RidingTurtle.mdx",
+      "spells": [
+        30174
+      ]
+    },
+    {
+      "id": 5228,
+      "name": "Skeletal Horse",
+      "icon": "Interface\\Icons\\Ability_Mount_Undeadhorse",
+      "model": "Creature\\UndeadHorse\\RidingUndeadHorse.mdx",
+      "spells": [
+        8980
+      ]
+    },
+    {
+      "id": 10718,
+      "name": "Skeletal Steed",
+      "icon": "Interface\\Icons\\Ability_Mount_Undeadhorse",
+      "model": "Creature\\MountedDeathKnight\\RidingUndeadWarHorse.mdx",
+      "spells": [
+        17481,
+        29059
+      ]
+    },
+    {
+      "id": 6444,
+      "name": "Spotted Frostsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteTiger",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        10789
+      ]
+    },
+    {
+      "id": 6447,
+      "name": "Spotted Panther",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackPanther",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        10792
+      ]
+    },
+    {
+      "id": 14777,
+      "name": "Stormpike Battle Charger",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\PVPRidingRam.mdx",
+      "spells": [
+        23510
+      ]
+    },
+    {
+      "id": 6080,
+      "name": "Striped Frostsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteTiger",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        8394
+      ]
+    },
+    {
+      "id": 6448,
+      "name": "Striped Nightsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackPanther",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        10793
+      ]
+    },
+    {
+      "id": 14339,
+      "name": "Swift Blue Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\PvPRidingRaptor.mdx",
+      "spells": [
+        23241
+      ]
+    },
+    {
+      "id": 14347,
+      "name": "Swift Brown Ram",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\PVPRidingRam.mdx",
+      "spells": [
+        23238
+      ]
+    },
+    {
+      "id": 14583,
+      "name": "Swift Brown Steed",
+      "icon": "Interface\\Icons\\Ability_Mount_RidingHorse",
+      "model": "Creature\\RidingHorse\\RidingHorsePvPT2.mdx",
+      "spells": [
+        23229
+      ]
+    },
+    {
+      "id": 14573,
+      "name": "Swift Brown Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackDireWolf",
+      "model": "Creature\\DireWolf\\PvPRidingDireWolf.mdx",
+      "spells": [
+        23250
+      ]
+    },
+    {
+      "id": 14329,
+      "name": "Swift Dawnsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_JungleTiger",
+      "model": "Creature\\FrostSabre\\PVPRidingFrostSabre.mdx",
+      "spells": [
+        23220
+      ]
+    },
+    {
+      "id": 14331,
+      "name": "Swift Frostsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteTiger",
+      "model": "Creature\\FrostSabre\\PVPRidingFrostSabre.mdx",
+      "spells": [
+        23221
+      ]
+    },
+    {
+      "id": 14576,
+      "name": "Swift Gray Ram",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\PVPRidingRam.mdx",
+      "spells": [
+        23239
+      ]
+    },
+    {
+      "id": 14574,
+      "name": "Swift Gray Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteDireWolf",
+      "model": "Creature\\DireWolf\\PvPRidingDireWolf.mdx",
+      "spells": [
+        23252
+      ]
+    },
+    {
+      "id": 14374,
+      "name": "Swift Green Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\PvPMechaStrider.mdx",
+      "spells": [
+        23225
+      ]
+    },
+    {
+      "id": 14332,
+      "name": "Swift Mistsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackPanther",
+      "model": "Creature\\FrostSabre\\PVPRidingFrostSabre.mdx",
+      "spells": [
+        23219
+      ]
+    },
+    {
+      "id": 14344,
+      "name": "Swift Olive Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\PvPRidingRaptor.mdx",
+      "spells": [
+        23242
+      ]
+    },
+    {
+      "id": 14342,
+      "name": "Swift Orange Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\PvPRidingRaptor.mdx",
+      "spells": [
+        23243
+      ]
+    },
+    {
+      "id": 14582,
+      "name": "Swift Palomino",
+      "icon": "Interface\\Icons\\Ability_Mount_RidingHorse",
+      "model": "Creature\\RidingHorse\\RidingHorsePvPT2.mdx",
+      "spells": [
+        23227
+      ]
+    },
+    {
+      "id": 15289,
+      "name": "Swift Razzashi Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\PvPRidingRaptor.mdx",
+      "spells": [
+        24242
+      ]
+    },
+    {
+      "id": 14632,
+      "name": "Swift Stormsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_BlackPanther",
+      "model": "Creature\\FrostSabre\\PVPRidingFrostSabre.mdx",
+      "spells": [
+        23338
+      ]
+    },
+    {
+      "id": 14575,
+      "name": "Swift Timber Wolf",
+      "icon": "Interface\\Icons\\Ability_Mount_WhiteDireWolf",
+      "model": "Creature\\DireWolf\\PvPRidingDireWolf.mdx",
+      "spells": [
+        23251
+      ]
+    },
+    {
+      "id": 14376,
+      "name": "Swift White Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\PvPMechaStrider.mdx",
+      "spells": [
+        23223
+      ]
+    },
+    {
+      "id": 14346,
+      "name": "Swift White Ram",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\PVPRidingRam.mdx",
+      "spells": [
+        23240
+      ]
+    },
+    {
+      "id": 14338,
+      "name": "Swift White Steed",
+      "icon": "Interface\\Icons\\Ability_Mount_RidingHorse",
+      "model": "Creature\\RidingHorse\\RidingHorsePvPT2.mdx",
+      "spells": [
+        23228
+      ]
+    },
+    {
+      "id": 14377,
+      "name": "Swift Yellow Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\PvPMechaStrider.mdx",
+      "spells": [
+        23222
+      ]
+    },
+    {
+      "id": 15290,
+      "name": "Swift Zulian Tiger",
+      "icon": "Interface\\Icons\\Ability_Mount_JungleTiger",
+      "model": "Creature\\FrostSabre\\PVPRidingFrostSabre.mdx",
+      "spells": [
+        24252
+      ]
+    },
+    {
+      "id": 6442,
+      "name": "Tawny Sabercat",
+      "icon": "Interface\\Icons\\Ability_Mount_JungleTiger",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        16059
+      ]
+    },
+    {
+      "id": 12242,
+      "name": "Teal Kodo",
+      "icon": "Interface\\Icons\\Ability_Mount_Kodo_02",
+      "model": "Creature\\Kodobeast\\RidingKodo.mdx",
+      "spells": [
+        18992
+      ]
+    },
+    {
+      "id": 6443,
+      "name": "Tiger",
+      "icon": "Interface\\Icons\\Ability_Mount_JungleTiger",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        10790
+      ]
+    },
+    {
+      "id": 6472,
+      "name": "Turquoise Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\RidingRaptor.mdx",
+      "spells": [
+        10796
+      ]
+    },
+    {
+      "id": 6478,
+      "name": "Turquoise Tallstrider",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\Tallstrider\\TallStrider.mdx",
+      "spells": [
+        10804
+      ]
+    },
+    {
+      "id": 9476,
+      "name": "Unpainted Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\MechaStrider.mdx",
+      "spells": [
+        15781,
+        17454
+      ]
+    },
+    {
+      "id": 6473,
+      "name": "Violet Raptor",
+      "icon": "Interface\\Icons\\Ability_Mount_Raptor",
+      "model": "Creature\\RidingRaptor\\RidingRaptor.mdx",
+      "spells": [
+        10799
+      ]
+    },
+    {
+      "id": 8469,
+      "name": "Warhorse",
+      "icon": "Interface\\Icons\\Spell_Nature_Swiftness",
+      "model": "Creature\\WarHorse\\WarHorse.mdx",
+      "spells": [
+        13819
+      ]
+    },
+    {
+      "id": 9474,
+      "name": "White Mechanostrider",
+      "icon": "Interface\\Icons\\Ability_Mount_MechaStrider",
+      "model": "Creature\\MechaStrider\\MechaStrider.mdx",
+      "spells": [
+        15779
+      ]
+    },
+    {
+      "id": 2786,
+      "name": "White Ram",
+      "icon": "Interface\\Icons\\Ability_Mount_MountainRam",
+      "model": "Creature\\Ram\\RidingRam.mdx",
+      "spells": [
+        6898
+      ]
+    },
+    {
+      "id": 2410,
+      "name": "White Stallion",
+      "icon": "Interface\\Icons\\Ability_Mount_RidingHorse",
+      "model": "Creature\\RidingHorse\\RidingHorse.mdx",
+      "spells": [
+        468,
+        16083
+      ]
+    },
+    {
+      "id": 10426,
+      "name": "Winterspring Frostsaber",
+      "icon": "Interface\\Icons\\Ability_Mount_PinkTiger",
+      "model": "Creature\\FrostSabre\\RidingFrostSabre.mdx",
+      "spells": [
+        17229
+      ]
+    },
+    {
+      "id": 15680,
+      "name": "Yellow Qiraji Battle Tank",
+      "icon": "Interface\\Icons\\INV_Misc_QirajiCrystal_01",
+      "model": "Creature\\RidingSilithid\\RidingSilithid.mdx",
+      "spells": [
+        26055
+      ]
+    }
+  ],
+  "auraNames": [
+    "Arctic Wolf",
+    "Black Battlestrider",
+    "Black Ram",
+    "Black Stallion",
+    "Black War Kodo",
+    "Black War Ram",
+    "Black War Raptor",
+    "Black War Steed",
+    "Black War Tiger",
+    "Black War Wolf",
+    "Black Wolf",
+    "Blue Mechanostrider",
+    "Blue Ram",
+    "Blue Skeletal Horse",
+    "Brown Horse",
+    "Brown Kodo",
+    "Brown Ram",
+    "Brown Skeletal Horse",
+    "Brown Wolf",
+    "Chestnut Mare",
+    "Chromatic Mount",
+    "Deathcharger",
+    "Dire Wolf",
+    "Emerald Raptor",
+    "Fluorescent Green Mechanostrider",
+    "Frost Ram",
+    "Frostsaber",
+    "Frostwolf Howler",
+    "Golden Sabercat",
+    "Gray Kodo",
+    "Gray Ram",
+    "Gray Wolf",
+    "Great Brown Kodo",
+    "Great Gray Kodo",
+    "Great White Kodo",
+    "Green Kodo",
+    "Green Mechanostrider",
+    "Green Skeletal Warhorse",
+    "Icy Blue Mechanostrider",
+    "Ivory Raptor",
+    "Large Timber Wolf",
+    "Leopard",
+    "Mottled Red Raptor",
+    "Nightsaber",
+    "Obsidian Raptor",
+    "Palamino Stallion",
+    "Palomino Stallion",
+    "Panther",
+    "Pinto Horse",
+    "Primal Leopard",
+    "Purple Mechanostrider",
+    "Purple Skeletal Warhorse",
+    "Red & Blue Mechanostrider",
+    "Red Mechanostrider",
+    "Red Skeletal Horse",
+    "Red Skeletal Warhorse",
+    "Red Wolf",
+    "Reindeer",
+    "Riding Kodo",
+    "Riding Turtle",
+    "Skeletal Horse",
+    "Skeletal Steed",
+    "Spotted Frostsaber",
+    "Spotted Panther",
+    "Steel Mechanostrider",
+    "Stormpike Battle Charger",
+    "Striped Frostsaber",
+    "Striped Nightsaber",
+    "Summon Black Qiraji Battle Tank",
+    "Summon Blue Qiraji Battle Tank",
+    "Summon Brown Tallstrider",
+    "Summon Charger",
+    "Summon Dreadsteed",
+    "Summon Felsteed",
+    "Summon Gray Tallstrider",
+    "Summon Green Qiraji Battle Tank",
+    "Summon Ivory Tallstrider",
+    "Summon Mouth Tentacle",
+    "Summon Pink Tallstrider",
+    "Summon Purple Tallstrider",
+    "Summon Red Qiraji Battle Tank",
+    "Summon Riding Gryphon",
+    "Summon Turquoise Tallstrider",
+    "Summon Warhorse",
+    "Summon Yellow Qiraji Battle Tank",
+    "Swift Blue Raptor",
+    "Swift Brown Ram",
+    "Swift Brown Steed",
+    "Swift Brown Wolf",
+    "Swift Dawnsaber",
+    "Swift Frostsaber",
+    "Swift Gray Ram",
+    "Swift Gray Wolf",
+    "Swift Green Mechanostrider",
+    "Swift Mistsaber",
+    "Swift Olive Raptor",
+    "Swift Orange Raptor",
+    "Swift Palomino",
+    "Swift Razzashi Raptor",
+    "Swift Stormsaber",
+    "Swift Timber Wolf",
+    "Swift White Mechanostrider",
+    "Swift White Ram",
+    "Swift White Steed",
+    "Swift Yellow Mechanostrider",
+    "Swift Zulian Tiger",
+    "Tawny Sabercat",
+    "Teal Kodo",
+    "Tiger",
+    "Turquoise Raptor",
+    "Unpainted Mechanostrider",
+    "Violet Raptor",
+    "White Mechanostrider",
+    "White Ram",
+    "White Stallion",
+    "Winter Wolf",
+    "Winterspring Frostsaber"
+  ],
+  "candidateMountIcons": [
+    "Interface\\Icons\\Ability_BullRush",
+    "Interface\\Icons\\Ability_Hunter_Pet_Turtle",
+    "Interface\\Icons\\Ability_Mount_BlackDireWolf",
+    "Interface\\Icons\\Ability_Mount_BlackPanther",
+    "Interface\\Icons\\Ability_Mount_Charger",
+    "Interface\\Icons\\Ability_Mount_Dreadsteed",
+    "Interface\\Icons\\Ability_Mount_JungleTiger",
+    "Interface\\Icons\\Ability_Mount_Kodo_01",
+    "Interface\\Icons\\Ability_Mount_Kodo_02",
+    "Interface\\Icons\\Ability_Mount_Kodo_03",
+    "Interface\\Icons\\Ability_Mount_MechaStrider",
+    "Interface\\Icons\\Ability_Mount_MountainRam",
+    "Interface\\Icons\\Ability_Mount_NightmareHorse",
+    "Interface\\Icons\\Ability_Mount_PinkTiger",
+    "Interface\\Icons\\Ability_Mount_Raptor",
+    "Interface\\Icons\\Ability_Mount_RidingHorse",
+    "Interface\\Icons\\Ability_Mount_Undeadhorse",
+    "Interface\\Icons\\Ability_Mount_WhiteDireWolf",
+    "Interface\\Icons\\Ability_Mount_WhiteTiger",
+    "Interface\\Icons\\INV_Misc_Branch_01",
+    "Interface\\Icons\\INV_Misc_Head_Dragon_Black",
+    "Interface\\Icons\\INV_Misc_Head_Tauren_02",
+    "Interface\\Icons\\INV_Misc_QirajiCrystal_01",
+    "Interface\\Icons\\INV_Misc_QirajiCrystal_02",
+    "Interface\\Icons\\INV_Misc_QirajiCrystal_03",
+    "Interface\\Icons\\INV_Misc_QirajiCrystal_04",
+    "Interface\\Icons\\INV_Misc_QirajiCrystal_05",
+    "Interface\\Icons\\INV_Misc_QuestionMark",
+    "Interface\\Icons\\Spell_Nature_Swiftness",
+    "Interface\\Icons\\Temp"
+  ],
+  "exclusiveMountIcons": [
+    "Interface\\Icons\\Ability_Mount_BlackDireWolf",
+    "Interface\\Icons\\Ability_Mount_BlackPanther",
+    "Interface\\Icons\\Ability_Mount_Charger",
+    "Interface\\Icons\\Ability_Mount_Dreadsteed",
+    "Interface\\Icons\\Ability_Mount_Kodo_01",
+    "Interface\\Icons\\Ability_Mount_Kodo_02",
+    "Interface\\Icons\\Ability_Mount_Kodo_03",
+    "Interface\\Icons\\Ability_Mount_MechaStrider",
+    "Interface\\Icons\\Ability_Mount_MountainRam",
+    "Interface\\Icons\\Ability_Mount_NightmareHorse",
+    "Interface\\Icons\\Ability_Mount_Raptor",
+    "Interface\\Icons\\Ability_Mount_RidingHorse",
+    "Interface\\Icons\\Ability_Mount_Undeadhorse",
+    "Interface\\Icons\\Ability_Mount_WhiteDireWolf",
+    "Interface\\Icons\\Ability_Mount_WhiteTiger"
+  ]
+}

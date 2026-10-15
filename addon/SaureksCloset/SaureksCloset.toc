@@ -10,6 +10,8 @@ ItemIcons.lua
 BodyData.lua
 WeaponData.lua
 Core.lua
+MountCatalog.lua
+Mounts.lua
 BagCatalog.lua
 Updates.lua
 Sharing.lua

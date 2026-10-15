@@ -53,7 +53,7 @@ function V:Copy(source)
 end
 
 -- Character fields are the working copy only. Saved looks own independent snapshots.
-local lookSettingKeys={"placements","weaponPhysics","weaponBounce","weaponRocking","weaponJumpLift","weaponPhysicsSlots","capeMotion"}
+local lookSettingKeys={"mount","placements","weaponPhysics","weaponBounce","weaponRocking","weaponJumpLift","weaponPhysicsSlots","capeMotion"}
 function V:CaptureLookSettings()
     local settings={}
     for _,key in ipairs(lookSettingKeys) do
@@ -132,6 +132,7 @@ end
 function V:SyncLookSettings()
     if self.SyncBagTuning then self:SyncBagTuning() end
     if self.SyncPhysics then self:SyncPhysics() end
+    if self.SyncMount then self:SyncMount() end
     if self.RefreshCapePhysics then self:RefreshCapePhysics(true) end
 end
 
@@ -201,6 +202,7 @@ function V:Initialize()
     self:CheckArmorRepairs()
     if c.outfitDirty then self:TrackUnsaved() end
     self.ready = true
+    if self.InitializeMounts then self:InitializeMounts() end
     self:CreateLauncher()
     self:InitializeUpdates()
     if self.InitializeSharing then self:InitializeSharing() end
@@ -240,6 +242,7 @@ function V:Sync()
     -- returns. Ignore only that short echo of our own writes, not later game
     -- rebuilds that genuinely need repair.
     self.ignoreArmorModelEventsUntil=GetTime()+1
+    if self.SyncMount then self:SyncMount() end
     self:UpdateArmorEquipment()
     local c = VanityStudioCharacter
     self:SyncBody()

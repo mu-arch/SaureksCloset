@@ -280,7 +280,7 @@ function V:SetTab(tab)
     if tab~="weaponry" then self:CloseWeaponOptions() end
     self:CloseOutfitMenu();self:CloseOutfitDetails();self:CloseBrowser();self.tab=tab
     self.selectedOutfit=nil;self.confirmDelete=nil
-    local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="physics" or tab=="haircraft" or tab=="exposure"
+    local character=tab=="armor" or tab=="body" or tab=="weaponry" or tab=="bags" or tab=="mounts" or tab=="physics" or tab=="haircraft" or tab=="exposure"
     local modelPage=tab=="armor" or tab=="body" or tab=="haircraft" or tab=="exposure"
     local sideControls=tab=="body" or tab=="haircraft" or tab=="exposure"
     local closeUp=tab=="body" or tab=="haircraft"
@@ -296,7 +296,7 @@ function V:SetTab(tab)
     if character then
         self.wardrobeSelectorBox:Show()
         -- Weaponry uses the space normally occupied by the swivel buttons.
-        local wide=tab=="weaponry" or tab=="bags" or tab=="physics"
+        local wide=tab=="weaponry" or tab=="bags" or tab=="mounts" or tab=="physics"
         self.wardrobeSelectorBox:ClearAllPoints()
         self.wardrobeSelectorBox:SetPoint("TOP",self.frame,"TOP",wide and -12 or -44,-392)
         self.wardrobeSelectorBox:SetWidth(wide and 176 or 106)
@@ -305,7 +305,7 @@ function V:SetTab(tab)
         for _,tile in ipairs(self.weaponSelectorFill) do
             if wide then tile:Show() else tile:Hide() end
         end
-        self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags",physics="Physics",haircraft="Haircraft",exposure="Exposure"})[tab])
+        self.wardrobeSelectorLabel:SetText(({armor="Outfit",body="Body",weaponry="Weaponry",bags="Bags",mounts="Mounts",physics="Physics",haircraft="Haircraft",exposure="Exposure"})[tab])
     else self.wardrobeSelectorBox:Hide() end
     if self.leftPaneFrameOverlay then
         if leftPane then self.leftPaneFrameOverlay:Show() else self.leftPaneFrameOverlay:Hide() end
@@ -449,7 +449,7 @@ function V:CreateUI()
     self.outfitMenu=CreateFrame("Frame","SaureksClosetOutfitMenu",f)
     self.outfitMenu.displayMode="MENU";self.outfitMenu:Hide()
     self.outfitMenu.initialize=function(level) V:BuildOutfitMenu(level) end
-    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),physics=page(f),haircraft=page(f),exposure=page(f),outfits=page(f),settings=page(f)}
+    self.pagesByName={armor=page(f),body=page(f),weaponry=page(f),bags=page(f),mounts=page(f),physics=page(f),haircraft=page(f),exposure=page(f),outfits=page(f),settings=page(f)}
     self.tabButtons={}
     local function fitTab(b)
         local text=getglobal(b:GetName().."Text")
@@ -477,6 +477,7 @@ function V:CreateUI()
     self:CreateBodyPage(self.pagesByName.body)
     self:CreateWeaponryPage(self.pagesByName.weaponry)
     self:CreateBagsPage(self.pagesByName.bags)
+    if self.CreateMountsPage then self:CreateMountsPage(self.pagesByName.mounts,section,label,edit,button,enabled,arrow) end
     if self.CreatePhysicsPage then self:CreatePhysicsPage(self.pagesByName.physics,sheet,section,label,settingsButton,enabled,edit,button) end
     if self.CreateHaircraftPage then self:CreateHaircraftPage(self.pagesByName.haircraft,label,button,enabled,sheet,edit) end
     self:CreateExposurePage(self.pagesByName.exposure)
@@ -527,7 +528,7 @@ function V:CreateWardrobeSelector()
             UIDropDownMenu_AddButton({text=text,checked=V.tab==page and 1 or nil,
                 func=function() V:SetTab(page) end})
         end
-        choice("Outfit","armor");choice("Weaponry","weaponry");choice("Body","body");choice("Bags","bags");choice("Physics","physics");choice("Haircraft","haircraft");choice("Exposure","exposure")
+        choice("Outfit","armor");choice("Weaponry","weaponry");choice("Body","body");choice("Bags","bags");choice("Mounts","mounts");choice("Physics","physics");choice("Haircraft","haircraft");choice("Exposure","exposure")
     end
     b:SetScript("OnClick",function() ToggleDropDownMenu(1,nil,menu,b:GetName(),0,0) end)
 end
@@ -2027,6 +2028,7 @@ function V:Refresh()
     end
     self.activeOutfitLabel:SetText(self:ActiveOutfitText())
     self:RefreshBagsPage()
+    if self.RefreshMountsPage then self:RefreshMountsPage() end
     if self.RefreshPhysicsPage then self:RefreshPhysicsPage() end
     if self.RefreshHaircraftPage then self:RefreshHaircraftPage() end
     for slot,b in pairs(self.slotButtons) do
