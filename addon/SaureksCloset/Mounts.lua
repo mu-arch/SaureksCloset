@@ -111,10 +111,18 @@ function V:CreateMountsPage(p,section,label,edit,button,enable,arrow)
     self.mountOriginal=button(p,"Original",240,80,90,function() V:SetMountAppearance(nil) end)
     self.mountCurrent=label(p,"",38,114,292,22)
     self.mountSearch=edit(p,"SaureksClosetMountSearch",43,144,282,70)
-    self.mountSearch:SetScript("OnTextChanged",function() V.mountPage=1;V:RefreshMountsPage() end)
-    self.mountSearch:SetScript("OnEnterPressed",function() this:ClearFocus() end)
     local hint=label(p,"Search mounts",48,149,270,18,true)
-    self.mountSearch:SetScript("OnUpdate",function() if this:GetText()=="" and not this:HasFocus() then hint:Show() else hint:Hide() end end)
+    self.mountSearchHint=hint
+    local function refreshHint()
+        if V.mountSearch:GetText()=="" and not V.mountSearch.closetFocused then hint:Show() else hint:Hide() end
+    end
+    -- Vanilla EditBoxes have focus events, but no HasFocus() method.
+    self.mountSearch:SetScript("OnEditFocusGained",function() this.closetFocused=true;refreshHint() end)
+    self.mountSearch:SetScript("OnEditFocusLost",function() this.closetFocused=nil;refreshHint() end)
+    self.mountSearch:SetScript("OnHide",function() this.closetFocused=nil;refreshHint() end)
+    self.mountSearch:SetScript("OnTextChanged",function() refreshHint();V.mountPage=1;V:RefreshMountsPage() end)
+    self.mountSearch:SetScript("OnEnterPressed",function() this:ClearFocus() end)
+    refreshHint()
     self.mountButtons={}
     for i=1,24 do
         local column=math.mod(i-1,6);local row=math.floor((i-1)/6)

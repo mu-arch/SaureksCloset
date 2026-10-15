@@ -29,7 +29,6 @@ function CreateFrame(kind,name,parent,template)
         function f:SetPlayerBuff(i) tooltipName=auras[i+1].name end
         _G[name..'TextLeft1']={GetText=function() return tooltipName end}
     end
-    function f:HasFocus() return self.focused end
     function f:SetNormalTexture(value) self.normalTexture=value end
     function f:SetPushedTexture(value) self.pushedTexture=value end
     function f:SetDisabledTexture(value) self.disabledTexture=value end
@@ -53,6 +52,14 @@ V:InitializeLookSettings();V.ready=true;V:InitializeMounts()
 local page=CreateFrame('Frame',nil,V.frame)
 V:CreateMountsPage(page,helpers.section,helpers.label,helpers.edit,helpers.button,helpers.enabled,helpers.arrow)
 assert(#VanityStudioMountCatalog==109 and #V.mountButtons==24)
+assert(V.mountSearch.HasFocus==nil,'Use the original 1.12 EditBox API in tests')
+assert(not V.mountSearch.scripts.OnUpdate,'The search hint must not poll unsupported focus methods')
+assert(V.mountSearchHint:IsShown())
+V.mountSearch:SetFocus();assert(not V.mountSearchHint:IsShown())
+V.mountSearch:SetText('wolf');V.mountSearch:ClearFocus();assert(not V.mountSearchHint:IsShown())
+V.mountSearch:SetText('');assert(V.mountSearchHint:IsShown())
+V.mountSearch:SetFocus();run(V.mountSearch,'OnHide');assert(V.mountSearchHint:IsShown() and not V.mountSearch.closetFocused)
+
 assert(V.mountOriginal.closetPanel and V.mountCurrent.text=='Original mount' and not V.mountOriginal.closetEnabled)
 assert(calls==0,'Opening mount selection cannot create a mounted model')
 assert(V.mountPageLabel.text=='1 / 5')
