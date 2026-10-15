@@ -129,7 +129,10 @@ function V:CreateMountsPage(p,section,label,edit,button,enable,arrow)
         local b=CreateFrame("Button","SaureksClosetMount"..i,p)
         b:SetWidth(42);b:SetHeight(42);b:SetPoint("TOPLEFT",p,"TOPLEFT",37+column*49,-(175+row*42))
         b.icon=b:CreateTexture(nil,"ARTWORK");b.icon:SetPoint("CENTER",b,"CENTER",0,0);b.icon:SetWidth(36);b.icon:SetHeight(36)
-        local border=b:CreateTexture(nil,"OVERLAY");border:SetTexture("Interface\\Buttons\\UI-Quickslot2");border:SetAllPoints(b)
+        -- Quickslot2 includes transparent padding. Use the same visible-frame
+        -- sizing as equipment and bag icons so its rim stays outside the icon.
+        b.border=b:CreateTexture(nil,"OVERLAY");b.border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+        b.border:SetWidth(36*64/37);b.border:SetHeight(36*64/37);b.border:SetPoint("CENTER",b,"CENTER",0,-36/37)
         b.selected=b:CreateTexture(nil,"OVERLAY");b.selected:SetTexture("Interface\\Buttons\\CheckButtonHilight");b.selected:SetAllPoints(b);b.selected:SetBlendMode("ADD")
         b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square","ADD")
         b:SetScript("OnClick",function() if this.closetEnabled and this.mount then V:SetMountAppearance(this.mount.id) end end)
