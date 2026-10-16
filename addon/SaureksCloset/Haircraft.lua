@@ -22,6 +22,7 @@ function V:SetHaircraft(keep)
         self:Message("Haircraft could not apply. Update SaureksCloset.dll and fully restart WoW.")
         self:RefreshHaircraftPage();return false
     end
+    if (previous and true or false)~=c.keepHairWithHat and self.LookSettingsChanged then self:LookSettingsChanged() end
     self:InvalidatePreviewModel(0,true)
     self:RefreshHaircraftPage();return true
 end
@@ -44,7 +45,7 @@ function V:CreateHaircraftPage(p,label,button,enabled)
     end)
     self.haircraftToggle:SetScript("OnEnter",function()
         GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Toggle Hair",1,1,1)
-        GameTooltip:AddLine("Show your current hairstyle, including ponytails, with your equipped or cosmetic hat. This character setting also applies to the wardrobe preview. Enable Trim hair to automatically fit covered hair while preserving skin and exposed lower hair. Hats that sit inside the head may still need Adjust hat.",1,.82,0,true)
+        GameTooltip:AddLine("Show your current hairstyle, including ponytails, with your equipped or cosmetic hat. This setting also applies to the wardrobe preview. Use the main Save button to keep it with this look. Enable Trim hair to automatically fit covered hair while preserving skin and exposed lower hair. Hats that sit inside the head may still need Adjust hat.",1,.82,0,true)
         GameTooltip:Show()
     end)
     self.haircraftToggle:SetScript("OnLeave",function() GameTooltip:Hide() end)

@@ -53,13 +53,14 @@ function V:Copy(source)
 end
 
 -- Character fields are the working copy only. Saved looks own independent snapshots.
-local lookSettingKeys={"mount","placements","weaponPhysics","weaponBounce","weaponRocking","weaponJumpLift","weaponPhysicsSlots","capeMotion"}
+local lookSettingKeys={"keepHairWithHat","mount","placements","weaponPhysics","weaponBounce","weaponRocking","weaponJumpLift","weaponPhysicsSlots","capeMotion"}
 function V:CaptureLookSettings()
     local settings={}
     for _,key in ipairs(lookSettingKeys) do
         local value=VanityStudioCharacter[key]
         settings[key]=type(value)=="table" and self:Copy(value) or value
     end
+    settings.keepHairWithHat=settings.keepHairWithHat and true or false
     settings.placements=settings.placements or {schema=1,enabled=true,fits={}}
     settings.placements.lastExport=nil
     return settings
@@ -82,9 +83,13 @@ function V:InitializeLookSettings()
     local legacy=self:CaptureLookSettings()
     for _,look in pairs(VanityStudioDB.outfits) do
         if not look.settings then look.settings=self:Copy(legacy);look.version=4 end
+        -- Older looks shared the character's hair preference. Capture it once;
+        -- explicit false is a saved choice and must never be replaced.
+        if look.settings.keepHairWithHat==nil then look.settings.keepHairWithHat=legacy.keepHairWithHat end
     end
     if c.unsaved then
         if not c.unsaved.settings then c.unsaved.settings=self:Copy(legacy);c.unsaved.version=4 end
+        if c.unsaved.settings.keepHairWithHat==nil then c.unsaved.settings.keepHairWithHat=legacy.keepHairWithHat end
         if c.activeUnsaved then
             self:ApplyLookSettings(c.unsaved.settings)
             if c.unsaved.weapons then c.weapons=self:NormalizeWeapons(c.unsaved.weapons) end
@@ -133,6 +138,7 @@ function V:SyncLookSettings()
     if self.SyncBagTuning then self:SyncBagTuning() end
     if self.SyncPhysics then self:SyncPhysics() end
     if self.SyncMount then self:SyncMount() end
+    if self.SyncHaircraft then self:SyncHaircraft() end
     if self.RefreshCapePhysics then self:RefreshCapePhysics(true) end
 end
 
