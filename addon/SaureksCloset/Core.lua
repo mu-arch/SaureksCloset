@@ -53,7 +53,7 @@ function V:Copy(source)
 end
 
 -- Character fields are the working copy only. Saved looks own independent snapshots.
-local lookSettingKeys={"keepHairWithHat","mount","placements","weaponPhysics","weaponBounce","weaponRocking","weaponJumpLift","weaponPhysicsSlots","capeMotion"}
+local lookSettingKeys={"keepHairWithHat","casting","mount","placements","weaponPhysics","weaponBounce","weaponRocking","weaponJumpLift","weaponPhysicsSlots","capeMotion"}
 function V:CaptureLookSettings()
     local settings={}
     for _,key in ipairs(lookSettingKeys) do
@@ -139,6 +139,7 @@ function V:SyncLookSettings()
     if self.SyncPhysics then self:SyncPhysics() end
     if self.SyncMount then self:SyncMount() end
     if self.SyncHaircraft then self:SyncHaircraft() end
+    if self.SyncCasting then self:SyncCasting() end
     if self.RefreshCapePhysics then self:RefreshCapePhysics(true) end
 end
 
@@ -307,6 +308,7 @@ function V:Sync()
         end
     end
     self:SyncWeapons()
+    if self.SyncCasting then self:SyncCasting() end
     self.syncingAppearance = nil
 end
 
@@ -964,6 +966,7 @@ V.events:SetScript("OnUpdate", function()
     elapsed = 0
     if V.SyncPhysics then V:SyncPhysics() end
     if V.SyncHaircraft then V:SyncHaircraft() end
+    if V.SyncCasting then V:SyncCasting() end
     if V.UpdateSharing then V:UpdateSharing() end
     if V.armorRepairCheckPending then
         V.armorRepairCheckPending=nil

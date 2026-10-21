@@ -28,5 +28,6 @@ BagTunerUI.lua
 Physics.lua
 CapePhysics.lua
 Haircraft.lua
+Casting.lua
 UI.lua
 Bindings.xml

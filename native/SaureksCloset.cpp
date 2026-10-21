@@ -428,6 +428,7 @@ static int __fastcall weaponryProbe(void* L){
 }
 #include "WeaponRenderer.h"
 #include "ProjectileRenderer.h"
+#include "CastingRenderer.h"
 #include "UpdateChecker.h"
 #include "SharingRuntime.h"
 #include "VoiceRenderer.h"
@@ -457,6 +458,8 @@ static int __fastcall version(void* L){return result(L,40201);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
+        registerOriginal("SaureksClosetCastingVersion",reinterpret_cast<std::uintptr_t>(&castingVersionLua));
+        registerOriginal("SaureksClosetSetCasting",reinterpret_cast<std::uintptr_t>(&setCastingLua));
         registerOriginal("SaureksClosetSetCapeMotion",reinterpret_cast<std::uintptr_t>(&setCapeMotionLua));
         hairMask::capture=hairMaskRuntime::capture;
         registerOriginal("SaureksClosetHairMaskVersion",reinterpret_cast<std::uintptr_t>(&hairMaskVersionLua));
@@ -500,6 +503,13 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     if(!compatible()||MH_Initialize()!=MH_OK)return TRUE;
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
+        {0x60EDF0,reinterpret_cast<void*>(&castingKitHook),reinterpret_cast<void**>(&castingKitOriginal)},
+        {0x60ED40,reinterpret_cast<void*>(&castingEffectHook),reinterpret_cast<void**>(&castingEffectOriginal)},
+        {0x611CF0,reinterpret_cast<void*>(&castingSheathHook),reinterpret_cast<void**>(&castingSheathOriginal)},
+        {0x712CB0,reinterpret_cast<void*>(&castingHasPointHook),reinterpret_cast<void**>(&castingHasPointOriginal)},
+        {0x712D50,reinterpret_cast<void*>(&castingPointHook),reinterpret_cast<void**>(&castingPointOriginal)},
+        {0x712F70,reinterpret_cast<void*>(&castingAttachHook),reinterpret_cast<void**>(&castingAttachOriginal)},
+        {0x6EC780,reinterpret_cast<void*>(&castingOriginHook),reinterpret_cast<void**>(&castingOriginOriginal)},
         {0x5F0D60,reinterpret_cast<void*>(&visibleItemHook),reinterpret_cast<void**>(&visibleItemOriginal)},
         {0x4799A0,reinterpret_cast<void*>(&composeHelmetHook),reinterpret_cast<void**>(&composeHelmetOriginal)},
         {0x5E0720,reinterpret_cast<void*>(&tabardDisplayHook),reinterpret_cast<void**>(&tabardDisplayOriginal)},
