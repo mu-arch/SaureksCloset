@@ -503,6 +503,7 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     if(!compatible()||MH_Initialize()!=MH_OK)return TRUE;
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
+        {0x7121A0,reinterpret_cast<void*>(&castingSequenceHook),reinterpret_cast<void**>(&castingSequenceOriginal)},
         {0x60EDF0,reinterpret_cast<void*>(&castingKitHook),reinterpret_cast<void**>(&castingKitOriginal)},
         {0x60ED40,reinterpret_cast<void*>(&castingEffectHook),reinterpret_cast<void**>(&castingEffectOriginal)},
         {0x611CF0,reinterpret_cast<void*>(&castingSheathHook),reinterpret_cast<void**>(&castingSheathOriginal)},

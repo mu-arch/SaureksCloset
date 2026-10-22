@@ -7,6 +7,7 @@ using CastingEffect=void (__thiscall *)(void*,unsigned,unsigned,unsigned,const u
 using CastingSheath=void (__thiscall *)(void*,unsigned,unsigned,unsigned);
 using CastingPoint=float* (__thiscall *)(void*,float*,unsigned);
 using CastingOrigin=float* (__fastcall *)(float*,void*,unsigned);
+using CastingSequence=void (__thiscall *)(void*,int,unsigned,int,unsigned,float,unsigned,unsigned);
 static CastingKit castingKitOriginal=nullptr;
 static CastingEffect castingEffectOriginal=nullptr;
 static CastingSheath castingSheathOriginal=nullptr;
@@ -14,6 +15,7 @@ static HasPoint castingHasPointOriginal=nullptr;
 static CastingPoint castingPointOriginal=nullptr;
 static AttachChild castingAttachOriginal=nullptr;
 static CastingOrigin castingOriginOriginal=nullptr;
+static CastingSequence castingSequenceOriginal=nullptr;
 static weaponCasting::Settings castingSettings;
 static std::uint64_t castingOwner=0;
 static std::uintptr_t castingScope=0;
@@ -37,6 +39,16 @@ static bool castingSpell(unsigned spellId){
         if(!read(row+4*(91+i),aura)||aura==78)return false;
     }
     return true;
+}
+static bool castingInProgress(const Player& p){
+    // Build 5875 sets +C8C to the spell ID at SPELL_START and clears it at
+    // success/failure/interruption. Channel spells live at descriptor+228.
+    // Read the client lifecycle, not a guessed animation-duration timeout.
+    unsigned spell=0;
+    if(!read(p.unit+0xC8C,spell))return false;
+    if(spell)return castingSpell(spell);
+    std::uintptr_t descriptor=0;
+    return read(p.unit+0x110,descriptor)&&descriptor&&read(descriptor+0x228,spell)&&spell&&castingSpell(spell);
 }
 static void* castingWeapon(std::uintptr_t parent,unsigned& tip){
     Player p;
@@ -99,8 +111,24 @@ static void __fastcall castingAttachHook(void* child,void*,void* parent,unsigned
     castingAttachOriginal(child,parent,point);
 }
 static void __fastcall castingSheathHook(void* unit,void*,unsigned mode,unsigned immediate,unsigned notify){
-    if(castingScope==reinterpret_cast<std::uintptr_t>(unit))mode=1;
+    Player p;unsigned tip=0;
+    const bool hold=(castingScope&&castingScope==reinterpret_cast<std::uintptr_t>(unit))||
+        (castingDrewWeapon&&castingAsset()&&castingPlayer(unit,p)&&castingInProgress(p)&&castingWeapon(p.model,tip));
+    if(hold&&mode!=1){mode=1;notify=0;}
     castingSheathOriginal(unit,mode,immediate,notify);
+}
+static void __fastcall castingSequenceHook(void* model,void*,int track,unsigned animation,int variation,
+    unsigned time,float speed,unsigned repeat,unsigned blend){
+    // The client can schedule the sustained casting loop directly on the
+    // model after the opening kit/UnitAnimation call has returned.
+    if(castingSettings.enabled&&castingSettings.swing&&castingOwner==getPlayer()&&
+       (weaponCasting::ready(animation)||weaponCasting::channel(animation))){
+        Player p;unsigned tip=0;const auto* asset=castingAsset();
+        if(asset&&snapshot(p)&&p.guid==castingOwner&&p.display==p.native&&p.model==reinterpret_cast<std::uintptr_t>(model)&&
+           castingInProgress(p)&&castingWeapon(p.model,tip))
+            animation=weaponCasting::animation(animation,asset->kind,asset->subclass);
+    }
+    castingSequenceOriginal(model,track,animation,variation,time,speed,repeat,blend);
 }
 static void __fastcall castingEffectHook(void* unit,void*,unsigned point,unsigned expires,unsigned spell,
     const unsigned* kit,const unsigned* effect,unsigned* flags,std::uintptr_t callback){

@@ -29,6 +29,7 @@ data. New entry points have executable-prefix checks in BuildSignatures.h.
 | 712D50 | model thiscall(output, point), ret 8 | Resolve the animated weapon's attachment position |
 | 712F70 | child thiscall(parent, point), ret 8 | Attach casting art to the held weapon |
 | 6EC780 | fastcall(output in ECX, unit in EDX, spellID on stack), ret 4 | Weapon projectile origin |
+| 7121A0 | model thiscall(track, animation, variation, time, speed, repeat, blend), ret 1Ch | Preserve weapon pose through delayed casting loops |
 
 SpellVisualKit has 35 uint fields (140 bytes); [1] identifies caster/target,
 [2] is animation, [6]/[7] are left/right palm effects. 60F199/60F1D7 dispatch
@@ -49,12 +50,27 @@ computed by the client. The synthetic marker is used only in private effect inst
 attachment consumers resolve it before calling native code, falling back to the
 original palm point when the weapon is unavailable or the feature is disabled.
 
-60EDF0 also calls 611CF0 to put weapons away. The scoped sheath hook substitutes
-melee only during an eligible caster-kit dispatch. No global animation or DBC
+60EDF0 also calls 611CF0 to put weapons away. The sheath hook substitutes melee
+during an eligible caster-kit dispatch and while that player's supported
+cast/channel is still in progress with a valid held weapon. No global animation or DBC
 row is edited. If drawing does not produce a valid held weapon, the prior visual
 sheath is restored and the original kit runs. Disabling restores the visual
 sheath captured before the first successful weapon cast, unless the player has
 since switched away from the drawn melee state.
+
+The initial dispatch scope alone is insufficient: the native scheduler can
+later reapply a hand-casting loop directly through 7121A0 and restore the sheath
+through 611CF0. Both paths now preserve the weapon for the full cast. The spell ID
+at unit+C8Ch is set by 60D020 (called from 6EC2CF before the opening kit), and
+60D040 clears it on completion/failure/interruption. Channels use the unit's
+descriptor pointer at +110h, spell ID at descriptor+228h, as read by 60D340 and
+60DD0C. These fields are read only. No guessed duration, Lua timer or persistent
+cast flag is used. Once both IDs clear, subsequent pose/sheath requests pass
+through immediately. Idle, movement, release, foreign models, unavailable
+weapons, disabled swing and disabled feature paths keep their native sequences.
+The seven sequence arguments, including timing, speed, repeat and blending,
+remain unchanged apart from the eligible ready/channel animation ID. Ret 1Ch
+and the seven argument reads were audited at 7121A0–712230 / 7127E4.
 
 ## Lifetime and timing
 
@@ -74,6 +90,9 @@ cast until the middle/end of a swing or turn a melee attack into a spell cast.
 `tests/casting.cpp` executes the actual hooks with simulated client memory and
 callbacks, covering isolation, stable kit lifetimes, field preservation, poses,
 effects/origins, fallback/disable, unsupported casts and malformed bridge inputs.
+It also schedules pose and sheath updates after the opening scope has ended,
+through 30 seconds of simulated cast time, then checks release/cancel cleanup,
+channels, one/two-handed poses, foreign models and unchanged sequence timing.
 The Lua tests exercise real look persistence, transmog choice, dirty/save/discard,
 reload, disabled/missing bridges, navigation and 1.12-shaped widgets. They are
 mandatory release checks. The Windows DLL also builds with warnings as errors.

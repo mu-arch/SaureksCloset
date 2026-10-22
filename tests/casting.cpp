@@ -46,8 +46,17 @@ static unsigned receivedPoint=0;
 static std::uintptr_t receivedModel=0,receivedChild=0;
 static bool simulateKit=false;
 static unsigned flags=7,effectRow=99;
+static unsigned receivedNotify=99,receivedAnimation=0,receivedTime=0;
 static void sheath(void* unit,unsigned mode,unsigned immediate,unsigned notify){
-    assert(immediate==1);assert(notify==0||notify==1);++sheathCalls;put(address(unit)+0xD40,mode);
+    assert(immediate==1);assert(notify==0||notify==1);receivedNotify=notify;++sheathCalls;put(address(unit)+0xD40,mode);
+}
+static void sequence(void* model,int track,unsigned animation,int variation,unsigned time,float speed,unsigned repeat,unsigned blend){
+    assert(track==-1&&variation==3&&speed==.75f&&repeat==5&&blend==7);
+    receivedModel=address(model);receivedAnimation=animation;receivedTime=time;
+}
+static void loop(unsigned animation,unsigned time=3500,void* model=nullptr){
+    castingSequenceHook(model?model:ptr(player.model),nullptr,-1,animation,3,time,.75f,5,7);
+    assert(receivedTime==time);
 }
 static void effect(void*,unsigned point,unsigned expires,unsigned spell,const unsigned* kit,const unsigned* row,unsigned* f,std::uintptr_t callback){
     assert(expires==1100&&spell==133&&row==&effectRow&&f==&flags&&callback==0x1234);
@@ -78,6 +87,7 @@ static void settings(bool on=true,unsigned item=35,bool effects=true,bool swing=
 int main(){
     castingKitOriginal=kit;castingEffectOriginal=effect;castingSheathOriginal=sheath;
     castingHasPointOriginal=hasPoint;castingPointOriginal=position;castingAttachOriginal=attach;castingOriginOriginal=origin;
+    castingSequenceOriginal=sequence;
     put(0x8000,133u);put(0x8018,0u);for(unsigned i=0;i<3;++i)put(0x8000+4*(91+i),0u);
     put(player.unit+0xD40,0u);put(child+0x1CC,player.model);put(child+0x1D0,1u);put(child+0x10,1u);
     put(child+0x30,std::uintptr_t(0x4000));put(0x4130,std::uintptr_t(0x5000));
@@ -136,6 +146,44 @@ int main(){
     settings();childMatches=false;call(source);assert(read(player.unit+0xD40,mode)&&mode==0&&!castingDrewWeapon);
     childMatches=true;call(source);put(player.unit+0xD40,2u);settings(false);
     assert(read(player.unit+0xD40,mode)&&mode==2&&!castingDrewWeapon);
+    // Regression: the native scheduler refreshes the ready pose and sheath
+    // several seconds AFTER the opening kit's scope has returned to zero.
+    put(player.unit+0xC8C,133u);put(player.unit+0x110,std::uintptr_t(0x7000));put(0x7228,0u);
+    put(player.unit+0xD40,0u);settings();source[0]=30;source[2]=51;call(source);
+    assert(castingScope==0&&castingDrewWeapon);
+    for(unsigned elapsed:{100u,2000u,3500u,8000u,30000u}){
+        settings(); // the addon's periodic sync must not reset cast ownership
+        castingSheathHook(ptr(player.unit),nullptr,0,1,1);
+        assert(read(player.unit+0xD40,mode)&&mode==1&&receivedNotify==0);
+        loop(51,elapsed);assert(receivedAnimation==28);
+        castingSheathHook(ptr(player.unit),nullptr,2,1,1);
+        assert(read(player.unit+0xD40,mode)&&mode==1);
+    }
+    for(unsigned a:{31u,51u,52u,124u,125u}){loop(a);assert(receivedAnimation==28);}
+    for(unsigned a:{0u,5u,17u,53u,94u}){loop(a);assert(receivedAnimation==a);}
+    loop(51,3500,ptr(0x9999));assert(receivedAnimation==51&&receivedModel==0x9999);
+    castingSheathHook(ptr(0x9999),nullptr,0,1,1);
+    assert(read(0x9999+0xD40,mode)&&mode==0&&receivedNotify==1);
+    settings(true,25);loop(51);assert(receivedAnimation==26);
+    settings(true,647);loop(51);assert(receivedAnimation==27);
+    settings(true,35,true,false);loop(51);assert(receivedAnimation==51);
+    settings();childMatches=false;loop(51);assert(receivedAnimation==51);
+    castingSheathHook(ptr(player.unit),nullptr,0,1,1);assert(read(player.unit+0xD40,mode)&&mode==0);
+    childMatches=true;put(player.unit+0xD40,1u);
+    player.display=1;loop(51);assert(receivedAnimation==51);player.display=49;
+    put(0x8018,2u);loop(51);assert(receivedAnimation==51);
+    castingSheathHook(ptr(player.unit),nullptr,2,1,1);assert(read(player.unit+0xD40,mode)&&mode==2);
+    put(0x8018,0u);put(player.unit+0xD40,1u);
+    // Channels use the descriptor's real channel spell; cancellations and
+    // successful release clear both native spell IDs, immediately ending hold.
+    put(player.unit+0xC8C,0u);put(0x7228,133u);loop(124);assert(receivedAnimation==28);
+    castingSheathHook(ptr(player.unit),nullptr,0,1,1);assert(read(player.unit+0xD40,mode)&&mode==1);
+    put(0x7228,0u);loop(51);assert(receivedAnimation==51);
+    castingSheathHook(ptr(player.unit),nullptr,0,1,1);assert(read(player.unit+0xD40,mode)&&mode==0&&receivedNotify==1);
+    put(player.unit+0xC8C,133u);call(source);settings(false);
+    loop(51);assert(receivedAnimation==51);
+    castingSheathHook(ptr(player.unit),nullptr,0,1,1);assert(read(player.unit+0xD40,mode)&&mode==0);
+    put(player.unit+0xC8C,0u);
     settings(true,0);call(source);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));
     Lua bad{{1,1,1,999999}};setCastingLua(&bad);assert(bad.status==-2);
     bad.args={1,1};setCastingLua(&bad);assert(bad.status==-2);
@@ -143,5 +191,5 @@ int main(){
     bad.args={1,1,1,35.5};setCastingLua(&bad);assert(bad.status==-2);
     snapshotOK=false;bad.args={1,1,1,35};setCastingLua(&bad);assert(bad.status==-1);snapshotOK=true;
     assert(retained[2]==28&&retained[7]==287);
-    std::cout<<"PASS: casting ownership, immutable/retained kits, poses, weapon effects/origin, exclusions, fallback, disable and bridge validation\n";
+    std::cout<<"PASS: casting ownership, immutable/retained kits, full-cast/channel loops, cancel/release cleanup, poses, weapon effects/origin, exclusions, fallback, disable and bridge validation\n";
 }
