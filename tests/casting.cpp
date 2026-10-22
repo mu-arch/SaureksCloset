@@ -33,7 +33,17 @@ static void* ptr(std::uintptr_t at){return reinterpret_cast<void*>(at);}
 static std::uintptr_t address(const void* p){return reinterpret_cast<std::uintptr_t>(p);}
 static void* findChildHook(void* parent,void*,unsigned point){return address(parent)==player.model&&point==1?ptr(child):nullptr;}
 static bool weaponModelMatches(void*,const char*){return childMatches;}
-static std::uintptr_t projectileDBRow(std::uintptr_t table,unsigned id){return table==0xC0D788&&id==133?0x8000:0;}
+static std::map<std::pair<std::uintptr_t,unsigned>,std::uintptr_t> dbcRows;
+static std::uintptr_t projectileDBRow(std::uintptr_t table,unsigned id){
+    const auto found=dbcRows.find({table,id});return found==dbcRows.end()?0:found->second;
+}
+static weaponCasting::Visual sourceVisual{{67,30,38,286,0,0}};
+static bool visualAvailable=true;
+static unsigned* originalVisual(void*,const unsigned*,unsigned* out){
+    if(!visualAvailable)return nullptr;
+    std::copy(sourceVisual.begin(),sourceVisual.end(),out);return out;
+}
+static auto unitSpellVisualOriginal=&originalVisual;
 struct Lua {std::vector<double> args;int status=0;};
 static bool isNumber(void* p,int index){return static_cast<Lua*>(p)->args.size()>=static_cast<unsigned>(index);}
 static double toNumber(void* p,int index){return static_cast<Lua*>(p)->args.at(index-1);}
@@ -59,14 +69,16 @@ static void loop(unsigned animation,unsigned time=3500,void* model=nullptr){
     assert(receivedTime==time);
 }
 static void effect(void*,unsigned point,unsigned expires,unsigned spell,const unsigned* kit,const unsigned* row,unsigned* f,std::uintptr_t callback){
-    assert(expires==1100&&spell==133&&row==&effectRow&&f==&flags&&callback==0x1234);
+    unsigned actual=0;assert(read(0x8000,actual));
+    assert(expires==1100&&spell==actual&&row==&effectRow&&f==&flags&&callback==0x1234);
     ++effectCalls;receivedPoint=point;assert(kit==receivedKit);
 }
 static unsigned kit(void* unit,const unsigned* spell,const unsigned* data,unsigned phase,unsigned arg){
     ++kitCalls;receivedKit=data;receivedSpell=spell;receivedPhase=phase;receivedArg=arg;
     if(simulateKit){
+        unsigned id=0;assert(read(address(spell),id));
         castingSheathHook(unit,nullptr,2,1,1);
-        castingEffectHook(unit,nullptr,22,1100,133,data,&effectRow,&flags,0x1234);
+        castingEffectHook(unit,nullptr,22,1100,id,data,&effectRow,&flags,0x1234);
     }
     return 77;
 }
@@ -77,7 +89,7 @@ static float* position(void* model,float* out,unsigned point){
 static void attach(void* effectModel,void* parent,unsigned point){receivedChild=address(effectModel);receivedModel=address(parent);receivedPoint=point;}
 static float* origin(float* out,void* unit,unsigned spell){receivedModel=address(unit);receivedPoint=spell;out[0]=1;return out;}
 static unsigned call(const weaponCasting::Kit& source,unsigned phase=4,void* unit=nullptr){
-    put(0x9000,source);
+    put(0x9000,source);put(0x9008,source[2]);dbcRows[{0xC0D74C,source[0]}]=0x9000;
     return castingKitHook(unit?unit:ptr(player.unit),nullptr,reinterpret_cast<const unsigned*>(0x8000),reinterpret_cast<const unsigned*>(0x9000),phase,987);
 }
 static void settings(bool on=true,unsigned item=35,bool effects=true,bool swing=true){
@@ -88,6 +100,7 @@ int main(){
     castingKitOriginal=kit;castingEffectOriginal=effect;castingSheathOriginal=sheath;
     castingHasPointOriginal=hasPoint;castingPointOriginal=position;castingAttachOriginal=attach;castingOriginOriginal=origin;
     castingSequenceOriginal=sequence;
+    dbcRows[{0xC0D788,133}]=0x8000;dbcRows[{0xC0D74C,21}]=0xA000;
     put(0x8000,133u);put(0x8018,0u);for(unsigned i=0;i<3;++i)put(0x8000+4*(91+i),0u);
     put(player.unit+0xD40,0u);put(child+0x1CC,player.model);put(child+0x1D0,1u);put(child+0x10,1u);
     put(child+0x30,std::uintptr_t(0x4000));put(0x4130,std::uintptr_t(0x5000));
@@ -119,8 +132,8 @@ int main(){
     castingOriginHook(output,ptr(0x9999),133);assert(receivedModel==0x9999&&receivedPoint==133);
     const auto before=sheathCalls;call(source,4,ptr(0x9999));assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000)&&sheathCalls==before);
     for(unsigned phase:{1,2,3,5}){call(source,phase);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));}
-    auto target=source;target[1]=1;call(target);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));
-    auto invalid=source;invalid[2]=16;call(invalid);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));
+    auto target=source;target[0]=286;target[1]=1;call(target,1);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));
+    auto unusual=source;unusual[2]=16;call(unusual);assert(receivedKit[2]==28);
     for(unsigned attributes:{2u,0x40u}){put(0x8018,attributes);call(source);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));}
     put(0x8018,0u);put(0x8000+91*4,78u);call(source);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));put(0x8000+91*4,0u);
     player.display=1;call(source);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));player.display=49;
@@ -129,11 +142,12 @@ int main(){
     put(child+0x10,0u);call(source);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));put(child+0x10,1u);
     put(0x5104,65u);call(source);assert(receivedKit==reinterpret_cast<const unsigned*>(0x9000));put(0x5104,3u);
     // Each animation family preserves every other kit field.
-    source[0]=38;source[2]=53;settings(true,25);call(source);assert(receivedKit[2]==17);
-    settings(true,647);call(source);assert(receivedKit[2]==18);
-    settings(true,35);call(source);assert(receivedKit[2]==19);
-    source[0]=64;source[2]=124;call(source);assert(receivedKit[2]==28);
-    settings(true,35,false,false);call(source);assert(std::equal(source.begin(),source.end(),receivedKit));
+    source[0]=38;source[2]=53;settings(true,25);call(source,0);assert(receivedKit[2]==17);
+    settings(true,647);call(source,0);assert(receivedKit[2]==18);
+    settings(true,35);call(source,0);assert(receivedKit[2]==19);
+    source[0]=64;source[2]=124;sourceVisual[5]=64;put(player.unit+0xC8C,133u);
+    call(source,2);assert(receivedKit[2]==28);
+    settings(true,35,false,false);call(source,2);assert(std::equal(source.begin(),source.end(),receivedKit));
     castingOriginHook(output,ptr(player.unit),133);assert(receivedModel==player.unit&&receivedPoint==133);
     // Disable restores the original visual sheath and safely resolves markers
     // still present on effects that the native client has not expired yet.
@@ -143,8 +157,8 @@ int main(){
     const auto disabledCalls=sheathCalls;settings(false);assert(sheathCalls==disabledCalls);
     // A failed first cast must not leave the real weapon drawn. If the player
     // switches to ranged after casting, disabling must respect that choice.
-    settings();childMatches=false;call(source);assert(read(player.unit+0xD40,mode)&&mode==0&&!castingDrewWeapon);
-    childMatches=true;call(source);put(player.unit+0xD40,2u);settings(false);
+    settings();childMatches=false;call(source,2);assert(read(player.unit+0xD40,mode)&&mode==0&&!castingDrewWeapon);
+    childMatches=true;call(source,2);put(player.unit+0xD40,2u);settings(false);
     assert(read(player.unit+0xD40,mode)&&mode==2&&!castingDrewWeapon);
     // Regression: the native scheduler refreshes the ready pose and sheath
     // several seconds AFTER the opening kit's scope has returned to zero.
@@ -159,7 +173,8 @@ int main(){
         castingSheathHook(ptr(player.unit),nullptr,2,1,1);
         assert(read(player.unit+0xD40,mode)&&mode==1);
     }
-    for(unsigned a:{31u,51u,52u,124u,125u}){loop(a);assert(receivedAnimation==28);}
+    for(unsigned a:{31u,51u,52u,124u,125u,123u}){put(0x9008,a);loop(a);assert(receivedAnimation==28);}
+    put(0x9008,51u);
     for(unsigned a:{0u,5u,17u,53u,94u}){loop(a);assert(receivedAnimation==a);}
     loop(51,3500,ptr(0x9999));assert(receivedAnimation==51&&receivedModel==0x9999);
     castingSheathHook(ptr(0x9999),nullptr,0,1,1);
@@ -176,7 +191,8 @@ int main(){
     put(0x8018,0u);put(player.unit+0xD40,1u);
     // Channels use the descriptor's real channel spell; cancellations and
     // successful release clear both native spell IDs, immediately ending hold.
-    put(player.unit+0xC8C,0u);put(0x7228,133u);loop(124);assert(receivedAnimation==28);
+    put(player.unit+0xC8C,0u);put(0x7228,133u);put(0x9008,124u);loop(124);assert(receivedAnimation==28);
+    put(0x9008,51u);
     castingSheathHook(ptr(player.unit),nullptr,0,1,1);assert(read(player.unit+0xD40,mode)&&mode==1);
     put(0x7228,0u);loop(51);assert(receivedAnimation==51);
     castingSheathHook(ptr(player.unit),nullptr,0,1,1);assert(read(player.unit+0xD40,mode)&&mode==0&&receivedNotify==1);
@@ -192,4 +208,5 @@ int main(){
     snapshotOK=false;bad.args={1,1,1,35};setCastingLua(&bad);assert(bad.status==-1);snapshotOK=true;
     assert(retained[2]==28&&retained[7]==287);
     std::cout<<"PASS: casting ownership, immutable/retained kits, full-cast/channel loops, cancel/release cleanup, poses, weapon effects/origin, exclusions, fallback, disable and bridge validation\n";
+    return 0;
 }

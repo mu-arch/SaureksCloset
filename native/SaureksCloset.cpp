@@ -458,6 +458,7 @@ static int __fastcall version(void* L){return result(L,40201);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
+        castingVisualFilter=&castingAugmentVisual;
         registerOriginal("SaureksClosetCastingVersion",reinterpret_cast<std::uintptr_t>(&castingVersionLua));
         registerOriginal("SaureksClosetSetCasting",reinterpret_cast<std::uintptr_t>(&setCastingLua));
         registerOriginal("SaureksClosetSetCapeMotion",reinterpret_cast<std::uintptr_t>(&setCapeMotionLua));

@@ -4,6 +4,8 @@
 // to the missile constructor. Spell, targets, speed and equipment stay native.
 using UnitSpellVisual=unsigned* (__thiscall *)(void*,const unsigned*,unsigned*);
 static UnitSpellVisual unitSpellVisualOriginal=nullptr;
+using CastingVisualFilter=unsigned* (*)(void*,const unsigned*,unsigned*,unsigned*);
+static CastingVisualFilter castingVisualFilter=nullptr;
 using UnitMissile=void (__thiscall *)(void*,const void*,const void*,unsigned,unsigned,
     unsigned,unsigned,unsigned,const unsigned*,unsigned,const void*,const void*);
 static UnitMissile unitMissileOriginal=nullptr;
@@ -65,7 +67,8 @@ static unsigned* __fastcall unitSpellVisualHook(void* unit,void*,const unsigned*
     // finishes. Never return a hook-local array or modify a shared DBC row.
     if(!output||result!=output||!read(reinterpret_cast<std::uintptr_t>(spellRow),spellId)||
        projectileDBRow(0xC0D788,spellId)!=reinterpret_cast<std::uintptr_t>(spellRow)||
-       !selectedWeaponVisual(unit,spellId,selected,ammo))return result;
+       !selectedWeaponVisual(unit,spellId,selected,ammo))
+        return castingVisualFilter?castingVisualFilter(unit,spellRow,output,result):result;
     output[1]=selected[1];output[2]=selected[2];
     // Physical weapon visuals normally rely on ammo supplied by the server.
     // A real wand sends none: keep visual dispatch alive until the late hook

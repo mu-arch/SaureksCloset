@@ -11,8 +11,8 @@ transmog, never a decorative carried item. An empty/hidden/unsupported slot uses
 normal casting. The native side additionally verifies the current player's GUID,
 unit, model, weapon model path, ownership, loaded resource and attachment table.
 Polymorphed units, other players, target effects, passive effects, ranged attacks
-and mount spells keep their existing paths. Only caster kits using standard
-casting/channel animation IDs are eligible.
+and mount spells keep their existing paths. All caster kit animation styles are
+eligible, including custom emotes and kits with no animation.
 
 ## Binary audit
 
@@ -31,7 +31,7 @@ data. New entry points have executable-prefix checks in BuildSignatures.h.
 | 6EC780 | fastcall(output in ECX, unit in EDX, spellID on stack), ret 4 | Weapon projectile origin |
 | 7121A0 | model thiscall(track, animation, variation, time, speed, repeat, blend), ret 1Ch | Preserve weapon pose through delayed casting loops |
 
-SpellVisualKit has 35 uint fields (140 bytes); [1] identifies caster/target,
+SpellVisualKit has 35 uint fields (140 bytes); [1] is kit metadata,
 [2] is animation, [6]/[7] are left/right palm effects. 60F199/60F1D7 dispatch
 those effects to points 21/22. Other kit fields, including body effects, sounds,
 shake and timing flags, are copied unchanged. Identical palm art is merged into
@@ -39,6 +39,27 @@ one weapon effect. The animation IDs are from AnimationData.dbc: Ready1H 26 /
 Attack1H 17, Ready2H 27 / Attack2H 18, Ready2HL 28 / Attack2HL 19. Staves and
 polearms use the latter pair. Channels hold a ready pose instead of swinging
 repeatedly. The client's original animation dispatcher still owns scheduling.
+
+Caster eligibility comes from the actual spell's resolved SpellVisual output:
+precast [1] with dispatch phase 4, cast [2] with phase 0, and channel [5] with
+phase 2. Channel kits have metadata type 2; treating only type 0 as a caster
+silently excludes them. Blizzard uses kits 197/5390/717 and its channel kit 717
+is dispatched at 612B31 with phase 2 (resolved from visual+14h at 612AC9).
+The original restriction to phases 0/4 also skipped that path. These checks now
+use kit membership and role, without filtering on metadata or animation ID.
+Channel phase 2 additionally requires the same current spell ID, because state
+auras also use phase 2 and three client visuals share their state/channel kit.
+Victim, ground and unrelated aura dispatches remain unchanged. Charge/channel
+roles use a weapon ready pose; ordinary release roles use a weapon swing.
+
+The existing 60D450 visual hook also runs a casting filter on its caller-owned
+output. With swing enabled, a spell lacking both cast and channel kits receives
+the client's silent/empty cast kit 21. A private copy supplies the weapon swing;
+no particles, missile, sound or target effect is invented. Null visual results
+use a zeroed caller-owned output with just that cast kit. All existing fields
+survive when a visual is present. This is disabled for other players, hidden or
+unsupported weapons, passive/ranged/mount spells, and when swing is off.
+There are no global DBC edits or new native addresses for this extension.
 
 The model's resource is at +30h; its loaded header at resource+130h has
 attachment count +104h, pointer +108h and lookup +10Ch. Attachments are 48 bytes,
@@ -68,7 +89,9 @@ descriptor pointer at +110h, spell ID at descriptor+228h, as read by 60D340 and
 cast flag is used. Once both IDs clear, subsequent pose/sheath requests pass
 through immediately. Idle, movement, release, foreign models, unavailable
 weapons, disabled swing and disabled feature paths keep their native sequences.
-The seven sequence arguments, including timing, speed, repeat and blending,
+Delayed loop animation matching uses the current spell's actual precast and
+channel kits (including a channel-style cast kit), so styles such as Frostbolt's
+UseStandingLoop are covered without an animation allowlist. The seven sequence arguments, including timing, speed, repeat and blending,
 remain unchanged apart from the eligible ready/channel animation ID. Ret 1Ch
 and the seven argument reads were audited at 7121A0–712230 / 7127E4.
 
@@ -93,6 +116,15 @@ effects/origins, fallback/disable, unsupported casts and malformed bridge inputs
 It also schedules pose and sheath updates after the opening scope has ended,
 through 30 seconds of simulated cast time, then checks release/cancel cleanup,
 channels, one/two-handed poses, foreign models and unchanged sequence timing.
+`tests/casting_catalog.cpp` adds 164 pinned client-derived cases covering all 131
+distinct role/metadata/animation/channel combinations across 19,206 caster-kit
+references in 17,019 eligible spells. Named cases include every player Blizzard
+rank, Frostbolt, Arcane Missiles, Mind Flay, Evocation, Tranquility, Rain of Fire,
+Hurricane and instant buffs. It exercises the actual hook, field preservation,
+channel ownership, no-animation/custom styles and silent missing-caster fallback.
+Regenerate with `tools/build_casting_fixtures.py` and extracted build-5875 Spell,
+SpellVisual and SpellVisualKit DBCs; input hashes are pinned in the fixture header.
+The ranged visual/missile regression suite is also a mandatory check.
 The Lua tests exercise real look persistence, transmog choice, dirty/save/discard,
 reload, disabled/missing bridges, navigation and 1.12-shaped widgets. They are
 mandatory release checks. The Windows DLL also builds with warnings as errors.

@@ -21,7 +21,7 @@ static std::uint64_t castingOwner=0;
 static std::uintptr_t castingScope=0;
 static unsigned castingPreviousSheath=0;
 static bool castingDrewWeapon=false;
-static std::map<std::array<unsigned,5>,weaponCasting::Kit> castingKits;
+static std::map<std::array<unsigned,6>,weaponCasting::Kit> castingKits;
 static std::map<std::array<std::uintptr_t,3>,unsigned> castingTips;
 static bool castingPlayer(void* unit,Player& p){
     return castingSettings.enabled&&castingOwner==getPlayer()&&snapshot(p)&&p.guid==castingOwner&&
@@ -40,15 +40,45 @@ static bool castingSpell(unsigned spellId){
     }
     return true;
 }
-static bool castingInProgress(const Player& p){
+static unsigned castingCurrentSpell(const Player& p){
     // Build 5875 sets +C8C to the spell ID at SPELL_START and clears it at
     // success/failure/interruption. Channel spells live at descriptor+228.
     // Read the client lifecycle, not a guessed animation-duration timeout.
     unsigned spell=0;
-    if(!read(p.unit+0xC8C,spell))return false;
-    if(spell)return castingSpell(spell);
+    if(!read(p.unit+0xC8C,spell))return 0;
+    if(spell)return castingSpell(spell)?spell:0;
     std::uintptr_t descriptor=0;
-    return read(p.unit+0x110,descriptor)&&descriptor&&read(descriptor+0x228,spell)&&spell&&castingSpell(spell);
+    return read(p.unit+0x110,descriptor)&&descriptor&&read(descriptor+0x228,spell)&&spell&&castingSpell(spell)?spell:0;
+}
+static bool castingInProgress(const Player& p){return castingCurrentSpell(p)!=0;}
+static unsigned* castingAugmentVisual(void* unit,const unsigned* spell,unsigned* output,unsigned* original){
+    Player p;unsigned id=0;
+    if(!output||(original&&original!=output)||!castingSettings.swing||!castingAsset()||!castingPlayer(unit,p)||
+       !read(reinterpret_cast<std::uintptr_t>(spell),id)||projectileDBRow(0xC0D788,id)!=reinterpret_cast<std::uintptr_t>(spell)||
+       !castingSpell(id))return original;
+    // A few spells have no caster art/animation at all. Supply the client's
+    // blank cast kit, then customize its private copy at dispatch. No new art,
+    // missiles or sounds are added, and existing target/ground kits survive.
+    if((!original||(!output[2]&&!output[5]))&&projectileDBRow(0xC0D74C,21)){
+        if(!original)std::fill(output,output+16,0u);
+        output[2]=21;return output;
+    }
+    return original;
+}
+static bool castingVisual(void* unit,const unsigned* spell,weaponCasting::Visual& visual){
+    auto* original=unitSpellVisualOriginal(unit,spell,visual.data());
+    return castingAugmentVisual(unit,spell,visual.data(),original)==visual.data();
+}
+static bool castingLoopAnimation(const Player& p,unsigned animation){
+    const auto spell=projectileDBRow(0xC0D788,castingCurrentSpell(p));
+    weaponCasting::Visual visual{};
+    if(!spell||!castingVisual(reinterpret_cast<void*>(p.unit),reinterpret_cast<const unsigned*>(spell),visual))return false;
+    for(unsigned index:{1u,5u,2u}){
+        if(index==2&&!visual[5])continue; // A release swing is not a charge loop.
+        unsigned actual=0;const auto kit=projectileDBRow(0xC0D74C,visual[index]);
+        if(kit&&read(kit+8,actual)&&actual==animation)return true;
+    }
+    return false;
 }
 static void* castingWeapon(std::uintptr_t parent,unsigned& tip){
     Player p;
@@ -121,12 +151,11 @@ static void __fastcall castingSequenceHook(void* model,void*,int track,unsigned 
     unsigned time,float speed,unsigned repeat,unsigned blend){
     // The client can schedule the sustained casting loop directly on the
     // model after the opening kit/UnitAnimation call has returned.
-    if(castingSettings.enabled&&castingSettings.swing&&castingOwner==getPlayer()&&
-       (weaponCasting::ready(animation)||weaponCasting::channel(animation))){
+    if(castingSettings.enabled&&castingSettings.swing&&castingOwner==getPlayer()&&animation&&animation!=0xffffffffu){
         Player p;unsigned tip=0;const auto* asset=castingAsset();
         if(asset&&snapshot(p)&&p.guid==castingOwner&&p.display==p.native&&p.model==reinterpret_cast<std::uintptr_t>(model)&&
-           castingInProgress(p)&&castingWeapon(p.model,tip))
-            animation=weaponCasting::animation(animation,asset->kind,asset->subclass);
+           castingLoopAnimation(p,animation)&&castingWeapon(p.model,tip))
+            animation=weaponCasting::animation(51,asset->kind,asset->subclass);
     }
     castingSequenceOriginal(model,track,animation,variation,time,speed,repeat,blend);
 }
@@ -136,18 +165,23 @@ static void __fastcall castingEffectHook(void* unit,void*,unsigned point,unsigne
     castingEffectOriginal(unit,point,expires,spell,kit,effect,flags,callback);
 }
 static unsigned __fastcall castingKitHook(void* unit,void*,const unsigned* spell,const unsigned* kit,unsigned phase,unsigned arg4){
-    Player p;unsigned id=0;weaponCasting::Kit copy{};
+    Player p;unsigned id=0;weaponCasting::Kit copy{};weaponCasting::Visual visual{};
     const auto* asset=castingAsset();
     if(!castingPlayer(unit,p)||!asset||!spell||!kit||!read(reinterpret_cast<std::uintptr_t>(spell),id)||
        projectileDBRow(0xC0D788,id)!=reinterpret_cast<std::uintptr_t>(spell)||!castingSpell(id)||
-       !read(reinterpret_cast<std::uintptr_t>(kit),copy)||!weaponCasting::casterKit(copy,phase))
+       !read(reinterpret_cast<std::uintptr_t>(kit),copy)||!castingVisual(unit,spell,visual))
         return castingKitOriginal(unit,spell,kit,phase,arg4);
+    const auto role=weaponCasting::casterKit(copy,phase,visual);
+    if(role==weaponCasting::Role::None)return castingKitOriginal(unit,spell,kit,phase,arg4);
+    // State/aura dispatches also use phase 2, and a few visuals share the same
+    // state/channel kit. Only the player's active channel may take that path.
+    if(phase==2&&castingCurrentSpell(p)!=id)return castingKitOriginal(unit,spell,kit,phase,arg4);
     // The client's own visual sheath routine composes/moves the existing held
     // weapon; no extra weapon decoration or duplicate model is created.
     unsigned tip=0;
     if(!castingDrawWeapon(unit,p,tip))return castingKitOriginal(unit,spell,kit,phase,arg4);
-    const auto prepared=weaponCasting::prepare(copy,castingSettings,asset->kind,asset->subclass);
-    const std::array<unsigned,5> key{{copy[0],asset->kind,asset->subclass,castingSettings.effects,castingSettings.swing}};
+    const auto prepared=weaponCasting::prepare(copy,castingSettings,asset->kind,asset->subclass,role);
+    const std::array<unsigned,6> key{{copy[0],asset->kind,asset->subclass,castingSettings.effects,castingSettings.swing,static_cast<unsigned>(role)}};
     const auto inserted=castingKits.emplace(key,prepared);
     const auto previousScope=castingScope;castingScope=p.unit;
     const auto result=castingKitOriginal(unit,spell,inserted.first->second.data(),phase,arg4);
