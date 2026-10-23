@@ -138,6 +138,19 @@ static void* castingDrawWeapon(void* unit,const Player& p,unsigned& tip){
     if(!castingDrewWeapon){castingPreviousSheath=previous;castingDrewWeapon=true;}
     return weapon;
 }
+static bool castingForwardAttachment(void* model,const float* matrix,std::array<float,16>& output){
+    Player p;std::uintptr_t parent=0;unsigned tip=0,point=0;
+    // Cheap attachment checks reject ordinary equipment/effects before any
+    // player snapshot or weapon-resource traversal on this render hot path.
+    if(!castingSettings.enabled||!castingSettings.effects||
+       !read(reinterpret_cast<std::uintptr_t>(model)+0x1CC,parent)||!parent||
+       !read(parent+0x1D0,point)||point!=1||
+       !weaponModelMatches(model,"Spells\\ConeofCold_Hand.mdx"))return false;
+    if(castingOwner!=getPlayer()||!snapshot(p)||p.guid!=castingOwner||p.display!=p.native||!p.model||
+       castingWeapon(p.model,tip)!=reinterpret_cast<void*>(parent))return false;
+    std::array<float,16> root{};
+    return read(p.model+0xFC,root)&&weaponCasting::forwardTransform(root,matrix,output);
+}
 static bool __fastcall castingHasPointHook(void* model,void*,unsigned point){
     if(!weaponCasting::synthetic(point))return castingHasPointOriginal(model,point);
     unsigned tip=0;

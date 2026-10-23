@@ -386,6 +386,30 @@ int main(){
     sheathTransitionOriginal=&sheathTransition;updateAttachedOriginal=&observeAttachment;
     bowStringDrawOriginal=&observeBowString;
     testHatPlacementRouting();
+    {
+        // The casting orientation filter must run on recursive AND lazy
+        // child updates; otherwise the native swing overwrites it mid-effect.
+        const auto effect=pointer(0xB13000);
+        modelName(effect,"Spells\\ConeofCold_Hand.mdx");
+        assert(weaponModelMatches(effect,"Spells\\ConeofCold_Hand.mdx"));
+        assert(!weaponModelMatches(effect,"Spells\\Ice_Precast_Low_Hand.mdx"));
+        BagMatrix input{{1,0,0,0,0,1,0,0,0,0,1,0,10,20,30,1}};
+        auto expected=input;expected[0]=0;expected[1]=1;expected[4]=-1;expected[5]=0;
+        castingAttachmentFilter=+[](void* model,const float* matrix,BagMatrix& out){
+            if(address(model)!=0xB13000)return false;
+            std::copy(matrix,matrix+16,out.begin());out[0]=0;out[1]=1;out[4]=-1;out[5]=0;return true;
+        };
+        captureAttachmentMatrix=true;
+        for(auto caller:{0x718761u,0x71415Du,0x714183u}){
+            updateAttachmentForCaller(effect,input.data(),nullptr,nullptr,.75f,caller);
+            assert(capturedAttachmentMatrix==expected&&attachmentUpdate.alpha==.75f);
+            updateAttachmentForCaller(pointer(0xB13001),input.data(),nullptr,nullptr,.75f,caller);
+            assert(capturedAttachmentMatrix==input&&attachmentUpdate.alpha==.75f);
+        }
+        castingAttachmentFilter=nullptr;
+        updateAttachmentForCaller(effect,input.data(),nullptr,nullptr,.75f,0x714183);
+        assert(capturedAttachmentMatrix==input);captureAttachmentMatrix=false;
+    }
     memory[player.unit+0xD8]=player.model;memory[player.unit+0xD40]=0;memory[player.model+0x10]=1;
     memory[0xC0DC10]=0x900000;memory[0xC0DC14]=100000;
     for(const auto& a:weaponAssets){const auto row=0xC00000+100*a.display;memory[0x900000+4*a.display]=row;memory[row]=a.display;}

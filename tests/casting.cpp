@@ -17,7 +17,7 @@ using HasPoint=bool (*)(void*,unsigned);
 using AttachChild=void (*)(void*,void*,unsigned);
 struct Player {std::uintptr_t unit=0x1000,model=0x2000;std::uint64_t guid=123;unsigned display=49,native=49;};
 static Player player;
-static bool snapshotOK=true,childMatches=true;
+static bool snapshotOK=true,childMatches=true,coneMatches=false;
 static std::uintptr_t child=0x3000;
 static std::map<std::uintptr_t,std::vector<unsigned char>> memory;
 template<class T> static void put(std::uintptr_t at,const T& v){
@@ -32,7 +32,10 @@ static std::uint64_t getPlayer(){return player.guid;}
 static void* ptr(std::uintptr_t at){return reinterpret_cast<void*>(at);}
 static std::uintptr_t address(const void* p){return reinterpret_cast<std::uintptr_t>(p);}
 static void* findChildHook(void* parent,void*,unsigned point){return address(parent)==player.model&&point==1?ptr(child):nullptr;}
-static bool weaponModelMatches(void*,const char*){return childMatches;}
+static bool weaponModelMatches(void* model,const char* filename){
+    if(std::strcmp(filename,"Spells\\ConeofCold_Hand.mdx")==0)return address(model)==0xABCD&&coneMatches;
+    return childMatches;
+}
 static std::map<std::pair<std::uintptr_t,unsigned>,std::uintptr_t> dbcRows;
 static std::uintptr_t projectileDBRow(std::uintptr_t table,unsigned id){
     const auto found=dbcRows.find({table,id});return found==dbcRows.end()?0:found->second;

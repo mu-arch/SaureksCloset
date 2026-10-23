@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <cmath>
 namespace weaponCasting {
 using Kit=std::array<unsigned,35>;
 struct Settings {
@@ -38,4 +39,18 @@ inline Kit prepare(const Kit& original,const Settings& settings,unsigned kind,un
 constexpr unsigned marker=0x7f00;
 inline bool synthetic(unsigned point){return point==marker+21||point==marker+22;}
 inline unsigned fallback(unsigned point){return synthetic(point)?point-marker:point;}
+inline bool forwardTransform(const std::array<float,16>& player,const float* attachment,std::array<float,16>& out){
+    if(!attachment)return false;
+    for(unsigned i=0;i<16;++i)if(!std::isfinite(player[i])||!std::isfinite(attachment[i]))return false;
+    if(std::fabs(player[15]-1.f)>.001f||std::fabs(attachment[15]-1.f)>.001f)return false;
+    for(unsigned column:{0u,4u,8u}){
+        float length=0;for(unsigned axis=0;axis<3;++axis)length+=player[column+axis]*player[column+axis];
+        if(length<.000001f)return false;
+    }
+    // ConeofCold_Hand's authored emitter faces +X. Keep the weapon-tip
+    // position, but use the player's facing/scale instead of the swing bones.
+    out=player;
+    for(unsigned axis=0;axis<3;++axis)out[12+axis]=attachment[12+axis];
+    return true;
+}
 }

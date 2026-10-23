@@ -459,6 +459,7 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
         castingVisualFilter=&castingAugmentVisual;
+        castingAttachmentFilter=&castingForwardAttachment;
         registerOriginal("SaureksClosetCastingVersion",reinterpret_cast<std::uintptr_t>(&castingVersionLua));
         registerOriginal("SaureksClosetSetCasting",reinterpret_cast<std::uintptr_t>(&setCastingLua));
         registerOriginal("SaureksClosetSetCapeMotion",reinterpret_cast<std::uintptr_t>(&setCapeMotionLua));

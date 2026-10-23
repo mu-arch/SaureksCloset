@@ -37,6 +37,8 @@ static SheathTransition sheathTransitionOriginal=nullptr;
 static FindChild findChildOriginal=nullptr;
 static ClearChildren clearChildrenOriginal=nullptr;
 static UpdateAttachedModel updateAttachedOriginal=nullptr;
+using CastingAttachmentFilter=bool (*)(void*,const float*,std::array<float,16>&);
+static CastingAttachmentFilter castingAttachmentFilter=nullptr;
 static BowStringDraw bowStringDrawOriginal=nullptr;
 #ifndef SAUREKS_WEAPON_TEST
 template<typename T> static T weaponFunction(std::uintptr_t address){return reinterpret_cast<T>(address);}
@@ -922,6 +924,10 @@ static bool positionHaircraftHat(void* child,const float* matrix,BagMatrix& out)
 }
 static void updateAttachmentForCaller(void* model,const float* matrix,const float* color,const float* lighting,float alpha,std::uintptr_t caller){
     if(hairMask::capture)hairMask::capture(model,matrix);
+    BagMatrix casting;
+    if(castingAttachmentFilter&&castingAttachmentFilter(model,matrix,casting)){
+        updateAttachedOriginal(model,casting.data(),color,lighting,alpha);return;
+    }
     BagMatrix hat;
     if(positionHaircraftHat(model,matrix,hat)){
         updateAttachedOriginal(model,hat.data(),color,lighting,alpha);return;

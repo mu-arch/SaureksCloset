@@ -84,6 +84,23 @@ computed by the client. The synthetic marker is used only in private effect inst
 attachment consumers resolve it before calling native code, falling back to the
 original palm point when the weapon is unavailable or the feature is disabled.
 
+Cone of Cold's directional art needs a different orientation from a charging
+glow. All five player ranks (120/8492/10159/10160/10161) use visual 1007,
+release kit 1027 and palm effect 625, `Spells\ConeofCold_Hand.mdx`. The installed
+M2 (SHA256 49b737d35e7cfff5c87f60fd7f15f8608073e906297c7c3b800909ff331c423d)
+has its principal emitter on bone 11, inheriting bone 0's fixed quaternion
+(-.5, .499999, -.499999, .500002), which turns its emission axis toward local
++X. Attaching that art normally to the weapon also rotates the cone with the
+swing. The existing 714260 attachment-update hook therefore filters this exact
+effect model on the local player's validated held weapon. It retains the
+incoming weapon-tip translation, but takes orientation and scale from the
+player model's +FCh root matrix. The blast faces the player forward axis,
+including camera/facing changes, instead of following the hand/weapon bones.
+Both recursive and lazy attachment updates take this path, after the cast scope
+has ended as well. The effect's authored particles/fan, local scale, timing,
+color and lighting remain native. Other spell art and native/non-owned cones
+are unaffected. No effect pointers or animated transforms are cached.
+
 60EDF0 also calls 611CF0 to put weapons away. The sheath hook substitutes melee
 during an eligible caster-kit dispatch and while that player's supported
 cast/channel is still in progress with a valid held weapon. No global animation or DBC
@@ -142,6 +159,11 @@ The ranged visual/missile regression suite is also a mandatory check.
 verify native kit, hand props, visual output, sequence, sheath and origin paths
 remain untouched, including after a weapon cast. Ten real magic spell controls
 confirm that the exclusions do not disable genuine casting or channels.
+`tests/casting_cone.cpp` uses all five complete player-rank records to check
+weapon poses, effect selection, stable facing across swing angles and player
+headings, retained tip position, expired cast scope, and isolation/fallbacks.
+`tests/weapon_renderer.cpp` also checks the filter's integration on recursive
+and lazy updates and verifies the actual resource-path matcher.
 The Lua tests exercise real look persistence, transmog choice, dirty/save/discard,
 reload, disabled/missing bridges, navigation and 1.12-shaped widgets. They are
 mandatory release checks. The Windows DLL also builds with warnings as errors.
