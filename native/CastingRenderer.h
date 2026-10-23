@@ -32,11 +32,27 @@ static const WeaponAsset* castingAsset(){
     return a&&(a->kind==1||a->kind==2)?a:nullptr;
 }
 static bool castingSpell(unsigned spellId){
-    const auto row=projectileDBRow(0xC0D788,spellId);unsigned attributes=0;
-    // Passive effects and ammo/ranged attacks retain their native weapon paths.
-    if(!row||!read(row+0x18,attributes)||(attributes&(2|0x40)))return false;
+    const auto row=projectileDBRow(0xC0D788,spellId);
+    unsigned attributes=0,category=0,family=0,mechanic=0;
+    // The client also represents food, professions and other activities as
+    // spells. Their props/gestures must never be turned into weapon casting.
+    if(!row||!read(row+0x18,attributes)||(attributes&(2|0x20|0x40))||
+       !read(row+4*2,category)||category==11||category==59||
+       !read(row+4*160,family)||family==13||!read(row+4*5,mechanic)||mechanic==16)return false;
+    if(!family){
+        unsigned visual=0;
+        if(!read(row+4*115,visual)||!visual)return false; // e.g. triggered Well Fed bonuses
+    }
     for(unsigned i=0;i<3;++i){unsigned aura=0;
         if(!read(row+4*(91+i),aura)||aura==78)return false;
+        if(aura==84||aura==85){
+            unsigned interrupts=0;
+            if(!read(row+4*22,interrupts)||(interrupts&0x40000))return false;
+        }
+        if(!family){
+            unsigned effect=0;if(!read(row+4*(61+i),effect))return false;
+            if(effect==33||effect==50||effect==95||effect==99||effect==118)return false;
+        }
     }
     return true;
 }
@@ -60,6 +76,10 @@ static unsigned* castingAugmentVisual(void* unit,const unsigned* spell,unsigned*
     // blank cast kit, then customize its private copy at dispatch. No new art,
     // missiles or sounds are added, and existing target/ground kits survive.
     if((!original||(!output[2]&&!output[5]))&&projectileDBRow(0xC0D74C,21)){
+        // No-visual generic effects include triggered Well Fed/item bonuses;
+        // don't invent a weapon swing for those background updates.
+        unsigned family=0;
+        if(!read(reinterpret_cast<std::uintptr_t>(spell)+4*160,family)||!family)return original;
         if(!original)std::fill(output,output+16,0u);
         output[2]=21;return output;
     }

@@ -102,6 +102,8 @@ int main(){
     castingSequenceOriginal=sequence;
     dbcRows[{0xC0D788,133}]=0x8000;dbcRows[{0xC0D74C,21}]=0xA000;
     put(0x8000,133u);put(0x8018,0u);for(unsigned i=0;i<3;++i)put(0x8000+4*(91+i),0u);
+    for(unsigned i:{2u,5u,22u,61u,62u,63u,160u})put(0x8000+4*i,0u);
+    put(0x8000+4*115,67u);
     put(player.unit+0xD40,0u);put(child+0x1CC,player.model);put(child+0x1D0,1u);put(child+0x10,1u);
     put(child+0x30,std::uintptr_t(0x4000));put(0x4130,std::uintptr_t(0x5000));
     put(0x5104,3u);put(0x5108,std::uintptr_t(0x6000));

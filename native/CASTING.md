@@ -11,8 +11,10 @@ transmog, never a decorative carried item. An empty/hidden/unsupported slot uses
 normal casting. The native side additionally verifies the current player's GUID,
 unit, model, weapon model path, ownership, loaded resource and attachment table.
 Polymorphed units, other players, target effects, passive effects, ranged attacks
-and mount spells keep their existing paths. All caster kit animation styles are
-eligible, including custom emotes and kits with no animation.
+and mount spells keep their existing paths. Food, drink, potions, bandaging,
+crafting, gathering, fishing, opening and disenchanting retain native props and
+gestures. Magic casting supports every animation style, including custom emotes
+and kits with no animation.
 
 ## Binary audit
 
@@ -59,7 +61,18 @@ no particles, missile, sound or target effect is invented. Null visual results
 use a zeroed caller-owned output with just that cast kit. All existing fields
 survive when a visual is present. This is disabled for other players, hidden or
 unsupported weapons, passive/ranged/mount spells, and when swing is off.
-There are no global DBC edits or new native addresses for this extension.
+Generic effects without a visual (such as triggered Well Fed bonuses) are also
+excluded; the silent fallback is limited to actual class-spell families. There
+are no global DBC edits or new native addresses for this extension.
+
+Activity classification is shared by kit dispatch, visual augmentation, held
+pose/sheath maintenance and projectile-origin routing. It reads build-5875 spell
+metadata: category [2] (food 11/drink 59), family [160] (potions 13), mechanic [5]
+(bandaging 16), trade-spell attribute 20h, seated-regeneration auras 84/85 with
+aura-interrupt flag 40000h, and generic activity effects 33/50/95/99/118. This
+also catches food/drink variants with category zero. A shared animation such as
+UseStandingLoop is not an exclusion: Frostbolt, Conjure Water and Evocation must
+remain eligible. Cups and similar props never enter the weapon-effect scope.
 
 The model's resource is at +30h; its loaded header at resource+130h has
 attachment count +104h, pointer +108h and lookup +10Ch. Attachments are 48 bytes,
@@ -116,15 +129,19 @@ effects/origins, fallback/disable, unsupported casts and malformed bridge inputs
 It also schedules pose and sheath updates after the opening scope has ended,
 through 30 seconds of simulated cast time, then checks release/cancel cleanup,
 channels, one/two-handed poses, foreign models and unchanged sequence timing.
-`tests/casting_catalog.cpp` adds 164 pinned client-derived cases covering all 131
-distinct role/metadata/animation/channel combinations across 19,206 caster-kit
-references in 17,019 eligible spells. Named cases include every player Blizzard
+`tests/casting_catalog.cpp` adds 163 pinned client-derived cases covering all 128
+distinct role/metadata/animation/channel combinations across 17,651 caster-kit
+references in 13,262 eligible spells. Named cases include every player Blizzard
 rank, Frostbolt, Arcane Missiles, Mind Flay, Evocation, Tranquility, Rain of Fire,
 Hurricane and instant buffs. It exercises the actual hook, field preservation,
 channel ownership, no-animation/custom styles and silent missing-caster fallback.
 Regenerate with `tools/build_casting_fixtures.py` and extracted build-5875 Spell,
 SpellVisual and SpellVisualKit DBCs; input hashes are pinned in the fixture header.
 The ranged visual/missile regression suite is also a mandatory check.
+`tests/casting_activities.cpp` uses 30 complete real activity spell records to
+verify native kit, hand props, visual output, sequence, sheath and origin paths
+remain untouched, including after a weapon cast. Ten real magic spell controls
+confirm that the exclusions do not disable genuine casting or channels.
 The Lua tests exercise real look persistence, transmog choice, dirty/save/discard,
 reload, disabled/missing bridges, navigation and 1.12-shaped widgets. They are
 mandatory release checks. The Windows DLL also builds with warnings as errors.

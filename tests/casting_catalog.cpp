@@ -36,7 +36,7 @@ int main(){
         }
     }
     assert(channels&&none&&unusual);
-    put(0x8000,133u);sourceVisual={};sourceVisual[3]=286;sourceVisual[10]=1234;
+    put(0x8000,133u);put(0x8000+4*160,3u);sourceVisual={};sourceVisual[3]=286;sourceVisual[10]=1234;
     auto output=sourceVisual;
     assert(castingAugmentVisual(ptr(player.unit),reinterpret_cast<const unsigned*>(0x8000),output.data(),output.data())==output.data());
     assert(output[2]==21);
