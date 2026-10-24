@@ -669,5 +669,20 @@
     "gpu_base_bytes": 4096,
     "bytes": 4140,
     "sha256": "e0725ba31cb64e36ad437a9eb50596cc54a8696507bccce2897cb0fd5bf87cb3"
+  },
+  {
+    "texture": "SecondHatNumber.tga",
+    "source": "tools/build_second_hat_number.py",
+    "generated": true,
+    "source_sha256": "d0e7f2c06ceab59500a1e4a0704467de86cb35a5bc5135b28064684d40e053ab",
+    "font_sha256": "8f798feb09a0e9dc97daf0a54b52a9a1a7b4cf7103fcb2aa1566ab36ac4dc41c",
+    "size": [
+      32,
+      32
+    ],
+    "encoding": "RGBA8 lossless",
+    "gpu_base_bytes": 4096,
+    "bytes": 4140,
+    "sha256": "8d2347348dccdd3b5592f3157a81f9a4b1ccd8cb391b21b1c52e2a57d6176d68"
   }
 ]

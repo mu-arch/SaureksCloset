@@ -30,6 +30,18 @@ for entry in manifest:
             assert lengths[0] == w*h//(1 if alpha else 2)
             assert offsets[0] + lengths[0] == len(data)
             assert lengths[0] == entry['gpu_base_bytes']
+# Center the visible numeral, not the font's ascender/line box. Test both
+# source pixels and the actual 16px control after texture filtering.
+number_entry=next(entry for entry in manifest if entry['texture']=='SecondHatNumber.tga')
+assert hashlib.sha256((root/number_entry['source']).read_bytes()).hexdigest()==number_entry['source_sha256']
+with Image.open(folder/'SecondHatNumber.tga') as number:
+    assert number.mode=='RGBA' and number.size==(32,32)
+    assert number.getpixel((0,0))[3]==0
+    for size in (32,16):
+        alpha=number.resize((size,size),Image.Resampling.BILINEAR).getchannel('A')
+        left,top,right,bottom=alpha.point(lambda v:255 if v>=16 else 0).getbbox()
+        assert abs((left+right)/2-size/2)<=.5 and abs((top+bottom)/2-size/2)<=.5
+    assert number.getpixel((16,16))[:3]==(210,210,204)
 assert not list(folder.glob('ArmorDecorations*'))
 assert not list(folder.glob('GenericTrim*')) and not list(folder.glob('WardrobeBG*'))
 assert not list(folder.glob('Settings*'))
