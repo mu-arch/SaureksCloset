@@ -35,12 +35,16 @@ local function button(parent,text,x,y,w,callback,name)
     b:SetScript("OnMouseUp",function() paintButton(this,this.closetEnabled and "Up" or "Disabled") end)
     return b
 end
--- Every item cog uses the same corner overlap, artwork and hit target.
-local function placementCog(parent)
+-- Item corner controls share their overlap and hit target.
+local function placementCog(parent,caption)
     local cog=CreateFrame("Button",nil,parent)
     cog:SetPoint("BOTTOMRIGHT",parent,"BOTTOMRIGHT",4,-3);cog:SetWidth(16);cog:SetHeight(16)
     cog:SetFrameLevel(parent:GetFrameLevel()+3)
-    cog:SetNormalTexture(art.."PlacementCog.tga")
+    if caption then
+        cog.caption=label(cog,caption,0,0,16,16)
+        cog.caption:SetFont("Fonts\\FRIZQT__.TTF",14,"OUTLINE")
+        cog.caption:SetJustifyH("CENTER");cog.caption:SetJustifyV("MIDDLE")
+    else cog:SetNormalTexture(art.."PlacementCog.tga") end
     cog:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Round","ADD")
     return cog
 end
@@ -681,7 +685,7 @@ function V:CreateArmorPage(p)
         local b=self:CreateSlotButton(slotLayer,p,slot,pos[1],pos[2],iconSize)
         b:SetFrameLevel(slotLayer:GetFrameLevel()+1)
         if slot==1 then
-            local cog=placementCog(b);self.secondHatCog=cog
+            local cog=placementCog(b,"2");self.secondHatCog=cog
             cog:SetScript("OnClick",function() V:OpenBrowser(112) end)
             cog:SetScript("OnEnter",function()
                 GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Second hat",1,.82,0)
