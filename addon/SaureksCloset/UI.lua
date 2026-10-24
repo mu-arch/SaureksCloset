@@ -41,6 +41,7 @@ local function placementCog(parent,caption)
     cog:SetPoint("BOTTOMRIGHT",parent,"BOTTOMRIGHT",4,-3);cog:SetWidth(16);cog:SetHeight(16)
     cog:SetFrameLevel(parent:GetFrameLevel()+3)
     if caption then
+        cog:SetNormalTexture(art.."CornerButton.tga")
         cog.caption=label(cog,caption,0,0,16,16)
         cog.caption:SetFont("Fonts\\FRIZQT__.TTF",14,"OUTLINE")
         cog.caption:SetJustifyH("CENTER");cog.caption:SetJustifyV("MIDDLE")

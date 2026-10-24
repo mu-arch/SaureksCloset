@@ -655,5 +655,19 @@
       496,
       208
     ]
+  },
+  {
+    "texture": "CornerButton.tga",
+    "source": "tools/build_corner_button.py",
+    "generated": true,
+    "source_sha256": "8fb825b20306c6589e97552f56c3985e82c184c322c13f56205b8584b6a7a9ec",
+    "size": [
+      32,
+      32
+    ],
+    "encoding": "RGBA8 lossless",
+    "gpu_base_bytes": 4096,
+    "bytes": 4140,
+    "sha256": "e0725ba31cb64e36ad437a9eb50596cc54a8696507bccce2897cb0fd5bf87cb3"
   }
 ]

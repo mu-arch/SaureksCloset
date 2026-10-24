@@ -8,6 +8,8 @@ assert(cog:GetFrameLevel()==V.slotButtons[1]:GetFrameLevel()+3)
 -- Compare to the actual weapon cog, rather than hardcoding a separate style.
 local weapon=V.weaponCards[108].gear
 assert(cog.caption and cog.caption:GetText()=='2' and not weapon.caption)
+assert(cog.normal=='Interface\\AddOns\\SaureksCloset\\Textures\\CornerButton.tga')
+assert(weapon.normal=='Interface\\AddOns\\SaureksCloset\\Textures\\PlacementCog.tga')
 assert(weapon.width==cog.width and weapon.height==cog.height)
 assert(weapon.anchor[1]==cog.anchor[1] and weapon.anchor[3]==cog.anchor[3])
 assert(weapon.anchor[4]==cog.anchor[4] and weapon.anchor[5]==cog.anchor[5])
