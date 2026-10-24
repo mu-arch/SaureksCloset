@@ -35,6 +35,15 @@ local function button(parent,text,x,y,w,callback,name)
     b:SetScript("OnMouseUp",function() paintButton(this,this.closetEnabled and "Up" or "Disabled") end)
     return b
 end
+-- Every item cog uses the same corner overlap, artwork and hit target.
+local function placementCog(parent)
+    local cog=CreateFrame("Button",nil,parent)
+    cog:SetPoint("BOTTOMRIGHT",parent,"BOTTOMRIGHT",4,-3);cog:SetWidth(16);cog:SetHeight(16)
+    cog:SetFrameLevel(parent:GetFrameLevel()+3)
+    cog:SetNormalTexture(art.."PlacementCog.tga")
+    cog:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Round","ADD")
+    return cog
+end
 -- Full native page buttons retain the original frame, arrow size and alignment.
 local function arrow(parent,direction,x,y,callback,name)
     serial=serial+1
@@ -672,17 +681,16 @@ function V:CreateArmorPage(p)
         local b=self:CreateSlotButton(slotLayer,p,slot,pos[1],pos[2],iconSize)
         b:SetFrameLevel(slotLayer:GetFrameLevel()+1)
         if slot==1 then
-            local cog=CreateFrame("Button",nil,b);self.secondHatCog=cog
-            cog:SetPoint("BOTTOMRIGHT",b,"BOTTOMRIGHT",-1,1);cog:SetWidth(16);cog:SetHeight(16)
-            cog:SetFrameLevel(b:GetFrameLevel()+3)
-            cog:SetNormalTexture(art.."PlacementCog.tga")
-            cog:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Round","ADD")
+            local cog=placementCog(b);self.secondHatCog=cog
             cog:SetScript("OnClick",function() V:OpenBrowser(112) end)
             cog:SetScript("OnEnter",function()
                 GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Second hat",1,.82,0)
                 local id=VanityStudioCharacter.secondHat
                 GameTooltip:AddLine(id and itemName(id) or "Wear a second hat or bandana alongside your current hat.",1,1,1,true)
                 GameTooltip:AddLine("Click to choose or remove your second hat. Save keeps it with this look.",1,.82,0,true)
+                if not (V.SecondHatAvailable and V:SecondHatAvailable()) then
+                    GameTooltip:AddLine("Fully restart WoW to load second-hat support from the updated DLL.",1,.3,.3,true)
+                end
                 GameTooltip:Show()
             end)
             cog:SetScript("OnLeave",function() GameTooltip:Hide() end)
@@ -863,11 +871,7 @@ function V:CreateWeaponryPage(p)
             stowed:SetScript("OnLeave",function() GameTooltip:Hide() end)
         end
         do
-            local cog=CreateFrame("Button",nil,b);card.gear=cog;cog.slot=slot
-            cog:SetPoint("BOTTOMRIGHT",b,"BOTTOMRIGHT",4,-3);cog:SetWidth(16);cog:SetHeight(16)
-            cog:SetFrameLevel(b:GetFrameLevel()+3)
-            cog:SetNormalTexture(art.."PlacementCog.tga")
-            cog:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Round","ADD")
+            local cog=placementCog(b);card.gear=cog;cog.slot=slot
             cog:SetScript("OnClick",function()
                 if not V:WeaponChoiceAvailable(this.slot) then return end
                 if this.slot>=108 and not V:HeldWeaponTuningAvailable() then return end
@@ -1100,7 +1104,7 @@ function V:OpenSlotMenu(slot)
 end
 function V:OpenBrowser(slot)
     if slot==112 and not (self.SecondHatAvailable and self:SecondHatAvailable()) then
-        self:Message("Update SaureksCloset.dll and fully restart WoW to wear a second hat.");return
+        self:Message("Second-hat DLL support is not loaded. You can browse hats, but fully close and reopen WoW with the updated DLL before applying one.")
     end
     if not (self.slotButtons[slot] or (slot==112 and self.slotButtons[1])) or (self:IsWeaponPosition(slot) and self.tab~="weaponry") then return end
     if self:IsWeaponPosition(slot) and not self:WeaponChoiceAvailable(slot) then return end
@@ -1836,7 +1840,8 @@ function V:RefreshList()
     if self.maxOffset>0 then self.scroll:Show();self.scrollThumb:Show() else self.scrollThumb:Hide();self.scroll:Hide() end
     self.qualityLabel:SetText(self.quality=="unobtainable" and "Unobtainable" or ("Quality: "..(self.qualityNames[self.quality] or "All")))
     self.materialLabel:SetText("Type: "..self:ItemTypeName(self.material,self.slot))
-    self.browser.title:SetText(self.slotNames[self.slot]..(self:IsCarriedWeapon(self.slot) and " - Carried" or " Appearance"))
+    local secondHatReady=self.slot~=112 or (self.SecondHatAvailable and self:SecondHatAvailable())
+    self.browser.title:SetText(self.slot==112 and not secondHatReady and "Second hat - Restart required" or self.slotNames[self.slot]..(self:IsCarriedWeapon(self.slot) and " - Carried" or " Appearance"))
     self.resultsLabel:SetText(table.getn(matches)..(table.getn(matches)==1 and " Item" or " Items"))
     if table.getn(matches)==0 then self.emptyLabel:Show() else self.emptyLabel:Hide() end
     for i,b in ipairs(self.rows) do
@@ -1854,9 +1859,9 @@ function V:RefreshList()
     end
     if self.removeSecondHatButton then
         if self.slot==112 then self.removeSecondHatButton:Show() else self.removeSecondHatButton:Hide() end
-        enabled(self.removeSecondHatButton,VanityStudioCharacter.secondHat~=nil or (self.draft and self.draft.slot==112))
+        enabled(self.removeSecondHatButton,secondHatReady and (VanityStudioCharacter.secondHat~=nil or (self.draft and self.draft.slot==112)))
     end
-    enabled(self.commitButton,self.draft~=nil)
+    enabled(self.commitButton,self.draft~=nil and secondHatReady)
 end
 function V:RefreshWardrobeSaveButton()
     if not self.saveLookButton then return end
@@ -2044,6 +2049,9 @@ function V:ActiveOutfitText()
     local name=base and (base..(edited and " (Edited)" or "")) or (edited and "(Unsaved Look)" or "No outfit")
     return name..(not c.enabled and " (off)" or "")
 end
+function V:RefreshSecondHatCog()
+    if self.secondHatCog then enabled(self.secondHatCog,true);self.secondHatCog:SetAlpha(1) end
+end
 function V:Refresh()
     if not self.uiReady or not self.frame or not self.frame:IsShown() then return end
     self:RefreshUpdateUI()
@@ -2067,10 +2075,9 @@ function V:Refresh()
         b.icon:SetTexture(icon or "Interface\\PaperDoll\\UI-PaperDoll-Slot-"..(icons[slot] or self.weaponIcons[slot-100]))
         if id==0 then b.hiddenOverlay:Show() else b.hiddenOverlay:Hide() end
     end
-    if self.secondHatCog then
-        local available=self.SecondHatAvailable and self:SecondHatAvailable()
-        enabled(self.secondHatCog,available);self.secondHatCog:SetAlpha(available and 1 or .4)
-    end
+    -- The cog opens a picker, even before the DLL can apply appearances.
+    -- Keep navigation usable and report missing native support in the picker.
+    self:RefreshSecondHatCog()
     self:RefreshSlotHighlights()
     self:RefreshWeaponCards()
     if self.tab=="armor" or self.tab=="bags" or self.tab=="exposure" or self.tab=="haircraft" then self:RefreshPreview()

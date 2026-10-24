@@ -120,7 +120,9 @@ function V:SyncHairMask()
 end
 
 function V:SecondHatAvailable()
-    return type(SaureksClosetSetSecondHat)=="function" and type(SaureksClosetSecondHatVersion)=="function"
+    -- The setter is the capability we use; an optional version getter must not
+    -- disable a working bridge.
+    return type(SaureksClosetSetSecondHat)=="function"
 end
 function V:SecondHatSelection()
     if self.draft and self.draft.slot==112 then return self.draft.id end
