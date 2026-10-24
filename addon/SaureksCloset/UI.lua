@@ -52,11 +52,13 @@ local function placementCog(parent,caption)
             circle:SetVertexColor(face[2],face[3],face[4],1)
             table.insert(cog.backplate,circle)
         end
-        -- The glyph's visible pixels are centered in its square canvas;
-        -- font ascenders/line spacing cannot move it off the button center.
-        cog.number=cog:CreateTexture(nil,"OVERLAY")
-        cog.number:SetTexture(art.."SecondHatNumber.tga")
-        cog.number:SetAllPoints(cog)
+        -- Real text remains visible without loading a new loose texture.
+        cog.caption=label(cog,caption,0,0,16,16)
+        cog.caption:ClearAllPoints();cog.caption:SetPoint("CENTER",cog,"CENTER",0,0)
+        cog.caption:SetFont("Fonts\\FRIZQT__.TTF",11,"OUTLINE")
+        cog.caption:SetTextColor(.82,.82,.80)
+        cog.caption:SetShadowOffset(0,0)
+        cog.caption:SetJustifyH("CENTER");cog.caption:SetJustifyV("MIDDLE")
     else cog:SetNormalTexture(art.."PlacementCog.tga") end
     cog:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Round","ADD")
     return cog

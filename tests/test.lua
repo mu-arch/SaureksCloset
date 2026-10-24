@@ -13,7 +13,7 @@ end
 local frames = {}
 local methods = {}
 local function noop() end
-for _,name in ipairs({"SetFont","SetTextColor","SetJustifyH","SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetHighlightTexture","SetTextInsets","SetAutoFocus","SetMaxLetters","ClearFocus","SetClampedToScreen","SetMovable","RegisterForDrag","StartMoving","StopMovingOrSizing","SetFrameStrata","EnableMouse","EnableMouseWheel","SetNormalTexture","SetOwner","ClearLines","AddLine","RegisterEvent","SetAllPoints","SetAlpha","RegisterForClicks","SetFocus","SetJustifyV","SetHitRectInsets","SetPushedTexture","SetVertexColor","SetValueStep","SetDisabledTexture","SetTexCoord","SetBlendMode"}) do methods[name]=noop end
+for _,name in ipairs({"SetFont","SetShadowOffset","SetTextColor","SetJustifyH","SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetHighlightTexture","SetTextInsets","SetAutoFocus","SetMaxLetters","ClearFocus","SetClampedToScreen","SetMovable","RegisterForDrag","StartMoving","StopMovingOrSizing","SetFrameStrata","EnableMouse","EnableMouseWheel","SetNormalTexture","SetOwner","ClearLines","AddLine","RegisterEvent","SetAllPoints","SetAlpha","RegisterForClicks","SetFocus","SetJustifyV","SetHitRectInsets","SetPushedTexture","SetVertexColor","SetValueStep","SetDisabledTexture","SetTexCoord","SetBlendMode"}) do methods[name]=noop end
 function methods:SetFont(path,size) self.fontPath=path;self.fontSize=size end
 function methods:RegisterEvent(name) self.events=self.events or {};self.events[name]=true end
 function methods:SetJustifyV(v) self.justifyV=v end

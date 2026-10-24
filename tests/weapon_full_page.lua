@@ -75,6 +75,7 @@ function methods:GetPosition()
     return p[1],p[2],p[3]
 end
 function methods:SetTextColor(r,g,b) self.color={r,g,b} end
+function methods:SetShadowOffset(x,y) self.shadowOffset={x,y} end
 function methods:SetJustifyH(value) self.align=value end
 function methods:SetJustifyV(value) self.verticalAlign=value end
 function methods:SetNormalTexture(value) self.normal=value end

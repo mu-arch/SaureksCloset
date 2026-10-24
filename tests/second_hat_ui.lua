@@ -7,8 +7,14 @@ assert(cog.anchor[1]=='BOTTOMRIGHT' and cog.anchor[2]==V.slotButtons[1] and cog.
 assert(cog:GetFrameLevel()==V.slotButtons[1]:GetFrameLevel()+3)
 -- Compare to the actual weapon cog, rather than hardcoding a separate style.
 local weapon=V.weaponCards[108].gear
-assert(cog.number and cog.number.allPoints==cog and not weapon.number)
-assert(cog.number.texture[1]=='Interface\\AddOns\\SaureksCloset\\Textures\\SecondHatNumber.tga')
+assert(cog.caption and cog.caption.kind=='FontString' and cog.caption:GetText()=='2' and not weapon.caption)
+assert(not cog.number,'The numeral must not depend on a newly loaded texture')
+assert(cog.caption.anchor[1]=='CENTER' and cog.caption.anchor[2]==cog and cog.caption.anchor[3]=='CENTER')
+assert(cog.caption.anchor[4]==0 and cog.caption.anchor[5]==0)
+assert(cog.caption.align=='CENTER' and cog.caption.verticalAlign=='MIDDLE')
+assert(cog.caption.width==16 and cog.caption.height==16 and cog.caption.fontSize==11)
+assert(cog.caption.shadowOffset[1]==0 and cog.caption.shadowOffset[2]==0)
+assert(cog.caption.color[1]==cog.caption.color[2])
 assert(cog.backplate and #cog.backplate==3)
 for i,diameter in ipairs({16,14,12}) do
     local circle=cog.backplate[i]
@@ -62,4 +68,4 @@ assert(V.commitButton.enabled and not V.removeSecondHatButton:IsShown())
 local f=assert(io.open('addon/SaureksCloset/UI.lua'));local source=f:read('*a');f:close()
 assert(string.find(source,'self.removeSecondHatButton=button(f,"Remove second hat",24,405,154',1,true))
 assert(string.find(source,'if self.slot==112 then self.removeSecondHatButton:Show()',1,true))
-print('PASS: 16px dark round button, centered glyph texture and muted rim, unchanged weapon cogs, clickable missing-DLL navigation, setter-only capability, clear restart notice, guarded Apply/Remove and normal browser isolation')
+print('PASS: 16px dark round button, centered native text and muted rim, unchanged weapon cogs, clickable missing-DLL navigation, setter-only capability, clear restart notice, guarded Apply/Remove and normal browser isolation')
