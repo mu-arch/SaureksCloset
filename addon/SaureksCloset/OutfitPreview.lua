@@ -10,7 +10,7 @@ function V:StartOutfitPreview()
     end
     local b=look.body and self:NormalizeBody(look.body) or self:NativeBody()
     local bodyKey=b and (b.race..":"..b.sex..":"..b.skin..":"..b.face..":"..b.hairStyle..":"..b.hairColor..":"..b.facial) or "pending"
-    local signature=bodyKey..self:WeaponSignature(look.weapons or {},look.slots)
+    local signature=bodyKey..self:WeaponSignature(look.weapons or {},look.slots)..":secondHat:"..((look.settings or {}).secondHat or 0)
     local items=self:OutfitPreviewItems(look)
     for _,slot in ipairs(self.slotOrder) do signature=signature..":"..items[slot] end
     if self.detailPending and self.detailPending.signature==signature then return end
@@ -44,7 +44,7 @@ function V:DressOutfitPreview(target,look)
             if not GetItemInfo(id) then self.detailMissing[id]=true;self:RequestItem(id) end
         end
     end
-    self:DressWeaponPlacements(target,look.weapons,look.slots)
+    self:DressWeaponPlacements(target,look.weapons,look.slots,(look.settings or {}).secondHat or 0)
     target:SetRotation(self.outfitModel.rotation or .61)
 end
 function V:UpdateOutfitPreview()
@@ -73,7 +73,7 @@ function V:UpdateOutfitPreview()
         end
         if pending.phase=="reveal" then
             if not self:PreviewModelReady(pending.target,pending.dressedAt) then return end
-            local ok,ready=pcall(self.DressWeaponPlacements,self,pending.target,pending.look.weapons,pending.look.slots)
+            local ok,ready=pcall(self.DressWeaponPlacements,self,pending.target,pending.look.weapons,pending.look.slots,(pending.look.settings or {}).secondHat or 0)
             if not ok or not ready then return end
             local target=pending.target;local previous=self.outfitModel
             target.rotation=previous.rotation or .61;target:SetRotation(target.rotation)

@@ -101,6 +101,8 @@ struct WeaponContext {
     void* passthroughQuiver=nullptr;
     unsigned backBag=0;
     void* backpack=nullptr;
+    void* secondHat=nullptr;
+    unsigned secondHatDisplay=0,secondHatRace=0,secondHatSex=0;
     BagMotion bagMotion;
     std::array<BagInstance,8> bags{};
     unsigned bagGeneration=0;
@@ -205,7 +207,7 @@ static void rememberClonedBagPreview(std::uintptr_t source,std::uintptr_t model)
     for(auto& entry:clonedBagPreviews)if(!entry.model){entry={model,guid};return;}
 }
 static bool ownedExtra(const WeaponContext& c,void* child){
-    if(child&&c.backpack==child)return true;
+    if(child&&(c.backpack==child||c.secondHat==child))return true;
     for(const auto& bag:c.bags)if(child&&bag.child==child)return true;
     if(child&&c.passthroughQuiver==child)return true;
     for(auto p:c.extra)if(p&&p==child)return true;
@@ -903,6 +905,7 @@ static bool positionHaircraftHat(void* child,const float* matrix,BagMatrix& out)
     const auto model=reinterpret_cast<std::uintptr_t>(child);
     std::uintptr_t parent=0;unsigned point=0;
     if(!read(model+0x1D0,point)||point!=11||!read(model+0x1CC,parent))return false;
+    if(const auto* c=weaponContext(parent))if(c->secondHat==child)return false;
     Player p;if(!snapshot(p))return false;
     unsigned race=0,sex=0;
     if(parent==p.model&&p.display==p.native&&nativeModel(p.native)){
@@ -923,7 +926,9 @@ static bool positionHaircraftHat(void* child,const float* matrix,BagMatrix& out)
     return hatPlacement(base,fit.values,out);
 }
 static void updateAttachmentForCaller(void* model,const float* matrix,const float* color,const float* lighting,float alpha,std::uintptr_t caller){
-    if(hairMask::capture)hairMask::capture(model,matrix);
+    std::uintptr_t parent=0;read(reinterpret_cast<std::uintptr_t>(model)+0x1CC,parent);
+    const auto* context=weaponContext(parent);
+    if(hairMask::capture&&(!context||context->secondHat!=model))hairMask::capture(model,matrix);
     BagMatrix casting;
     if(castingAttachmentFilter&&castingAttachmentFilter(model,matrix,casting)){
         updateAttachedOriginal(model,casting.data(),color,lighting,alpha);return;
@@ -960,6 +965,13 @@ static void releasePassthroughQuiver(WeaponContext& c){
     if(read(reinterpret_cast<std::uintptr_t>(child)+0x1CC,parent)&&parent==c.parent)detachChild(child);
     releaseModel(child);
 }
+static void releaseSecondHat(WeaponContext& c){
+    auto* child=c.secondHat;c.secondHat=nullptr;
+    if(!child)return;
+    std::uintptr_t parent=0;
+    if(read(reinterpret_cast<std::uintptr_t>(child)+0x1CC,parent)&&parent==c.parent)detachChild(child);
+    releaseModel(child);
+}
 static void releaseBackpack(WeaponContext& c){
     auto* child=c.backpack;c.backpack=nullptr;c.bagMotion={};
     if(!child)return;
@@ -982,6 +994,7 @@ static void forgetWeapons(std::uintptr_t model){
     for(auto& entry:clonedBagChildren)if(entry.child==model)entry={};
     for(auto& entry:clonedBagPreviews)if(entry.model==model)entry={};
     for(auto& c:weaponContexts){
+        if(reinterpret_cast<std::uintptr_t>(c.secondHat)==model)c.secondHat=nullptr;
         for(auto& entry:c.rigidWeapons)if(entry.child==model)entry={};
         for(auto& child:c.nativeChildren)if(reinterpret_cast<std::uintptr_t>(child)==model)child=nullptr;
         for(auto& bag:c.bags)if(reinterpret_cast<std::uintptr_t>(bag.child)==model){bag.child=nullptr;bag.motion={};}
@@ -996,7 +1009,7 @@ static void forgetWeapons(std::uintptr_t model){
         if(reinterpret_cast<std::uintptr_t>(c.backpack)==model){c.backpack=nullptr;c.bagMotion={};}
     }
 #endif
-    if(auto* c=weaponContext(model)){releaseExtras(*c);releasePassthroughQuiver(*c);releaseBackpack(*c);releaseBagInstances(*c);*c={};}
+    if(auto* c=weaponContext(model)){releaseExtras(*c);releasePassthroughQuiver(*c);releaseBackpack(*c);releaseBagInstances(*c);releaseSecondHat(*c);*c={};}
 }
 static void discardInheritedPreviewWeapons(std::uintptr_t parent){
     const auto* preview=previews.find(parent);
@@ -1325,13 +1338,13 @@ static int __fastcall setWeapons(void* L){
         for(auto& e:previews.entries)if(e.token==token&&e.guid==p.guid&&e.status==1)parent=e.model;
         if(!parent)return result(L,-1);
     }else if(p.display!=p.native){
-        if(auto* c=weaponContext(parent)){releaseExtras(*c);releasePassthroughQuiver(*c);releaseBackpack(*c);releaseBagInstances(*c);*c={};}
+        if(auto* c=weaponContext(parent)){releaseExtras(*c);releasePassthroughQuiver(*c);releaseBackpack(*c);releaseBagInstances(*c);releaseSecondHat(*c);*c={};}
         return result(L,0);
     }
     unsigned loaded=0;if(!parent||!read(parent+0x10,loaded)||!loaded)return result(L,0);
     auto* c=weaponContext(parent);
     const bool keepContext=!selection.empty()||selection.stowedMask>=0||selection.carriedMode==1||options[0]||
-        (selection.carriedMode<0&&(options[1]||options[2]))||(token&&actualQuiver)||backBag||(c&&hasBagInstances(*c));
+        (selection.carriedMode<0&&(options[1]||options[2]))||(token&&actualQuiver)||backBag||(c&&(hasBagInstances(*c)||c->secondHatDisplay));
     if(!c&&!keepContext)return result(L,1);
     if(!c){
         for(auto& entry:weaponContexts)if(!entry.parent){c=&entry;break;}
@@ -1471,7 +1484,7 @@ static int __fastcall setBags(void* L){
         if(!parent)return result(L,-1);
     }else if(player.display!=player.native){
         if(auto* context=weaponContext(parent)){releaseExtras(*context);releasePassthroughQuiver(*context);
-            releaseBackpack(*context);releaseBagInstances(*context);*context={};}
+            releaseBackpack(*context);releaseBagInstances(*context);releaseSecondHat(*context);*context={};}
         return result(L,0);
     }
     unsigned loaded=0;if(!parent||!read(parent+0x10,loaded)||!loaded)return result(L,0);
@@ -1495,8 +1508,8 @@ static int __fastcall setBags(void* L){
     if(changed)context->bagGeneration=nextBagGeneration();
     const bool complete=ensureBagInstances(*context);
     if(!any&&context->selection.empty()&&context->selection.stowedMask<0&&context->selection.carriedMode!=1&&!context->quiverHorizontal&&
-        !context->hideRangedWhenStored&&!context->hideMeleeWhenStored&&!(token&&context->actualQuiver)&&!context->backBag){
-        releaseExtras(*context);releasePassthroughQuiver(*context);*context={};
+        !context->hideRangedWhenStored&&!context->hideMeleeWhenStored&&!(token&&context->actualQuiver)&&!context->backBag&&!context->secondHatDisplay){
+        releaseExtras(*context);releasePassthroughQuiver(*context);releaseSecondHat(*context);*context={};
     }
     return bagSelectionResult(L,complete?1:0,context->bagGeneration);
 }

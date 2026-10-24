@@ -1,6 +1,6 @@
 -- Saurek's Closet: original 1.12 character-sheet art and Blizzard widget templates.
 local V=VanityStudio
-local icons={[1]="Head",[3]="Shoulder",[4]="Shirt",[5]="Chest",[6]="Waist",[7]="Legs",[8]="Feet",[9]="Wrists",[10]="Hands",[15]="Chest",[16]="MainHand",[17]="SecondaryHand",[18]="Ranged",[19]="Tabard"}
+local icons={[112]="Head",[1]="Head",[3]="Shoulder",[4]="Shirt",[5]="Chest",[6]="Waist",[7]="Legs",[8]="Feet",[9]="Wrists",[10]="Hands",[15]="Chest",[16]="MainHand",[17]="SecondaryHand",[18]="Ranged",[19]="Tabard"}
 local serial=0
 local art="Interface\\AddOns\\SaureksCloset\\Textures\\"
 local function label(parent,text,x,y,w,h,white)
@@ -671,6 +671,22 @@ function V:CreateArmorPage(p)
         local pos=positions[slot]
         local b=self:CreateSlotButton(slotLayer,p,slot,pos[1],pos[2],iconSize)
         b:SetFrameLevel(slotLayer:GetFrameLevel()+1)
+        if slot==1 then
+            local cog=CreateFrame("Button",nil,b);self.secondHatCog=cog
+            cog:SetPoint("BOTTOMRIGHT",b,"BOTTOMRIGHT",-1,1);cog:SetWidth(16);cog:SetHeight(16)
+            cog:SetFrameLevel(b:GetFrameLevel()+3)
+            cog:SetNormalTexture(art.."PlacementCog.tga")
+            cog:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Round","ADD")
+            cog:SetScript("OnClick",function() V:OpenBrowser(112) end)
+            cog:SetScript("OnEnter",function()
+                GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Second hat",1,.82,0)
+                local id=VanityStudioCharacter.secondHat
+                GameTooltip:AddLine(id and itemName(id) or "Wear a second hat or bandana alongside your current hat.",1,1,1,true)
+                GameTooltip:AddLine("Click to choose or remove your second hat. Save keeps it with this look.",1,.82,0,true)
+                GameTooltip:Show()
+            end)
+            cog:SetScript("OnLeave",function() GameTooltip:Hide() end)
+        end
         -- A subtle additive pass brightens only the actual item rim.
         b.borderLight=b:CreateTexture(nil,"ARTWORK")
         b.borderLight:SetTexture("Interface\\Buttons\\UI-Quickslot2")
@@ -1032,7 +1048,7 @@ function V:RefreshSlotHighlights()
     if self.frame and self.frame:IsVisible() then
         if self.slotMenu and UIDROPDOWNMENU_OPEN_MENU==self.slotMenu:GetName() and DropDownList1:IsShown() then
             slot=self.menuSlot
-        elseif self.browser and self.browser:IsShown() then slot=self.slot end
+        elseif self.browser and self.browser:IsShown() then slot=self.slot==112 and 1 or self.slot end
     end
     for id,b in pairs(self.slotButtons) do
         if id==slot then b.selected:Show() else b.selected:Hide() end
@@ -1083,7 +1099,10 @@ function V:OpenSlotMenu(slot)
     self:RefreshSlotHighlights()
 end
 function V:OpenBrowser(slot)
-    if not self.slotButtons[slot] or (self:IsWeaponPosition(slot) and self.tab~="weaponry") then return end
+    if slot==112 and not (self.SecondHatAvailable and self:SecondHatAvailable()) then
+        self:Message("Update SaureksCloset.dll and fully restart WoW to wear a second hat.");return
+    end
+    if not (self.slotButtons[slot] or (slot==112 and self.slotButtons[1])) or (self:IsWeaponPosition(slot) and self.tab~="weaponry") then return end
     if self:IsWeaponPosition(slot) and not self:WeaponChoiceAvailable(slot) then return end
     self:CancelDraft();self.slot=slot;self.offset=0
     self.quality=nil;self.material=nil;self.favoritesOnly=false
@@ -1113,6 +1132,8 @@ function V:CreateBrowser()
     -- The button's visible artwork is inset 1px at the top, so y=405
     -- leaves exactly 3px on either side of its visible 21px height.
     self.commitButton=button(f,"Apply Appearance",206,405,132,function() V:CommitDraft();V:Refresh() end)
+    self.removeSecondHatButton=button(f,"Remove second hat",24,405,154,function() V:SetSecondHat(nil) end)
+    self.removeSecondHatButton:Hide()
     local filters=section(f,23,79,318,60,true)
     self.search=edit(f,"SaureksClosetSearch",90,44,245)
     -- InputBoxTemplate extends 5px left: keep the header input clear of the portrait.
@@ -1831,6 +1852,10 @@ function V:RefreshList()
             if self.draft and self.draft.id==item[1] then b.selected:Show() else b.selected:Hide() end
         else b:Hide() end
     end
+    if self.removeSecondHatButton then
+        if self.slot==112 then self.removeSecondHatButton:Show() else self.removeSecondHatButton:Hide() end
+        enabled(self.removeSecondHatButton,VanityStudioCharacter.secondHat~=nil or (self.draft and self.draft.slot==112))
+    end
     enabled(self.commitButton,self.draft~=nil)
 end
 function V:RefreshWardrobeSaveButton()
@@ -2041,6 +2066,10 @@ function V:Refresh()
         end
         b.icon:SetTexture(icon or "Interface\\PaperDoll\\UI-PaperDoll-Slot-"..(icons[slot] or self.weaponIcons[slot-100]))
         if id==0 then b.hiddenOverlay:Show() else b.hiddenOverlay:Hide() end
+    end
+    if self.secondHatCog then
+        local available=self.SecondHatAvailable and self:SecondHatAvailable()
+        enabled(self.secondHatCog,available);self.secondHatCog:SetAlpha(available and 1 or .4)
     end
     self:RefreshSlotHighlights()
     self:RefreshWeaponCards()

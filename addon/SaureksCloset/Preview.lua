@@ -51,6 +51,10 @@ end
 function V:ApplyWorldDraft()
     local draft=self.draft
     if not draft then return false end
+    if draft.slot==112 then
+        local ok,status=self:SyncSecondHat(0,draft.id or 0)
+        self.worldDraftActive=ok and 112 or nil;return ok,status
+    end
     if self:IsWeaponPosition(draft.slot) then
         local ok,status=self:ApplyWeaponRenderer(0,self:PreviewWeapons())
         self.worldDraftActive=ok and draft.slot or nil
@@ -70,6 +74,7 @@ end
 function V:RestoreWorldDraft(draft)
     if not draft or not self.worldDraftActive then return end
     self.worldDraftActive=nil
+    if draft.slot==112 then self:SyncSecondHat();return end
     if self:IsWeaponPosition(draft.slot) then self:SyncWeapons();return end
     self.applied[draft.slot]=nil
     self:Sync()
@@ -212,6 +217,7 @@ function V:RefreshPreview()
     local dressSignature=key..":body"
     if not bodyPreview then dressSignature=key..":equipment"..self:WeaponSignature(weapons,nil,true)..":pose"..self:WeaponPreviewMode() end
     for _,slot in ipairs(self.slotOrder) do dressSignature=dressSignature..":"..items[slot] end
+    dressSignature=dressSignature..":secondHat:"..(bodyPreview and 0 or (self.SecondHatSelection and self:SecondHatSelection()) or 0)
     local signature=dressSignature..(bodyPreview and "" or self:WeaponDisplaySignature(weapons))
     if self.previewReveal and self.previewReveal.dressSignature==dressSignature then
         local reveal=self.previewReveal

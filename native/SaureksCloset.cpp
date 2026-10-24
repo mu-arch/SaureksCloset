@@ -205,6 +205,7 @@ static void __fastcall matrixHook(void* model,void*,const float* matrix){
     matrixOriginal(model,matrix);
 }
 static void discardInheritedPreviewWeapons(std::uintptr_t model);
+static void* cloneWithoutSecondHat(void* scene,void* source,unsigned flags);
 static void rememberClonedBagPreview(std::uintptr_t source,std::uintptr_t model);
 // Only the explicit, bracketed addon SetUnit call can substitute a preview model.
 static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned flags){
@@ -223,7 +224,7 @@ static void* __fastcall cloneModelHook(void* scene,void*,void* source,unsigned f
         // A different saved body still needs its own model and fresh compositor.
         const auto* path=localCapeMotionModel(requestedPreview.model()->filename);
         if(allowMask)path=hairMask::model(path,p.guid,(requestedPreview.race-1)*2+requestedPreview.sex+1,requestedPreview.hairStyle);
-        void* model=copyAppearance?cloneModelOriginal(scene,source,flags):createModel(scene,path,flags);
+        void* model=copyAppearance?cloneWithoutSecondHat(scene,source,flags):createModel(scene,path,flags);
         if(model){
             previewToken=previews.bind(reinterpret_cast<std::uintptr_t>(model),p.guid,requestedPreview);
             if(auto* entry=previews.find(reinterpret_cast<std::uintptr_t>(model)))entry->copiedAppearance=copyAppearance;
@@ -429,6 +430,7 @@ static int __fastcall weaponryProbe(void* L){
 #include "WeaponRenderer.h"
 #include "ProjectileRenderer.h"
 #include "CastingRenderer.h"
+#include "SecondHatRenderer.h"
 #include "UpdateChecker.h"
 #include "SharingRuntime.h"
 #include "VoiceRenderer.h"
@@ -458,6 +460,8 @@ static int __fastcall version(void* L){return result(L,40201);}
 static void __fastcall registerHook(const char* name,std::uintptr_t function){
     registerOriginal(name,function);
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
+        registerOriginal("SaureksClosetSecondHatVersion",reinterpret_cast<std::uintptr_t>(&secondHatVersionLua));
+        registerOriginal("SaureksClosetSetSecondHat",reinterpret_cast<std::uintptr_t>(&setSecondHatLua));
         castingVisualFilter=&castingAugmentVisual;
         castingAttachmentFilter=&castingForwardAttachment;
         registerOriginal("SaureksClosetCastingVersion",reinterpret_cast<std::uintptr_t>(&castingVersionLua));

@@ -1,4 +1,5 @@
 local V=VanityStudio
+V.slotNames=V.slotNames or {};V.slotNames[112]="Second hat"
 function V:HaircraftAvailable()
     return type(SaureksClosetSetHaircraft)=="function"
 end
@@ -116,4 +117,33 @@ function V:SyncHairMask()
     self:RefreshHaircraftPage()
     self.hairMaskLastOK=ok and status and status>=0
     return self.hairMaskLastOK
+end
+
+function V:SecondHatAvailable()
+    return type(SaureksClosetSetSecondHat)=="function" and type(SaureksClosetSecondHatVersion)=="function"
+end
+function V:SecondHatSelection()
+    if self.draft and self.draft.slot==112 then return self.draft.id end
+    return VanityStudioCharacter.enabled and VanityStudioCharacter.secondHat or nil
+end
+function V:SyncSecondHat(token,id)
+    if self.sharingWorldPaused then return false end
+    if id==nil then id=self:SecondHatSelection() end
+    if not self:SecondHatAvailable() then return not id or id==0,1 end
+    local item=id and self.index[id]
+    if id and id~=0 and (not item or item[3]~=1) then return false,-2 end
+    local ok,status=pcall(SaureksClosetSetSecondHat,token or 0,item and item[8] or 0)
+    return ok and type(status)=="number" and status>=0,status
+end
+function V:SetSecondHat(id)
+    if id==0 then id=nil end
+    if not self:SecondHatAvailable() or not self:Compatible(id,112) then return false end
+    self:CancelDraft()
+    local c=VanityStudioCharacter;local previous=c.secondHat;c.secondHat=id
+    if not self:SyncSecondHat() then
+        c.secondHat=previous;self:SyncSecondHat()
+        self:Message("This second hat could not load. Update the DLL and fully restart WoW if needed.");return false
+    end
+    if previous~=id then self:LookSettingsChanged() end
+    self:Refresh();return true
 end

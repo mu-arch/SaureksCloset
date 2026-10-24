@@ -53,7 +53,7 @@ function V:Copy(source)
 end
 
 -- Character fields are the working copy only. Saved looks own independent snapshots.
-local lookSettingKeys={"keepHairWithHat","casting","mount","placements","weaponPhysics","weaponBounce","weaponRocking","weaponJumpLift","weaponPhysicsSlots","capeMotion"}
+local lookSettingKeys={"secondHat","keepHairWithHat","casting","mount","placements","weaponPhysics","weaponBounce","weaponRocking","weaponJumpLift","weaponPhysicsSlots","capeMotion"}
 function V:CaptureLookSettings()
     local settings={}
     for _,key in ipairs(lookSettingKeys) do
@@ -139,6 +139,7 @@ function V:SyncLookSettings()
     if self.SyncPhysics then self:SyncPhysics() end
     if self.SyncMount then self:SyncMount() end
     if self.SyncHaircraft then self:SyncHaircraft() end
+    if self.SyncSecondHat then self:SyncSecondHat() end
     if self.SyncCasting then self:SyncCasting() end
     if self.RefreshCapePhysics then self:RefreshCapePhysics(true) end
 end
@@ -162,6 +163,7 @@ function V:CatalogIcon(id)
 end
 
 function V:Compatible(id, slot)
+    if slot==112 then return id==nil or (type(id)=="number" and id>0 and self:Compatible(id,1)) end
     if self:IsWeaponPosition(slot) then return self:WeaponCompatible(id,slot) end
     if id == 0 then return self.slotNames[slot] ~= nil end
     local item = self.index[id]
@@ -191,6 +193,7 @@ function V:Initialize()
         item.search = string.lower(item[2])
         for _,slot in ipairs(self.inventorySlots[item[3]] or {}) do table.insert(self.slots[slot], item) end
     end
+    self.slots[112]=self.slots[1]
     self:InitializeWeapons()
     for slot,id in pairs(c.selected) do
         if self:IsWeaponPosition(slot) or not self:Compatible(id, slot) then c.selected[slot] = nil end
@@ -254,6 +257,7 @@ function V:Sync()
     local c = VanityStudioCharacter
     self:SyncBody()
     if self.SyncHaircraft then self:SyncHaircraft() end
+    if self.SyncSecondHat then self:SyncSecondHat() end
     local refreshArmorDisplay=self.refreshArmorDisplay
     if refreshArmorDisplay then
         -- Consume before calling the helper: its model events are synchronous
@@ -313,6 +317,7 @@ function V:Sync()
 end
 
 function V:Select(slot, id)
+    if slot==112 then return self:SetSecondHat(id) end
     if self:IsWeaponPosition(slot) then return self:SelectWeapon(slot,id) end
     if not self:Compatible(id, slot) then return false end
     self:CancelDraft()
@@ -326,6 +331,7 @@ function V:Select(slot, id)
 end
 
 function V:ClearSlot(slot)
+    if slot==112 then return self:SetSecondHat(nil) end
     if self:IsWeaponPosition(slot) then return self:SelectWeapon(slot,nil) end
     self:CancelDraft()
     VanityStudioCharacter.selected[slot] = nil
@@ -966,6 +972,7 @@ V.events:SetScript("OnUpdate", function()
     elapsed = 0
     if V.SyncPhysics then V:SyncPhysics() end
     if V.SyncHaircraft then V:SyncHaircraft() end
+    if V.SyncSecondHat then V:SyncSecondHat() end
     if V.SyncCasting then V:SyncCasting() end
     if V.UpdateSharing then V:UpdateSharing() end
     if V.armorRepairCheckPending then

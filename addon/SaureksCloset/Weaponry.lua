@@ -181,6 +181,7 @@ function V:SetWeaponStoredHidden(kind,hidden)
     self:TrackUnsaved();self:SyncWeapons();self:Refresh();return true
 end
 function V:SlotSelection(slot)
+    if slot==112 then return VanityStudioCharacter.secondHat end
     local c=VanityStudioCharacter
     if self:IsWeaponPosition(slot) then return (c.weapons or {})[slot] end
     return c.selected[slot]
@@ -392,10 +393,16 @@ function V:CopyWardrobeModel(target)
     else target:SetUnit("player") end
     return true
 end
-function V:DressWeaponPlacements(target,weapons,overrides)
+function V:DressWeaponPlacements(target,weapons,overrides,secondHat)
     if not target.weaponToken or not self:WeaponRendererAvailable() then return true end
     local ok,status=self:ApplyWeaponRenderer(target.weaponToken,self:EffectiveWeapons(weapons,overrides))
     if not ok and status~=0 then error("Weapon preview unavailable") end
+    if self.SyncSecondHat then
+        if secondHat==nil then secondHat=self.tab=="body" and 0 or self:SecondHatSelection() end
+        local hatOK,hatStatus=self:SyncSecondHat(target.weaponToken,secondHat or 0)
+        if not hatOK then error("Second hat preview unavailable") end
+        if hatStatus~=1 then return false end
+    end
     if ok and (target==self.model or target==self.previewBuffer) then
         local pose=0
         if self:WeaponPreviewMode()==2 then
