@@ -41,9 +41,20 @@ local function placementCog(parent,caption)
     cog:SetPoint("BOTTOMRIGHT",parent,"BOTTOMRIGHT",4,-3);cog:SetWidth(16);cog:SetHeight(16)
     cog:SetFrameLevel(parent:GetFrameLevel()+3)
     if caption then
-        cog:SetNormalTexture(art.."CornerButton.tga")
-        cog.caption=label(cog,caption,0,0,16,16)
-        cog.caption:SetFont("Fonts\\FRIZQT__.TTF",14,"OUTLINE")
+        cog:SetWidth(20);cog:SetHeight(20)
+        -- Use stock, already-available artwork instead of a newly added file:
+        -- an opaque dark face and a broad two-tone rim stay visible at UI scale.
+        cog.backplate={}
+        for i,face in ipairs({{20,.12,.10,.07},{18,.80,.65,.35},{14,.06,.05,.04}}) do
+            local circle=cog:CreateTexture(nil,({"BACKGROUND","BORDER","ARTWORK"})[i])
+            circle:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+            circle:SetWidth(face[1]);circle:SetHeight(face[1])
+            circle:SetPoint("CENTER",cog,"CENTER",0,0)
+            circle:SetVertexColor(face[2],face[3],face[4],1)
+            table.insert(cog.backplate,circle)
+        end
+        cog.caption=label(cog,caption,0,0,20,20)
+        cog.caption:SetFont("Fonts\\FRIZQT__.TTF",11,"OUTLINE")
         cog.caption:SetJustifyH("CENTER");cog.caption:SetJustifyV("MIDDLE")
     else cog:SetNormalTexture(art.."PlacementCog.tga") end
     cog:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Round","ADD")
