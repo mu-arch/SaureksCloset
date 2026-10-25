@@ -1,4 +1,4 @@
-# Building Saurek's Closet 4.2.1
+# Building Saurek's Closet 4.3.1
 
 The Lua addon is in `addon/SaureksCloset/`. The native renderer uses C++17 and MinHook; generated headers and build signatures are included.
 
@@ -205,3 +205,14 @@ SetUnitMountDisplayID while a real mounted aura is present. The release gate
 covers catalog completeness, icon selection, saved-look isolation, on-foot
 safety, dismount/taxi/disable/zoning cleanup, API failures, and 1.12 search focus
 events. Quickslot borders use the same artwork geometry as equipment icons.
+
+### Release 4.3.1
+
+Addon 4.3.1 and renderer 40301 add per-look weapon casting and a second cosmetic
+hat selected from the head-slot corner button. Casting retains weapons through
+full casts/channels, preserves food/drink and item-use props, and keeps Cone of
+Cold facing forward through the weapon swing. The second hat follows its head
+attachment, remains separate from real equipment and the primary hat, and has
+independent preview ownership and per-look saving. Toggle Hair also saves with
+the current look. Native and Lua regression checks cover these paths, missing
+DLL support, lifecycle cleanup, and the second-hat button and picker.

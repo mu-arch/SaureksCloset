@@ -1,4 +1,4 @@
-# Equipment UI isolation (4.2.1)
+# Equipment UI isolation (4.3.1)
 
 The 1.12 client sometimes obtains inventory icons from its visible equipment
 records before reading real inventory. VanillaHelpers armor appearances modify

@@ -1,4 +1,4 @@
-# Independent weapon placements — 4.2.1 / renderer 40201
+# Independent weapon placements — 4.3.1 / renderer 40301
 
 ## Implemented renderer
 
