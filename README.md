@@ -4,7 +4,7 @@
 
 Saurek proudly presents:
 
-**· Release 4.2.1 · [Download now](https://github.com/mu-arch/SaureksCloset/releases/latest) ·**
+**· Release 4.3.1 · [Download now](https://github.com/mu-arch/SaureksCloset/releases/latest) ·**
 
 Supported on Linux, Windows, and Mac
 
@@ -25,8 +25,9 @@ Saurek's Closet morphs how your character looks on your own client, and for othe
 - **See your bags:** Equip and position your bags on your back and hips.
 - **Advanced physics:** Optionally enable modern pre-computed (baked) cape, bag, sheathed weapon physics with no runtime performance cost. Watch as jumping, running, falling, and combat motions realistically deform and swing your equipment on your character!
 - **Get dirty:** Sweat, dust, mud, and blood. It gets all over you, and you'll need to visit an inn, or take a dip to clean it off.
+- - **Cast with weapons:** Use your weapons as the source of casting your spells.
 - **Share your look with others:** If another player has the addon they can see your custom look (if you authorize broadcasting your transmog data)
-- **Hair with hats:** No more crop! Wear your hat while still seeing your hairstyle.
+- **Hair with hats:** No more crop! Wear your hat while still seeing your hairstyle. Also wear multiple head items like a fishing hat with goggles or a mask.
 
 ## Take a look inside
 
