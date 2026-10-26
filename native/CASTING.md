@@ -52,15 +52,20 @@ use kit membership and role, without filtering on metadata or animation ID.
 Channel phase 2 additionally requires the same current spell ID, because state
 auras also use phase 2 and three client visuals share their state/channel kit.
 Victim, ground and unrelated aura dispatches remain unchanged. Charge/channel
-roles use a weapon ready pose; ordinary release roles use a weapon swing.
+roles use a weapon ready pose; ordinary release roles use a weapon swing when
+Swing weapon on release is enabled. Turning the swing off retains the ready
+grip during charge, channel and release. Keeping the native hand-casting pose
+while drawing the weapon left the hand attachment displaced on bodies such as
+Tauren; no race-specific offset or weapon-local transform is added.
 
 The existing 60D450 visual hook also runs a casting filter on its caller-owned
-output. With swing enabled, a spell lacking both cast and channel kits receives
-the client's silent/empty cast kit 21. A private copy supplies the weapon swing;
+output. With weapon casting enabled, a spell lacking both cast and channel kits
+receives the client's silent/empty cast kit 21. A private copy supplies the weapon
+swing or steady ready grip according to the release-swing option;
 no particles, missile, sound or target effect is invented. Null visual results
 use a zeroed caller-owned output with just that cast kit. All existing fields
 survive when a visual is present. This is disabled for other players, hidden or
-unsupported weapons, passive/ranged/mount spells, and when swing is off.
+unsupported weapons, passive/ranged/mount spells, and when weapon casting is off.
 Generic effects without a visual (such as triggered Well Fed bonuses) are also
 excluded; the silent fallback is limited to actual class-spell families. There
 are no global DBC edits or new native addresses for this extension.
@@ -118,7 +123,8 @@ descriptor pointer at +110h, spell ID at descriptor+228h, as read by 60D340 and
 60DD0C. These fields are read only. No guessed duration, Lua timer or persistent
 cast flag is used. Once both IDs clear, subsequent pose/sheath requests pass
 through immediately. Idle, movement, release, foreign models, unavailable
-weapons, disabled swing and disabled feature paths keep their native sequences.
+weapons and disabled feature paths keep their native sequences. Delayed loops
+also retain the ready grip when the release swing is disabled.
 Delayed loop animation matching uses the current spell's actual precast and
 channel kits (including a channel-style cast kit), so styles such as Frostbolt's
 UseStandingLoop are covered without an animation allowlist. The seven sequence arguments, including timing, speed, repeat and blending,
@@ -174,3 +180,9 @@ cast-time/instant/channel spells, cancellation, ranged attacks, changing weapon
 or look, and disabling the feature. Spell kits without hand art do not gain art;
 weapons without a usable attachment fall back to normal casting. Other clients
 must not reuse these addresses without their own ABI audit.
+
+`tests/casting_no_swing.cpp` runs every client caster-role fixture with one-hand
+maces, two-hand weapons and staves, with effects on and off. It verifies steady
+ready poses through delayed loops, unchanged weapon-local grip/attachment
+transforms and preservation of all unrelated visual-kit fields. These checks
+simulate native callbacks; final rendered alignment requires an in-game check.

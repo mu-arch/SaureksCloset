@@ -152,7 +152,7 @@ int main(){
     settings(true,35);call(source,0);assert(receivedKit[2]==19);
     source[0]=64;source[2]=124;sourceVisual[5]=64;put(player.unit+0xC8C,133u);
     call(source,2);assert(receivedKit[2]==28);
-    settings(true,35,false,false);call(source,2);assert(std::equal(source.begin(),source.end(),receivedKit));
+    settings(true,35,false,false);call(source,2);auto steady=source;steady[2]=28;assert(std::equal(steady.begin(),steady.end(),receivedKit));
     castingOriginHook(output,ptr(player.unit),133);assert(receivedModel==player.unit&&receivedPoint==133);
     // Disable restores the original visual sheath and safely resolves markers
     // still present on effects that the native client has not expired yet.
@@ -186,7 +186,7 @@ int main(){
     assert(read(0x9999+0xD40,mode)&&mode==0&&receivedNotify==1);
     settings(true,25);loop(51);assert(receivedAnimation==26);
     settings(true,647);loop(51);assert(receivedAnimation==27);
-    settings(true,35,true,false);loop(51);assert(receivedAnimation==51);
+    settings(true,35,true,false);loop(51);assert(receivedAnimation==28);
     settings();childMatches=false;loop(51);assert(receivedAnimation==51);
     castingSheathHook(ptr(player.unit),nullptr,0,1,1);assert(read(player.unit+0xD40,mode)&&mode==0);
     childMatches=true;put(player.unit+0xD40,1u);

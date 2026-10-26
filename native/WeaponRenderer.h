@@ -166,10 +166,20 @@ static BagInstance* ownedBagInstance(WeaponContext& context,void* child){
     return nullptr;
 }
 // Stock CharacterModelFrame/DressUpModel clones do not use addon preview tokens.
-// Remember only copies originating from our player's bag-bearing model. These
+// Remember only copies originating from our player's wardrobe model. These
 // are weak identities: the client owns every cloned model and child reference.
 struct ClonedBagPreview { std::uintptr_t model=0;std::uint64_t guid=0; };
 static std::array<ClonedBagPreview,32> clonedBagPreviews{};
+struct ClonedBackWeapon {
+    std::uintptr_t child=0;std::uint64_t guid=0;unsigned point=0;const WeaponAsset* asset=nullptr;
+};
+static std::array<ClonedBackWeapon,64> clonedBackWeapons{};
+static const ClonedBackWeapon* clonedBackWeapon(std::uintptr_t child){
+    for(const auto& entry:clonedBackWeapons)if(child&&entry.child==child)return &entry;
+    return nullptr;
+}
+static const WeaponAsset* storedBackWeaponAsset(const WeaponContext& c,void* child,unsigned point);
+static bool weaponModelMatches(void* child,const char* filename);
 struct ClonedBagChild {
     std::uintptr_t child=0;std::uint64_t guid=0;unsigned identity=0;
     BagInstance bag;
@@ -185,6 +195,20 @@ static std::uint64_t clonedBagOwner(std::uintptr_t model){
 }
 static void rememberClonedBagPreview(std::uintptr_t source,std::uintptr_t model){
     if(!source||!model||source==model)return;
+    ClonedBackWeapon weapon;
+    if(const auto* previous=clonedBackWeapon(source)){weapon=*previous;weapon.child=model;}
+    else{
+        std::uintptr_t parent=0;unsigned point=0;
+        if(read(source+0x1CC,parent)&&read(source+0x1D0,point)&&(point==30||point==31)){
+            const auto* c=weaponContext(parent);
+            if(c&&c->guid==getPlayer())if(const auto* asset=storedBackWeaponAsset(*c,reinterpret_cast<void*>(source),point))
+                if(weaponModelMatches(reinterpret_cast<void*>(source),asset->model))weapon={model,c->guid,point,asset};
+        }
+    }
+    if(weapon.child&&weapon.guid==getPlayer()){
+        for(auto& entry:clonedBackWeapons)if(entry.child==model){entry=weapon;weapon.child=0;break;}
+        if(weapon.child)for(auto& entry:clonedBackWeapons)if(!entry.child){entry=weapon;break;}
+    }
     // 70EB85 recursively calls the hooked clone factory for each attachment.
     // Preserve the exact source instance: repeated meshes can have different fits.
     ClonedBagChild copy;
@@ -201,7 +225,7 @@ static void rememberClonedBagPreview(std::uintptr_t source,std::uintptr_t model)
         return;
     }
     const auto* context=weaponContext(source);
-    const auto guid=context&&(context->backBag==1||hasBagInstances(*context))?context->guid:clonedBagOwner(source);
+    const auto guid=context?context->guid:clonedBagOwner(source);
     if(!guid||guid!=getPlayer())return;
     for(auto& entry:clonedBagPreviews)if(entry.model==model){entry.guid=guid;return;}
     for(auto& entry:clonedBagPreviews)if(!entry.model){entry={model,guid};return;}
@@ -517,28 +541,37 @@ static bool positionStoredStaff(void* child,std::array<float,16>& adjusted){
     }
     return false;
 }
+static const WeaponAsset* storedBackWeaponAsset(const WeaponContext& c,void* child,unsigned point){
+    if(point!=30&&point!=31)return nullptr;
+    const auto* hand=modernHandWeaponAsset(c,child,point==30?0:1);
+    if(hand)return (hand->kind==1||hand->kind==2)&&hand->sheath==1?hand:nullptr;
+    const unsigned position=point==30?2:3;
+    const auto* asset=weaponAsset(c.selection.items[position]);
+    if(!asset||asset->kind!=2||asset->sheath!=1)return nullptr;
+    if(c.extra[position]!=child){
+        if(c.token)return nullptr;
+        bool routed=false;for(auto route:c.routes)if(route==static_cast<int>(position))routed=true;
+        if(!routed||findChildOriginal(reinterpret_cast<void*>(c.parent),point)!=child)return nullptr;
+    }
+    return asset;
+}
+static bool ownedStoredBackWeapon(void* child){
+    const auto model=reinterpret_cast<std::uintptr_t>(child);std::uintptr_t parent=0;unsigned point=0;
+    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point)||(point!=30&&point!=31))return false;
+    if(const auto* c=weaponContext(parent))return weaponContextActive(*c)&&storedBackWeaponAsset(*c,child,point);
+    // Stock Character-window clones have no wardrobe token/context. Track
+    // exact cloned children; never infer ownership from an arbitrary mesh.
+    const auto* copy=clonedBackWeapon(model);
+    return copy&&copy->guid==getPlayer()&&clonedBagOwner(parent)==copy->guid&&copy->point==point&&
+        copy->asset&&weaponModelMatches(child,copy->asset->model);
+}
 static bool positionStoredBackWeapon(void* child,std::array<float,16>& adjusted){
+    if(!ownedStoredBackWeapon(child))return false;
     std::uintptr_t parent=0;unsigned point=0;
     const auto model=reinterpret_cast<std::uintptr_t>(child);
-    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point)||(point!=30&&point!=31))return false;
-    const auto* c=weaponContext(parent);
-    if(!c||!weaponContextActive(*c))return false;
-    const auto* hand=modernHandWeaponAsset(*c,child,point==30?0:1);
-    if(hand){
-        if((hand->kind!=1&&hand->kind!=2)||hand->sheath!=1)return false;
-    }else{
-        const unsigned position=point==30?2:3;
-        const auto* asset=weaponAsset(c->selection.items[position]);
-        if(!asset||asset->kind!=2||asset->sheath!=1)return false;
-        if(c->extra[position]!=child){
-            if(c->token)return false;
-            bool routed=false;for(auto route:c->routes)if(route==static_cast<int>(position))routed=true;
-            if(!routed||findChildOriginal(reinterpret_cast<void*>(parent),point)!=child)return false;
-        }
-    }
-    // Points 30/31 have a staff-style pose. Keep those independent logical
-    // homes, but draw sheath-type-1 weapons using the model's sword pose at 26/27.
-    // The full animated transform preserves both the grip position and angle.
+    if(!read(model+0x1CC,parent)||!read(model+0x1D0,point))return false;
+    // Logical 30/31 retain ownership; render using this model's live sword
+    // anchor at 26/27, including its own camera, scale and animated skeleton.
     return animatedAttachmentMatrix(parent,point==30?26:27,adjusted);
 }
 // Center of the sole allowlisted Quiver_A mesh, measured from its render bounds.
@@ -942,7 +975,7 @@ static void updateAttachmentForCaller(void* model,const float* matrix,const floa
     // too, so every owned-bag update must restore local deformation afterward.
     // Opted-in rigid weapons must also retain their pose on lazy updates.
     // Unrelated equipment keeps the recursive-only routing restriction.
-    if(caller==0x718761||ownedBagUpdate(model)||ownedWeaponPhysicsUpdate(model))
+    if(caller==0x718761||ownedBagUpdate(model)||ownedWeaponPhysicsUpdate(model)||ownedStoredBackWeapon(model))
         updateWeaponAttachment(model,matrix,color,lighting,alpha);
     else updateAttachedOriginal(model,matrix,color,lighting,alpha);
 }
@@ -991,6 +1024,7 @@ static void releaseBagInstances(WeaponContext& context){
     for(auto& bag:context.bags){releaseBagInstance(context,bag);bag={};}
 }
 static void forgetWeapons(std::uintptr_t model){
+    for(auto& entry:clonedBackWeapons)if(entry.child==model)entry={};
     for(auto& entry:clonedBagChildren)if(entry.child==model)entry={};
     for(auto& entry:clonedBagPreviews)if(entry.model==model)entry={};
     for(auto& c:weaponContexts){

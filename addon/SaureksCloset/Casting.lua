@@ -64,7 +64,7 @@ function V:CreateCastingPage(p,label,button,enabled)
     self.castingChecks={}
     local choices={
         {"effects","Casting effects on weapon",230,"Move hand casting effects to the end of your weapon. Spells with a projectile also launch from the weapon. Spells without casting effects do not gain new effects."},
-        {"swing","Swing weapon on release",274,"Hold your weapon ready while charging and start a weapon swing when the spell releases. Channeled spells keep a steady ready pose. Turning this off keeps the normal casting motion."}
+        {"swing","Swing weapon on release",274,"Hold your weapon ready while charging and start a weapon swing when the spell releases. Channeled spells keep a steady ready pose. Turning this off keeps a steady weapon-ready grip without the release swing."}
     }
     for _,choice in ipairs(choices) do
         local key,title,y,tip=choice[1],choice[2],choice[3],choice[4]

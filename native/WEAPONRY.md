@@ -294,3 +294,17 @@ hand routes originally skipped those corrections, exposing the high raw
 attachment pose. The correction recognizes exact world native children and
 owned preview hand-role children, including equipped passthrough in the world.
 Unrelated decorations, staff fits, held weapons and saved tuning remain separate.
+
+
+Stock Character-window clones now inherit the stowed sword correction through
+weak, exact child clone identities recorded by the existing clone hook. The
+parent clone must independently belong to the local player, and the child's
+logical back point and allowlisted mesh must still match. Recursive and lazy
+attachment updates use that clone's own animated 26/27 sword anchor, including
+its camera transform, instead of the raw 30/31 staff-style orientation. Logical
+attachment ownership remains 30/31; held weapons are excluded. Nested clones
+inherit the identity, while child/parent destruction invalidates it.
+
+`tests/character_sword.cpp` covers both back sides on all 16 stock body types,
+independent camera/scale/bone transforms, recursive and lazy updates, nested
+clones, changed source selections, unrelated meshes/owners/hands, and cleanup.

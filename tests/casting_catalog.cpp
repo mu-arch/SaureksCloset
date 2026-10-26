@@ -56,6 +56,7 @@ int main(){
     settings(false);output=sourceVisual;
     castingAugmentVisual(ptr(player.unit),reinterpret_cast<const unsigned*>(0x8000),output.data(),output.data());assert(output==sourceVisual);
     settings(true,35,true,false);output=sourceVisual;
-    castingAugmentVisual(ptr(player.unit),reinterpret_cast<const unsigned*>(0x8000),output.data(),output.data());assert(output==sourceVisual);
+    castingAugmentVisual(ptr(player.unit),reinterpret_cast<const unsigned*>(0x8000),output.data(),output.data());assert(output[2]==21);
+    call(blank,0);assert(receivedKit[2]==28);
     std::cout<<"PASS: "<<std::size(castingCases)<<" client caster-role fixtures, all Blizzard ranks, channel-only spells, custom/no-animation kits, target isolation and silent missing-caster fallback\n";
 }

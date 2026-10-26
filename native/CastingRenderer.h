@@ -69,7 +69,7 @@ static unsigned castingCurrentSpell(const Player& p){
 static bool castingInProgress(const Player& p){return castingCurrentSpell(p)!=0;}
 static unsigned* castingAugmentVisual(void* unit,const unsigned* spell,unsigned* output,unsigned* original){
     Player p;unsigned id=0;
-    if(!output||(original&&original!=output)||!castingSettings.swing||!castingAsset()||!castingPlayer(unit,p)||
+    if(!output||(original&&original!=output)||!castingAsset()||!castingPlayer(unit,p)||
        !read(reinterpret_cast<std::uintptr_t>(spell),id)||projectileDBRow(0xC0D788,id)!=reinterpret_cast<std::uintptr_t>(spell)||
        !castingSpell(id))return original;
     // A few spells have no caster art/animation at all. Supply the client's
@@ -184,7 +184,7 @@ static void __fastcall castingSequenceHook(void* model,void*,int track,unsigned 
     unsigned time,float speed,unsigned repeat,unsigned blend){
     // The client can schedule the sustained casting loop directly on the
     // model after the opening kit/UnitAnimation call has returned.
-    if(castingSettings.enabled&&castingSettings.swing&&castingOwner==getPlayer()&&animation&&animation!=0xffffffffu){
+    if(castingSettings.enabled&&castingOwner==getPlayer()&&animation&&animation!=0xffffffffu){
         Player p;unsigned tip=0;const auto* asset=castingAsset();
         if(asset&&snapshot(p)&&p.guid==castingOwner&&p.display==p.native&&p.model==reinterpret_cast<std::uintptr_t>(model)&&
            castingLoopAnimation(p,animation)&&castingWeapon(p.model,tip))

@@ -29,7 +29,8 @@ inline unsigned animation(unsigned original,unsigned kind,unsigned subclass){
 }
 inline Kit prepare(const Kit& original,const Settings& settings,unsigned kind,unsigned subclass,Role role){
     Kit out=original;
-    if(settings.swing)out[2]=animation(role==Role::Release?53:51,kind,subclass);
+    // Drawn weapons need a gripping pose even when the release swing is off.
+    out[2]=animation(settings.swing&&role==Role::Release?53:51,kind,subclass);
     if(settings.effects){
         // Merge duplicate left/right charging art into one weapon effect.
         out[7]=effect(original[7])?original[7]:original[6];out[6]=0xffffffffu;
