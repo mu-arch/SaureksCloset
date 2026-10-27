@@ -47,7 +47,7 @@ static int inspect(const Memory& memory,unsigned slot,unsigned expected,ArmorIns
     return inspectArmor(component,model,slot,expected,read,captured?*captured:local);
 }
 int main(){
-    constexpr unsigned slots[]={1,3,4,5,6,7,8,9,10,15,19};
+    constexpr unsigned slots[]={1,3,4,5,6,7,8,9,10,19,15};
     for(unsigned i=0;i<11;++i){
         auto memory=fixture();assert(armorComponentSlot(slots[i])==static_cast<int>(i));
         assert(inspect(memory,slots[i],0)==1);
@@ -58,6 +58,17 @@ int main(){
         assert(inspect(memory,slots[i],0)==0);
         assert(memory.bytes==before); // All paths are read-only.
     }
+    // Independently authored client layout: never derive these fixtures from
+    // the mapping under test. A visible cape and tabard must stay distinct.
+    auto split=fixture();
+    split.put(component+0x4CC,0x7000u);split.put(0x7000,23140u);
+    split.put(component+0x4D0,0x7100u);split.put(0x7100,54321u);
+    assert(inspect(split,19,23140)==1&&inspect(split,15,54321)==1);
+    assert(inspect(split,19,54321)==0&&inspect(split,15,23140)==0);
+    split.put(component+0x4CC,0u);
+    assert(inspect(split,19,0)==1&&inspect(split,15,54321)==1);
+    split.put(component+0x4CC,0x7000u);split.put(component+0x4D0,0u);
+    assert(inspect(split,19,23140)==1&&inspect(split,15,0)==1);
     for(unsigned slot:{0u,2u,11u,12u,13u,14u,16u,17u,18u,20u,999u})
         assert(inspect(fixture(),slot,0)==-2);
     auto memory=fixture();display(memory,3);

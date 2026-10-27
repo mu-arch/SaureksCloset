@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include "ArmorSlots.h"
 
 // Read-only build-5875 armor composition inspection. These are the compositor's
 // ItemDisplayInfo rows, not the player's virtual item fields. No native methods,
@@ -8,15 +9,6 @@
 struct ArmorInspection {
     unsigned display=0,dirty=0,attachmentMask=0;
 };
-
-inline int armorComponentSlot(unsigned inventorySlot){
-    switch(inventorySlot){
-        case 1:return 0;case 3:return 1;case 4:return 2;case 5:return 3;
-        case 6:return 4;case 7:return 5;case 8:return 6;case 9:return 7;
-        case 10:return 8;case 15:return 9;case 19:return 10;
-        default:return -1;
-    }
-}
 
 inline char armorPathCharacter(char value){
     if(value=='/')return '\\';

@@ -49,7 +49,7 @@ Item refreshes through `5ED700` converge on the same tabard boundary.
 
 The `47A610` guild-texture hook also rejects late emblem responses when the
 current local tabard is hidden, loading, replaced, or not a guild tabard. It
-checks the current display against component row `4D0` and the guild flag at
+checks the current display against component row `4CC` and the guild flag at
 ItemDisplayInfo + `24`. Other players, previews, transformed bodies and inventory
 metadata are unchanged. No new frame loop, model reload, or player-field write
 is needed. Both hook prefixes and their verified callers are signature-guarded.
@@ -61,3 +61,12 @@ fixtures under ASan/UBSan, Lua recovery simulations and a strict PE32 DLL build.
 These checks do not replace testing during combat in the running client.
 This detects composed-slot and attachment drift, not every possible graphics
 driver or texture corruption with otherwise unchanged compositor state.
+
+
+Cape/tabard regression: the original guard treated inventory slot order as
+component order. Build 5875 maps cape (inventory 14) through 478D63 to component
+10 (+4D0), and tabard (inventory 18) through 478D54 to component 9 (+4CC).
+Reading the cape row rejected valid guild emblems, leaving blank tabards. The
+shared ArmorSlots.h mapping now drives both inspection and the emblem guard.
+Tests use independently hardcoded, distinct cape/tabard rows; the old fixtures
+had repeated the same incorrect assumption as the code.

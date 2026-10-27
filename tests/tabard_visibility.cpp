@@ -5,7 +5,7 @@
 
 struct Client {
     static constexpr std::uintptr_t player=0x1000,component=0x2000,record=0x3000,row=0x4000;
-    std::map<std::uintptr_t,unsigned> memory{{record+8,0},{component+0x4D0,row},{row,23140},{row+0x24,1}};
+    std::map<std::uintptr_t,unsigned> memory{{record+8,0},{component+0x4CC,row},{row,23140},{row+0x24,1},{component+0x4D0,0x5000},{0x5000,54321},{0x5024,0}};
     std::map<unsigned,int> displays{{5976,23140},{100,900}};
     bool recordAvailable=true;
     unsigned lookups=0,resolves=0,rendered=0,emblemWrites=0;
@@ -44,6 +44,11 @@ int main(){
     // fields immediately, without a sticky hidden-state cache.
     c.memory[Client::record+8]=5976;
     assert(c.update()==23140&&c.emblem());
+    // Cape at +4D0 is independent of tabard +4CC. No cape, a plain cape,
+    // or even a coincidentally matching flagged cape must not control emblems.
+    c.memory[Client::component+0x4D0]=0;assert(c.emblem());
+    c.memory[Client::component+0x4D0]=0x5000;assert(c.emblem());
+    c.memory[0x5000]=23140;c.memory[0x5024]=1;assert(c.emblem());
     c.memory[Client::record+8]=0;c.rendered=0;
     assert(c.update()==0&&!c.emblem()); // delayed work queued before hiding
     assert(c.rendered==0);
@@ -62,7 +67,7 @@ int main(){
     assert(c.update()==0&&!c.emblem()&&c.rendered==0);
     c.displays[999]=777;c.memory[Client::row]=777;c.memory[Client::row+0x24]=1;
     assert(c.update()==777&&c.emblem());
-    c.memory[Client::component+0x4D0]=0;assert(!c.emblem());
+    c.memory[Client::component+0x4CC]=0;assert(!c.emblem());
 
     // Other players, previews, unavailable owners and transformed players
     // (the bridge supplies no owner for transformations) retain native data.
@@ -76,9 +81,9 @@ int main(){
     c.recordAvailable=false;assert(c.update()==23140&&c.emblem());
     c.recordAvailable=true;c.memory.erase(Client::record+8);
     assert(c.update()==23140&&c.emblem());
-    c.memory[Client::record+8]=5976;c.memory.erase(Client::component+0x4D0);
+    c.memory[Client::record+8]=5976;c.memory.erase(Client::component+0x4CC);
     assert(c.emblem());
-    c.memory[Client::component+0x4D0]=Client::row;c.memory.erase(Client::row+0x24);
+    c.memory[Client::component+0x4CC]=Client::row;c.memory.erase(Client::row+0x24);
     assert(c.emblem());
     std::cout<<"Tabard visibility: hidden/visible/replaced/loading selections, repeated real-item refreshes, delayed guild textures, owner isolation and read failures passed\n";
 }

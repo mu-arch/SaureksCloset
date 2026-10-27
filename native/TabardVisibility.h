@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include "ArmorSlots.h"
 
 // Build 5875's guild/tabard refreshes (5E0830/5E08E0) read the actual inventory
 // item and call 5E0720, bypassing the visible-item getter used for transmogs.
@@ -30,7 +31,7 @@ bool allowGuildTabardTextures(void* component,std::uintptr_t localComponent,
     if(display==unknown)return true;
     if(!display)return false;
     std::uint32_t row=0;unsigned current=0,flags=0;
-    if(!read(localComponent+0x4D0,row))return true;
+    if(!read(localComponent+0x4A8+4*armorComponentSlot(19),row))return true;
     if(!row)return false;
     if(!read(row,current)||!read(row+0x24,flags))return true;
     return current==display&&(flags&1)!=0;
