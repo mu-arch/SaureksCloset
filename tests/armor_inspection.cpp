@@ -134,4 +134,5 @@ int main(){
     memory.put(0x10000+63*0x200+0x1E4,0x30000u);child(memory,0x30000,1);
     assert(inspect(memory,3,0)==-1);
     std::cout<<"Armor inspection: all 11 slots, hidden and custom shoulders, loading, effects, ownership, bounds and read-only behavior passed\n";
+    return 0;
 }

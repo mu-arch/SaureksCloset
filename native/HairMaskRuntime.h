@@ -1,5 +1,6 @@
 #pragma once
 #include <chrono>
+#include "ReadBatch.h"
 // Main-thread capture only. Baking happens from Lua after composition has
 // settled, never inside a render hook and never on shared live vertex buffers.
 namespace hairMaskRuntime {
@@ -53,7 +54,9 @@ inline void capture(void* child,const float* input){
     hatToRest=bagMatrixProduct(headInverse,hat);if(!bagAffineInverse(hatToRest,modelToHat))return;
     if(!read(resource+0x130,header)||!read(header+0x44,nv)||nv<3||nv>65535||!read(header+0x48,vertices))return;
     std::vector<hairMask::Point> points;points.reserve(nv);
-    for(unsigned i=0;i<nv;++i){hairMask::Point v;if(!read(vertices+48*i,v))return;for(auto n:v)if(!std::isfinite(n))return;points.push_back(v);}
+    const auto reader=[](std::uintptr_t address,auto& value){return read(address,value);};
+    ReadBatch<hairMask::Point,48> vertexReads{vertices,nv};
+    for(unsigned i=0;i<nv;++i){hairMask::Point v;if(!vertexReads.get(i,v,reader))return;for(auto n:v)if(!std::isfinite(n))return;points.push_back(v);}
     // Use the resident draw mesh, not its bounding box. Ignore transparent
     // feathers, ribbons and effect layers: they do not establish solid cover.
     unsigned viewsCount=0,ni=0,nt=0,ns=0,nBatch=0,nFlags=0;
@@ -70,10 +73,11 @@ inline void capture(void* child,const float* input){
         if(blend==0)opaque[section]=true;
     }
     std::vector<hairMask::Triangle> surface;
+    ReadBatch<std::uint16_t> indexReads{indices,ni},triangleReads{triangles,nt};
     for(unsigned i=0;i<ns;++i){if(!opaque[i])continue;std::uint16_t first=0,count=0;
         if(!read(sections+32*i+8,first)||!read(sections+32*i+10,count)||unsigned(first)+count>nt||count%3)return;
         for(unsigned t=first;t<unsigned(first)+count;t+=3){hairMask::Triangle tri;
-            for(unsigned j=0;j<3;++j){std::uint16_t ix=0,vertex=0;if(!read(triangles+2*(t+j),ix)||ix>=ni||!read(indices+2*ix,vertex)||vertex>=nv)return;tri[j]=points[vertex];}
+            for(unsigned j=0;j<3;++j){std::uint16_t ix=0,vertex=0;if(!triangleReads.get(t+j,ix,reader)||ix>=ni||!indexReads.get(ix,vertex,reader)||vertex>=nv)return;tri[j]=points[vertex];}
             surface.push_back(tri);if(surface.size()>20000)return;
         }
     }

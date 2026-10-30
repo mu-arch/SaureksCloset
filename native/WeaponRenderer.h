@@ -947,6 +947,12 @@ static void updateAttachmentForCaller(void* model,const float* matrix,const floa
     if(positionHaircraftHat(model,matrix,hat)){
         updateAttachedOriginal(model,hat.data(),color,lighting,alpha);return;
     }
+    // Casting effects can be parented to a weapon, and hats need no weapon
+    // context. Check those first. All remaining overrides require one of
+    // these live/weak registries; unrelated actors need no attachment scans.
+    if(!context&&!clonedBagOwner(parent)&&!clonedBackWeapon(reinterpret_cast<std::uintptr_t>(model))){
+        updateAttachedOriginal(model,matrix,color,lighting,alpha);return;
+    }
     // 0x714000 can lazily evaluate a child after its parent is already current
     // (returns 0x71415D/0x714183). Those calls overwrite its complete palette
     // too, so every owned-bag update must restore local deformation afterward.

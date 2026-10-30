@@ -134,7 +134,24 @@ inline bool build(const Bytes& base,unsigned body,const Amounts& amounts,Bytes& 
     result.swap(out);return true;
 }
 inline bool readFile(const std::string& path,Bytes& bytes){std::ifstream f(path,std::ios::binary|std::ios::ate);if(!f)return false;auto n=f.tellg();if(n<0||n>32*1024*1024)return false;bytes.resize(static_cast<unsigned>(n));f.seekg(0);return bool(f.read(reinterpret_cast<char*>(bytes.data()),bytes.size()));}
-inline unsigned crc(const Bytes& bytes){unsigned c=~0u;for(auto v:bytes){c^=v;for(unsigned i=0;i<8;++i)c=(c>>1)^(0xedb88320u&-(c&1));}return ~c;}
+// Same CRC-32 and cache filenames as before, eight bytes per iteration. Build
+// immutable tables at compile time; no CPU-specific instructions or threading.
+inline constexpr auto crcTables(){
+    std::array<std::array<std::uint32_t,256>,8> tables{};
+    for(unsigned v=0;v<256;++v){auto c=v;for(unsigned bit=0;bit<8;++bit)c=(c>>1)^(0xedb88320u&-(c&1));tables[0][v]=c;}
+    for(unsigned n=1;n<8;++n)for(unsigned v=0;v<256;++v){const auto c=tables[n-1][v];tables[n][v]=(c>>8)^tables[0][c&255];}
+    return tables;
+}
+inline unsigned crc(const Bytes& bytes){
+    static constexpr auto tables=crcTables();std::uint32_t c=~0u;std::size_t i=0;
+    for(;bytes.size()-i>=8;i+=8){
+        c^=std::uint32_t(bytes[i])|(std::uint32_t(bytes[i+1])<<8)|(std::uint32_t(bytes[i+2])<<16)|(std::uint32_t(bytes[i+3])<<24);
+        c=tables[7][c&255]^tables[6][(c>>8)&255]^tables[5][(c>>16)&255]^tables[4][c>>24]^
+            tables[3][bytes[i+4]]^tables[2][bytes[i+5]]^tables[1][bytes[i+6]]^tables[0][bytes[i+7]];
+    }
+    for(;i<bytes.size();++i)c=(c>>8)^tables[0][(c^bytes[i])&255];
+    return ~c;
+}
 inline bool cachePath(const char* path){
     if(!path)return false;std::string s(path);for(auto& c:s){if(c=='\\')c='/';if(c>='A'&&c<='Z')c+=32;}
     unsigned body,a,b,c,d,f,side,t,l,smooth,hem,hash;int n=0;

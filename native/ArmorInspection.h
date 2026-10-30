@@ -16,10 +16,15 @@ inline char armorPathCharacter(char value){
 }
 template<class Read> bool armorReadPath(std::uint32_t address,Read read,std::array<char,260>& path){
     if(!address)return false;
-    for(unsigned i=0;i<path.size();++i){
-        char value=0;if(!read(address+i,value))return false;
-        path[i]=armorPathCharacter(value);
-        if(!value)return true;
+    for(unsigned i=0;i<path.size();){
+        std::array<char,32> block{};
+        const bool batch=path.size()-i>=block.size()&&read(address+i,block);
+        const unsigned count=path.size()-i>=block.size()?static_cast<unsigned>(block.size()):static_cast<unsigned>(path.size()-i);
+        for(unsigned n=0;n<count;++n,++i){
+            char value=block[n];if(!batch&&!read(address+i,value))return false;
+            path[i]=armorPathCharacter(value);
+            if(!value)return true;
+        }
     }
     return false;
 }

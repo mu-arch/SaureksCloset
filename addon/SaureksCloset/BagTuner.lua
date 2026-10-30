@@ -175,9 +175,37 @@ function V:SyncBagTuning()
     if not self:BagTuningAvailable() then return false end
     self.bagTunerDrafts=self.bagTunerDrafts or {};self.bagTunerSynced=self.bagTunerSynced or {}
     local store=self:BagTunerStore();local enabled=store and store.enabled~=false
+    local supported=targets();local targetSignature=table.concat(supported,":")
+    local work,seen,allowed={},{},{}
+    for _,target in ipairs(supported) do allowed[target]=true end
+    local function add(key)
+        if seen[key] or type(key)~="string" then return end
+        local _,_,target,race,sex=string.find(key,"^(%d+):(%d+):(%d+)$")
+        target=tonumber(target);race=tonumber(race);sex=tonumber(sex)
+        if not allowed[target] or not validIdentity(target,race,sex) or key~=keyFor(target,race,sex) then return end
+        seen[key]=true;table.insert(work,{key,target,race,sex})
+    end
+    if self.bagTunerScanSynced~=self.bagTunerSynced or self.bagTunerScanTargets~=targetSignature then
+        -- A reload/world entry/look change may leave fits in the DLL. Retain
+        -- the complete initial clear, and all retries if the renderer is busy.
+        self.bagTunerActiveKeys={}
+        for _,target in ipairs(supported) do for race=1,8 do for sex=0,1 do add(keyFor(target,race,sex)) end end end
+        self.bagTunerScanSynced=self.bagTunerSynced;self.bagTunerScanTargets=targetSignature
+    else
+        -- Inspect actual saved/draft keys every time, so in-place edits and
+        -- removals are observed without relying on fragile UI dirty flags.
+        for key in pairs(store and store.fits or {}) do add(key) end
+        for key in pairs(self.bagTunerDrafts) do add(key) end
+        for key in pairs(self.bagTunerActiveKeys) do add(key) end
+        table.sort(work,function(a,b)
+            if a[2]~=b[2] then return a[2]<b[2] end
+            if a[3]~=b[3] then return a[3]<b[3] end
+            return a[4]<b[4]
+        end)
+    end
     local failure
-    for _,target in ipairs(targets()) do for race=1,8 do for sex=0,1 do
-        local key=keyFor(target,race,sex);local saved=self:BagTunerSaved(target,race,sex)
+    for _,entry in ipairs(work) do
+        local key,target,race,sex=entry[1],entry[2],entry[3],entry[4];local saved=self:BagTunerSaved(target,race,sex)
         local values=enabled and VanityStudioCharacter.enabled and (self.bagTunerDrafts[key] or (saved and saved.values)) or nil
         local motion=not (self.bagTunerPaused and self.bagTunerTargetKey==key)
         local signature="off"
@@ -193,7 +221,8 @@ function V:SyncBagTuning()
             if ok and status==1 then self.bagTunerSynced[key]=signature
             else failure="The placement renderer is not ready. Your values are kept; retrying." end
         end
-    end end end
+        self.bagTunerActiveKeys[key]=(signature~="off" or self.bagTunerSynced[key]~=signature) and true or nil
+    end
     if self.SyncLiveBagFits and not self:SyncLiveBagFits() then failure="The bag renderer is not ready. Your values are kept; retrying." end
     self.bagTunerError=failure;return not failure
 end
