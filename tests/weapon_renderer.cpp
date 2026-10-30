@@ -113,9 +113,6 @@ template<typename T> static T weaponFunction(std::uintptr_t a){
     else if constexpr(std::is_same_v<T,decltype(&sequenceOffset)>){if(a==0x7127F0)return &sequenceOffset;}
     assert(false);return nullptr;
 }
-#ifdef SAUREKS_SHARING_TEST
-#include "sharing_weapon_fixture.h"
-#endif
 #include "../native/WeaponRenderer.h"
 static unsigned lastBagGeneration=0;
 static int setBagsStatus(void* L){

@@ -23,7 +23,7 @@ function V:CastingWeapon()
     return id
 end
 function V:SyncCasting()
-    if not self:CastingAvailable() or self.sharingWorldPaused then return false end
+    if not self:CastingAvailable() or self.worldPaused then return false end
     local config=self:CastingConfig()
     local ok,status=pcall(SaureksClosetSetCasting,VanityStudioCharacter.enabled and config.enabled and 1 or 0,
         config.effects and 1 or 0,config.swing and 1 or 0,self:CastingWeapon())

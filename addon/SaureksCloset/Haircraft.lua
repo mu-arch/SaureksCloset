@@ -9,7 +9,7 @@ function V:HatTuningAvailable()
     return ok and status==1
 end
 function V:SyncHaircraft()
-    if not self:HaircraftAvailable() or self.sharingWorldPaused then return false end
+    if not self:HaircraftAvailable() or self.worldPaused then return false end
     local c=VanityStudioCharacter
     local ok,status=pcall(SaureksClosetSetHaircraft,c.enabled and c.keepHairWithHat and 1 or 0)
     if ok and status==1 then self:SyncHairMask() end
@@ -97,7 +97,7 @@ function V:HairMaskKey()
     return b.race..":"..b.sex..":"..(b.hairStyle or 0)..":"..id
 end
 function V:SyncHairMask()
-    if self.sharingWorldPaused then return false end
+    if self.worldPaused then return false end
     if not self:HairMaskAvailable() then
         -- Stop an already-loaded destructive bake with an older DLL too.
         if type(SaureksClosetSetHairMask)=="function" then pcall(SaureksClosetSetHairMask,0,90,90,95,35) end
@@ -129,7 +129,7 @@ function V:SecondHatSelection()
     return VanityStudioCharacter.enabled and VanityStudioCharacter.secondHat or nil
 end
 function V:SyncSecondHat(token,id)
-    if self.sharingWorldPaused then return false end
+    if self.worldPaused then return false end
     if id==nil then id=self:SecondHatSelection() end
     if not self:SecondHatAvailable() then return not id or id==0,1 end
     local item=id and self.index[id]

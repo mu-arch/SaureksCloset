@@ -112,34 +112,15 @@ struct WeaponContext {
     // The model destruction hook clears these before an address can be reused.
     std::array<void*,3> nativeChildren{};
     unsigned previewMode=0;
-    bool sharedWeaponPhysics=false;
-    WeaponPhysicsSettings sharedWeaponPhysicsSettings;
-    std::array<WeaponSlotPhysics,10> sharedWeaponSlotPhysics{};
     std::array<WeaponRigidMotion,13> rigidWeapons{};
-    std::array<BagTuningEntry,10> sharedFits{};
     std::array<unsigned char,8> rangedInfo{};
 };
 static std::array<WeaponContext,9> weaponContexts{};
-#if !defined(SAUREKS_WEAPON_TEST) || defined(SAUREKS_SHARING_TEST)
-static std::map<std::uint64_t,WeaponContext> sharedWeaponContexts;
-#endif
 static bool weaponContextActive(const WeaponContext& c){
-    if(c.guid==getPlayer())return true;
-#if !defined(SAUREKS_WEAPON_TEST) || defined(SAUREKS_SHARING_TEST)
-    return !c.token&&sharedWorldIdentity(c.guid,c.unit,c.parent);
-#else
-    return false;
-#endif
+    return c.guid&&c.guid==getPlayer();
 }
 static bool weaponPlayer(void* unit,Player& p){
-    if(snapshot(p)&&p.unit==reinterpret_cast<std::uintptr_t>(unit))return true;
-#if !defined(SAUREKS_WEAPON_TEST) || defined(SAUREKS_SHARING_TEST)
-    std::uintptr_t fields=0;std::uint64_t guid=0;
-    return read(reinterpret_cast<std::uintptr_t>(unit)+8,fields)&&read(fields,guid)&&
-        sharedAppearances.count(guid)&&sharedPlayer(guid,p)&&p.unit==reinterpret_cast<std::uintptr_t>(unit);
-#else
-    return false;
-#endif
+    return snapshot(p)&&p.unit==reinterpret_cast<std::uintptr_t>(unit);
 }
 static std::uint32_t bagGenerationCounter=0;
 static unsigned nextBagGeneration(){
@@ -151,10 +132,6 @@ static bool scopedProjectileAppearance=false;
 static std::uintptr_t loadingExtraParent=0;
 static WeaponContext* weaponContext(std::uintptr_t model){
     for(auto& c:weaponContexts)if(model&&c.parent==model)return &c;
-#if !defined(SAUREKS_WEAPON_TEST) || defined(SAUREKS_SHARING_TEST)
-    const auto owner=sharedModelOwners.find(model);
-    if(owner!=sharedModelOwners.end()){auto i=sharedWeaponContexts.find(owner->second);if(i!=sharedWeaponContexts.end()&&i->second.parent==model)return &i->second;}
-#endif
     return nullptr;
 }
 static bool hasBagInstances(const WeaponContext& context){
@@ -817,7 +794,7 @@ static bool tuneStoredPlacement(void* child,const BagMatrix& base, std::array<fl
         for(unsigned axis=0;axis<3;++axis)
             if(!std::isfinite(anchor[axis])||std::fabs(anchor[axis]-bagFits[i].anchor[axis])>.00001f)matches=false;
         if(!matches)continue;
-        const auto& fit=c->guid==getPlayer()?weaponTuningEntries[slot][i]:c->sharedFits[slot];
+        const auto& fit=weaponTuningEntries[slot][i];
         return fit.enabled&&
             placementTuning(base,local,torso,render,fit.values,out);
     }
@@ -855,10 +832,10 @@ static int __fastcall setWeaponSlotPhysicsLua(void* L){
 static bool weaponPhysicsForSlot(const WeaponContext& c,unsigned index,WeaponPhysicsSettings& settings){
     const unsigned slot=index>=10?index-3:index;
     if(slot>=10||slot==6)return false;
-    const bool local=c.guid==getPlayer();if(local&&weaponPhysicsOwner!=c.guid)return false;
-    const auto& custom=local?weaponSlotPhysics[slot]:c.sharedWeaponSlotPhysics[slot];
-    settings=custom.mode?custom.settings:(local?weaponPhysicsSettings:c.sharedWeaponPhysicsSettings);
-    return custom.mode?custom.mode==2:(local?weaponPhysicsEnabled:c.sharedWeaponPhysics);
+    if(!c.guid||c.guid!=getPlayer()||weaponPhysicsOwner!=c.guid)return false;
+    const auto& custom=weaponSlotPhysics[slot];
+    settings=custom.mode?custom.settings:weaponPhysicsSettings;
+    return custom.mode?custom.mode==2:weaponPhysicsEnabled;
 }
 static bool positionWeaponPhysics(void* child,const float* matrix,BagMatrix& out,bool visible){
     const auto model=reinterpret_cast<std::uintptr_t>(child);std::uintptr_t parent=0;unsigned point=0;
@@ -1033,16 +1010,6 @@ static void forgetWeapons(std::uintptr_t model){
         for(auto& child:c.nativeChildren)if(reinterpret_cast<std::uintptr_t>(child)==model)child=nullptr;
         for(auto& bag:c.bags)if(reinterpret_cast<std::uintptr_t>(bag.child)==model){bag.child=nullptr;bag.motion={};}
     }
-#if !defined(SAUREKS_WEAPON_TEST) || defined(SAUREKS_SHARING_TEST)
-    for(auto& pair:sharedWeaponContexts){auto& c=pair.second;
-        for(auto& entry:c.rigidWeapons)if(entry.child==model)entry={};
-        for(auto& child:c.nativeChildren)if(reinterpret_cast<std::uintptr_t>(child)==model)child=nullptr;
-        for(auto& child:c.extra)if(reinterpret_cast<std::uintptr_t>(child)==model)child=nullptr;
-        for(auto& bag:c.bags)if(reinterpret_cast<std::uintptr_t>(bag.child)==model){bag.child=nullptr;bag.motion={};bag.response={};bag.bodyBinding={};bag.bodyBound=false;}
-        if(reinterpret_cast<std::uintptr_t>(c.passthroughQuiver)==model)c.passthroughQuiver=nullptr;
-        if(reinterpret_cast<std::uintptr_t>(c.backpack)==model){c.backpack=nullptr;c.bagMotion={};}
-    }
-#endif
     if(auto* c=weaponContext(model)){releaseExtras(*c);releasePassthroughQuiver(*c);releaseBackpack(*c);releaseBagInstances(*c);releaseSecondHat(*c);*c={};}
 }
 static void discardInheritedPreviewWeapons(std::uintptr_t parent){

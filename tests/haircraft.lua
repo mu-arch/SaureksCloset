@@ -69,7 +69,7 @@ for i=1,4 do V:RefreshHaircraftPage() end
 assert(#calls==1,'Refreshing the page must not change appearance')
 c.enabled=false;assert(V:SyncHaircraft() and calls[#calls]==0 and c.keepHairWithHat)
 c.enabled=true;assert(V:SyncHaircraft() and calls[#calls]==1)
-V.sharingWorldPaused=true;local count=#calls;assert(not V:SyncHaircraft() and #calls==count);V.sharingWorldPaused=nil
+V.worldPaused=true;local count=#calls;assert(not V:SyncHaircraft() and #calls==count);V.worldPaused=nil
 result=-1;assert(not V:SetHaircraft(false) and c.keepHairWithHat and invalidated==baseline+1)
 result=1;assert(not V.haircraftDefault,"Haircraft must not have a Default button");V.haircraftToggle.scripts.OnClick()
 assert(not c.keepHairWithHat and calls[#calls]==0 and invalidated==baseline+2);buttonArt('Disabled');assert(V.haircraftToggle.enabled and V.haircraftStatus:GetText()==guidance)

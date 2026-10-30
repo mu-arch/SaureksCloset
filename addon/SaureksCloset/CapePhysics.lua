@@ -39,7 +39,7 @@ function V:CapeDraftChanged()
     if self.activeOutfitLabel then self.activeOutfitLabel:SetText(self:ActiveOutfitText()) end
 end
 function V:SyncCapePhysics()
-    if not self:CapePhysicsAvailable() or self.sharingWorldPaused then return false end
+    if not self:CapePhysicsAvailable() or self.worldPaused then return false end
     local config=self:CapePhysicsConfig()
     local ok,status=pcall(SaureksClosetSetCapeMotion,VanityStudioCharacter.enabled and config.enabled and 1 or 0,config.walk,config.run,config.idle,config.air,config.forward,config.side,config.twist,config.lean+30,config.smooth,config.tip)
     return ok and status==1

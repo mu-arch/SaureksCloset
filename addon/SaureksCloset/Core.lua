@@ -215,7 +215,6 @@ function V:Initialize()
     if self.InitializeMounts then self:InitializeMounts() end
     self:CreateLauncher()
     self:InitializeUpdates()
-    if self.InitializeSharing then self:InitializeSharing() end
 end
 
 -- Three states: nil removes the override; 0 explicitly hides; positive ID replaces it.
@@ -917,7 +916,7 @@ V.events:RegisterEvent("MERCHANT_CLOSED")
 V.events:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == "SaureksCloset" then V:Initialize()
     elseif V.ready and event == "PLAYER_LEAVING_WORLD" then
-        if V.StopSharingSession then V:StopSharingSession() end
+        V.worldPaused=true
     elseif V.ready and (event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST") then
         V:QueueRespawnRecovery(event)
     elseif V.ready and event == "MERCHANT_SHOW" then
@@ -947,7 +946,7 @@ V.events:SetScript("OnEvent", function()
         V:RefreshPortraits();V:RefreshPreviewForModelEvent()
     elseif V.ready and (event == "PLAYER_ENTERING_WORLD" or (event == "UNIT_INVENTORY_CHANGED" and arg1 == "player")) then
         if event == "PLAYER_ENTERING_WORLD" then
-            V.sharingWorldPaused=nil
+            V.worldPaused=nil
             V:CheckArmorRepairs()
             V.appliedRace = nil;V.bagTunerSynced={};V:RefreshTrueBody();V:RefreshBody()
             V:RefreshPortraits();V:InvalidatePreviewModel(.25,true)
@@ -974,7 +973,6 @@ V.events:SetScript("OnUpdate", function()
     if V.SyncHaircraft then V:SyncHaircraft() end
     if V.SyncSecondHat then V:SyncSecondHat() end
     if V.SyncCasting then V:SyncCasting() end
-    if V.UpdateSharing then V:UpdateSharing() end
     if V.armorRepairCheckPending then
         V.armorRepairCheckPending=nil
         V:CheckArmorRepairs()

@@ -36,7 +36,7 @@ VanityStudioCharacter.selected[16]=nil;equipped=nil;assert(V:CastingWeapon()==0)
 equipped=100;assert(V:CastingWeapon()==0,'Ranged items cannot be treated as a staff')
 equipped=35;VanityStudioCharacter.enabled=false;assert(V:SyncCasting() and calls[#calls][1]==0)
 VanityStudioCharacter.enabled=true;assert(V:SyncCasting() and calls[#calls][1]==1)
-V.sharingWorldPaused=true;local count=#calls;assert(not V:SyncCasting() and #calls==count);V.sharingWorldPaused=nil
+V.worldPaused=true;local count=#calls;assert(not V:SyncCasting() and #calls==count);V.worldPaused=nil
 SaureksClosetCastingVersion=nil;assert(not V:SetCasting('enabled',false) and V:CastingConfig().enabled)
 SaureksClosetCastingVersion=function() return 1 end
 V:ClearAll();assert(not V:CastingConfig().enabled and calls[#calls][1]==0)

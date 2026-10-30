@@ -35,5 +35,5 @@ c.trimHair=true;c.selected[1]=0;V:SyncHairMask();assert(calls[#calls][1]==0)
 -- An old DLL must be actively told to discard its already-applied plane bake.
 SaureksClosetHairMaskVersion=function() return 2 end
 assert(not V:HairMaskAvailable() and not V:SyncHairMask());assert(calls[#calls][1]==0 and calls[#calls][2]==90)
-local previous=#calls;V.sharingWorldPaused=true;assert(not V:SyncHairMask() and #calls==previous)
+local previous=#calls;V.worldPaused=true;assert(not V:SyncHairMask() and #calls==previous)
 print('PASS: automatic fitting, no trim menu, ignored destructive presets, hat/style changes, pending loads, disable/hidden and old DLL cleanup')

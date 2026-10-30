@@ -25,7 +25,7 @@ Build 5875 evidence (verified against the installed executable):
   DBC row, helmet attachment, facial groups, inventory fields, or saved hair.
 - Ownership is restricted to the local player's ordinary body or a registered
   Closet preview belonging to that player. Other players and shapeshifts use
-  their normal visibility. This preference is not sent through look sharing.
+  their normal visibility.
 
 `SaureksClosetSetHaircraft(0|1)` is idempotent and rebuilds the local compositor
 only when the effective preference changes. Lua invalidates its preview on a
@@ -43,8 +43,7 @@ visual evaluation in the running game.
 **Adjust hat** opens the shared precision tuner without leaving Haircraft. It
 offers live lateral/longitudinal/vertical offsets, three rotation axes, size,
 relative editing, individual resets, Save Fit, Load Saved, and Default. Target
-111 uses separate `hatTuningEntries`; weapon entries and sharing's weapon fit
-mask retain their original ten slots. Fits follow the existing account profile
+111 uses separate `hatTuningEntries`; weapon entries retain their original ten slots. Fits follow the existing account profile
 format, keyed by race and gender, and apply to hats worn with that body. They
 work independently of the keep-hair switch. The overall addon/live-tuning
 switches suspend placement overrides. Save Fit persists an edit; Default
@@ -111,8 +110,7 @@ skinning weights, skin patches, skeletons, attachments and animation tracks are
 unchanged. It does not create open cutting boundaries. Existing cape motion
 bakes remain the source when active. Cached `H1_*.m2` files are content-addressed
 and process-allowlisted; shared resources and source files remain untouched.
-World/previews retain the existing owner/body/style isolation. Fitting is local
-and is not transmitted by sharing.
+World/previews retain the existing owner/body/style isolation. Fitting is local.
 
 Returned status is 0 while capturing, 1 for loaded/off, 2 for no hat, 3 while
 loading, 4 when no solid hat surface is available (no unchanged copy is

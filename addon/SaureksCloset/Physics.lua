@@ -90,7 +90,7 @@ end
 function V:SyncPhysics()
     local c=VanityStudioCharacter;if not c then return end
     c.calmCape=nil;c.bodyAnimationStyle=nil;c.bodyAnimationEnabled=nil;c.capeAnimationStyle=nil;c.capeAnimationEnabled=nil
-    if self.sharingWorldPaused or not self:PhysicsControlsAvailable() then return end
+    if self.worldPaused or not self:PhysicsControlsAvailable() then return end
     pcall(SaureksClosetSetWeaponPhysics,c.enabled and c.weaponPhysics and 1 or 0,
         self:WeaponPhysicsAmount("weaponBounce",0),self:WeaponPhysicsAmount("weaponRocking",0),self:WeaponPhysicsAmount("weaponJumpLift",0))
     if self:PhysicsControlsAvailable(3) and type(SaureksClosetSetWeaponSlotPhysics)=="function" then

@@ -1751,7 +1751,6 @@ function V:CreateSettingsPage(p)
     self.autoUpdatesDescription:SetFont("Fonts\\FRIZQT__.TTF",11)
     self.autoUpdatesDescription:SetTextColor(.8,.8,.8)
 
-    if self.CreateSharingSettings then self:CreateSharingSettings(privacy,label,edit,settingsButton) end
 
     local updates=self.infoPages.updates
     self.addonVersionsHeading=label(updates,"This PC's Version",30,80,284,18)

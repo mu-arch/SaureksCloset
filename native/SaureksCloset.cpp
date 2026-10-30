@@ -100,7 +100,6 @@ static bool snapshot(Player& p){
         read(p.fields+0x24*4,p.identity)&&read(p.fields+0xC1*4,p.body)&&read(p.fields+0xC2*4,p.facial)&&
         read(p.unit+0xD8,p.model)&&read(p.unit+0xD30,p.component);
 }
-#include "SharingAppearance.h"
 static bool applies(const Player& p){
     return state.enabled&&state.guid==p.guid&&p.display==p.native&&nativeModel(p.native);
 }
@@ -124,7 +123,7 @@ static void* __fastcall visibleItemHook(void* unit,void*,int slot){
     if(equipmentUICaller(caller,slot)){
         Player p;if(snapshot(p))localPlayer=p.unit;
     }
-    return sharedVisibleItem(unit,slot,caller,equipmentUIVisibleItem(unit,slot,caller,localPlayer,visibleItemOriginal));
+    return equipmentUIVisibleItem(unit,slot,caller,localPlayer,visibleItemOriginal);
 }
 static bool __fastcall tabardDisplayHook(void* unit,void*,unsigned display){
     Player p;
@@ -152,10 +151,7 @@ static const char* __fastcall nameHook(void* unit,void*){
         const auto* cape=localCapeMotionModel(name);
         return p.display==p.native&&body?hairMask::model(cape,p.guid,(body->race-1)*2+body->sex+1,style):cape;
     }
-    const auto* name=sharedName(reinterpret_cast<std::uintptr_t>(unit));if(!name)name=nameOriginal(unit);
-    const auto* remote=sharedForUnit(reinterpret_cast<std::uintptr_t>(unit));
-    if(remote){const auto& c=remote->snapshot.look.cape;return capeMotion::model(name,c[0]!=0,{{c[1],c[2],c[3],c[4]}},remote->snapshot.look.capeAdvanced);}
-    return name;
+    return nameOriginal(unit);
 }
 static bool __fastcall initHook(void* component,void*,const std::uint32_t* input){
     Player p;std::array<std::uint32_t,91> copy;
@@ -166,7 +162,6 @@ static bool __fastcall initHook(void* component,void*,const std::uint32_t* input
         if(result){state.unit=p.unit;state.model=p.model;state.ratio=state.body.model()->scale/nativeModel(p.native)->scale;state.composed=state.revision;}
         return result;
     }
-    if(!sharedAppearances.empty()&&read(reinterpret_cast<std::uintptr_t>(input),copy)&&sharedCompose(reinterpret_cast<std::uintptr_t>(component),copy))return initOriginal(component,copy.data());
     return initOriginal(component,input);
 }
 static int __fastcall changedHook(void* unit,void*){
@@ -184,8 +179,6 @@ static void __fastcall transformHook(void* model,void*,const float* position,flo
             transformOriginal(model,position,angle,axis,adjusted,smoothPosition);return;
         }
     }
-    const auto ratio=sharedScale(reinterpret_cast<std::uintptr_t>(model));
-    if(ratio!=1){const float adjusted[]={scale[0]*ratio,scale[1]*ratio,scale[2]*ratio};transformOriginal(model,position,angle,axis,adjusted,smoothPosition);return;}
     transformOriginal(model,position,angle,axis,scale,smoothPosition);
 }
 static void __fastcall matrixHook(void* model,void*,const float* matrix){
@@ -197,10 +190,6 @@ static void __fastcall matrixHook(void* model,void*,const float* matrix){
             scaleBasis(copy,state.body.model()->scale/nativeModel(p.native)->scale);
             matrixOriginal(model,copy.data());return;
         }
-    }
-    if(reinterpret_cast<std::uintptr_t>(__builtin_return_address(0))==0x607BC8){
-        const auto ratio=sharedScale(reinterpret_cast<std::uintptr_t>(model));std::array<float,16> copy;
-        if(ratio!=1&&read(reinterpret_cast<std::uintptr_t>(matrix),copy)){scaleBasis(copy,ratio);matrixOriginal(model,copy.data());return;}
     }
     matrixOriginal(model,matrix);
 }
@@ -433,7 +422,6 @@ static int __fastcall weaponryProbe(void* L){
 #include "MountSoundsRenderer.h"
 #include "SecondHatRenderer.h"
 #include "UpdateChecker.h"
-#include "SharingRuntime.h"
 #include "VoiceRenderer.h"
 #include "HairMaskRuntime.h"
 static int __fastcall setCapeMotionLua(void* L){
@@ -476,8 +464,6 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
         registerOriginal("SaureksClosetPhysicsVersion",reinterpret_cast<std::uintptr_t>(&physicsVersion));
         registerOriginal("SaureksClosetSetWeaponSlotPhysics",reinterpret_cast<std::uintptr_t>(&setWeaponSlotPhysicsLua));
         registerOriginal("SaureksClosetSetWeaponPhysics",reinterpret_cast<std::uintptr_t>(&setWeaponPhysicsLua));
-        registerOriginal("SaureksClosetConfigureSharing",reinterpret_cast<std::uintptr_t>(&configureSharing));
-        registerOriginal("SaureksClosetUpdateSharing",reinterpret_cast<std::uintptr_t>(&updateSharing));
         registerOriginal("SaureksClosetSetAppearance",reinterpret_cast<std::uintptr_t>(&setAppearance));
         registerOriginal("SaureksClosetClearAppearance",reinterpret_cast<std::uintptr_t>(&clearAppearance));
         registerOriginal("SaureksClosetRealBody",reinterpret_cast<std::uintptr_t>(&bodyInfo));

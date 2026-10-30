@@ -16,8 +16,8 @@ The current actor/render transforms and child-local fit are removed before motio
 and restored afterward. Unusual nonuniform/sheared/reflected authored matrices
 fall back untouched rather than being normalized into a different shape.
 
-Only recognized, visible stowed/body-carried weapons in owned player or opted-in
-shared contexts are eligible. Hands, quivers, other props and stationary previews
+Only recognized, visible stowed/body-carried weapons belonging to the local
+player are eligible. Hands, quivers, other props and stationary previews
 keep native transforms. Drawing, hiding, disabling, changing attachment points,
 model destruction and context rebuilds reset motion history. Idle settles using
 the bag solver's existing quiet-stop behavior. Native sheath/draw routing remains
@@ -28,11 +28,9 @@ assets and options are removed. Models always use their normal native animations
 Old saved cape/race preferences are cleared during physics synchronization.
 
 The Lua bridge exports SaureksClosetPhysicsVersion (1) and
-SaureksClosetSetWeaponPhysics (0/1). Sharing wire version 4 uses appearance flag 4
-for weapon physics; bytes 85–87 are reserved again. Older wire versions are
-rejected so retired cape flags cannot accidentally turn weapon physics on.
+SaureksClosetSetWeaponPhysics (0/1).
 
 Tests cover real attachment routing plus running/walking response, rigid shape,
 idle, jumping, duplicate frames, camera/root transforms, ownership, hand exclusion,
-previews, toggle/reset, remote settings and the removed feature/package boundary.
+previews, toggle/reset, local ownership and the removed feature/package boundary.
 These are renderer simulations; final visual tuning still requires in-game review.
