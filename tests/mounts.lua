@@ -12,6 +12,8 @@ GetPlayerBuff=function(i,filter) assert(filter=='HELPFUL');buffQueries=buffQueri
 GetPlayerBuffTexture=function(i) return auras[i+1].icon end
 local serverMount,shownMount,override=0,0,nil
 local calls,fail=0,false
+local selectedSound=0
+SaureksClosetSetMountSound=function(display) selectedSound=display;return 1 end
 SetUnitMountDisplayID=function(unit,id)
     assert(unit=='player');calls=calls+1
     if fail then error('temporarily unavailable') end
@@ -77,6 +79,7 @@ V.mountPage=1;V:RefreshMountsPage()
 local first=V.mountButtons[1]
 run(first,'OnClick')
 assert(VanityStudioCharacter.mount==first.mount.id and V:HasUnsavedLookChanges())
+assert(selectedSound==first.mount.id,'Arm summon audio while still on foot, before the aura/event sound')
 assert(calls==0 and shownMount==0,'Selecting a mount while on foot must not summon a cosmetic mount')
 V:RefreshMountsPage();assert(first.selected:IsShown() and V.mountOriginal.closetEnabled)
 assert(V:SaveOutfit('Wolf',false))
@@ -97,12 +100,12 @@ server(0);aura(nil);V:SyncMount()
 assert(not override and shownMount==0 and not VanityStudioCharacter.mountManaged)
 server(1166);aura('Arctic Wolf','Interface\\Icons\\Ability_Mount_WhiteDireWolf');V:SyncMount();assert(override==2404)
 -- Taxi transitions must release the override and restore it when the taxi ends.
-taxi=true;V:SyncMount();assert(not override and shownMount==1166)
+taxi=true;V:SyncMount();assert(not override and shownMount==1166 and selectedSound==0)
 taxi=false;V:SyncMount();assert(override==2404)
 -- Addon disable/enable and original selection restore the server value.
-VanityStudioCharacter.enabled=false;V:SyncMount();assert(not override and shownMount==1166)
+VanityStudioCharacter.enabled=false;V:SyncMount();assert(not override and shownMount==1166 and selectedSound==0)
 VanityStudioCharacter.enabled=true;V:SyncMount();assert(override==2404)
-assert(V:SetMountAppearance(nil));assert(not override and shownMount==1166)
+assert(V:SetMountAppearance(nil));assert(not override and shownMount==1166 and selectedSound==0)
 -- Shared nonmount icons cannot create a mount, even while a display is present.
 server(0);aura('Power Word: Shield','Interface\\Icons\\Spell_Holy_PowerWordShield')
 assert(V:SetMountAppearance(2404));assert(not override)
@@ -121,9 +124,13 @@ fail=false;V:SyncMount();assert(not V.mountError and override==2404)
 VanityStudioCharacter.mount=nil;V.mountApplied=nil;V:SyncMount();assert(not override)
 -- Re-entering/zoning respects the saved look without affecting other units.
 assert(V:SetMountAppearance(1166));event='PLAYER_LEAVING_WORLD';run(V.mountEvents,'OnEvent')
-assert(V.mountSuspended and not override)
+assert(V.mountSuspended and not override and selectedSound==0)
 event='PLAYER_ENTERING_WORLD';run(V.mountEvents,'OnEvent');assert(not V.mountSuspended and override==1166)
 -- Blank looks clear mounts; stored inactive looks keep theirs.
 V:ClearAll();assert(not override and not VanityStudioCharacter.mount)
 assert(VanityStudioDB.outfits.Horse.settings.mount==2404)
+local soundBridge=SaureksClosetSetMountSound
+SaureksClosetSetMountSound=nil;assert(V:SetMountAppearance(2404));V:RefreshMountsPage()
+assert(V.mountSoundError and string.find(V.mountStatus.text,'DLL',1,true),'Old DLL should explain why audio still needs an update')
+SaureksClosetSetMountSound=soundBridge;V:SyncMount();assert(not V.mountSoundError and selectedSound==2404)
 print('PASS: mount catalog, icon picker/search/paging, look saves, mounted-only overrides, dismount/taxi/disable/reload/zoning, idempotence, errors and helper gating')

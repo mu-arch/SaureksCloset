@@ -15,6 +15,14 @@ function V:MountsAvailable()
     return type(SetUnitMountDisplayID)=="function" and type(UnitDisplayInfo)=="function"
         and type(GetPlayerBuff)=="function" and type(GetPlayerBuffTexture)=="function"
 end
+function V:SyncMountSound(id)
+    if type(SaureksClosetSetMountSound)~="function" then
+        self.mountSoundError=id and "Update the DLL and restart for mount sounds." or nil
+        return
+    end
+    local ok,status=pcall(SaureksClosetSetMountSound,id or 0)
+    self.mountSoundError=(not ok or status~=1) and "Mount sounds are waiting for the renderer." or nil
+end
 function V:MountAuraActive()
     if not self:MountsAvailable() then return false end
     for i=0,31 do
@@ -50,6 +58,11 @@ function V:SyncMount()
     if not c or self.mountSyncing then return end
     self.mountSyncing=true
     local entry=c.mount and self:MountCatalogIndex()[c.mount]
+    -- Arm the sound before the mounted aura arrives: precast/release sounds
+    -- happen before the cosmetic model is applied. No sound is played in Lua.
+    local soundActive=not self.mountSuspended and c.enabled and entry and self:MountsAvailable() and
+        not (UnitOnTaxi and UnitOnTaxi("player")) and not (UnitIsDeadOrGhost and UnitIsDeadOrGhost("player"))
+    self:SyncMountSound(soundActive and entry.id or nil)
     if self.mountSuspended or not c.enabled or not entry or not self:MountsAvailable() or
         (UnitOnTaxi and UnitOnTaxi("player")) or (UnitIsDeadOrGhost and UnitIsDeadOrGhost("player")) or not self:MountAuraActive() then
         self:ReleaseMount()
@@ -88,7 +101,7 @@ function V:RefreshMountsPage()
     local selected=self:MountCatalogIndex()[VanityStudioCharacter.mount]
     self.mountCurrent:SetText(selected and selected.name or "Original mount")
     self.mountEnable(self.mountOriginal,VanityStudioCharacter.mount~=nil)
-    self.mountStatus:SetText(not available and "Update VanillaHelpers.dll to change mounts." or self.mountError or "")
+    self.mountStatus:SetText(not available and "Update VanillaHelpers.dll to change mounts." or self.mountError or self.mountSoundError or "")
     local matches=self:FilterMounts(self.mountSearch:GetText())
     local pageSize=table.getn(self.mountButtons)
     local pages=math.max(1,math.ceil(table.getn(matches)/pageSize))
@@ -170,8 +183,8 @@ function V:InitializeMounts()
     f:SetScript("OnUpdate",function()
         if not V.ready then return end
         elapsed=elapsed+(arg1 or 0);if elapsed<.25 then return end;elapsed=0
-        local previous=V.mountError;V:SyncMount()
-        if previous~=V.mountError then V:RefreshMountsPage() end
+        local previous,previousSound=V.mountError,V.mountSoundError;V:SyncMount()
+        if previous~=V.mountError or previousSound~=V.mountSoundError then V:RefreshMountsPage() end
     end)
     self:SyncMount()
 end

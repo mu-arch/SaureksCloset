@@ -28,3 +28,10 @@ assert next(e for e in entries if e['id']==2404)['icon']=='Interface\\Icons\\Abi
 toc=(root/'addon/SaureksCloset/SaureksCloset.toc').read_text().splitlines()
 assert toc.index('Core.lua')<toc.index('MountCatalog.lua')<toc.index('Mounts.lua')<toc.index('UI.lua')
 print('PASS: 109 unique mount displays, all 126 client mounted spells, validated names/icons/models, pinned provenance and load ordering')
+
+# Sound selection uses the same current spell as each catalog entry. These are
+# display IDs, not creature/item/spell IDs, and native lookup expects sorting.
+sounds=(root/'native/MountSoundCatalog.h').read_text()
+pairs=[tuple(map(int,r)) for r in re.findall(r'^\{(\d+),(\d+)\},$',sounds,re.M)]
+assert pairs==sorted((e['id'],e['spells'][-1]) for e in entries)
+print('PASS: every mount appearance has the matching current spell for native summon sounds')

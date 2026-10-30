@@ -430,6 +430,7 @@ static int __fastcall weaponryProbe(void* L){
 #include "WeaponRenderer.h"
 #include "ProjectileRenderer.h"
 #include "CastingRenderer.h"
+#include "MountSoundsRenderer.h"
 #include "SecondHatRenderer.h"
 #include "UpdateChecker.h"
 #include "SharingRuntime.h"
@@ -462,6 +463,7 @@ static void __fastcall registerHook(const char* name,std::uintptr_t function){
     if(name&&std::strcmp(name,"SetUnitVisibleItemID")==0){
         registerOriginal("SaureksClosetSecondHatVersion",reinterpret_cast<std::uintptr_t>(&secondHatVersionLua));
         registerOriginal("SaureksClosetSetSecondHat",reinterpret_cast<std::uintptr_t>(&setSecondHatLua));
+        registerOriginal("SaureksClosetSetMountSound",reinterpret_cast<std::uintptr_t>(&setMountSoundLua));
         castingVisualFilter=&castingAugmentVisual;
         castingAttachmentFilter=&castingForwardAttachment;
         registerOriginal("SaureksClosetCastingVersion",reinterpret_cast<std::uintptr_t>(&castingVersionLua));
@@ -510,7 +512,7 @@ BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID){
     struct Hook {std::uintptr_t address;void* replacement;void** original;};
     Hook hooks[]={
         {0x7121A0,reinterpret_cast<void*>(&castingSequenceHook),reinterpret_cast<void**>(&castingSequenceOriginal)},
-        {0x60EDF0,reinterpret_cast<void*>(&castingKitHook),reinterpret_cast<void**>(&castingKitOriginal)},
+        {0x60EDF0,reinterpret_cast<void*>(&mountSoundKitHook),reinterpret_cast<void**>(&castingKitOriginal)},
         {0x60ED40,reinterpret_cast<void*>(&castingEffectHook),reinterpret_cast<void**>(&castingEffectOriginal)},
         {0x611CF0,reinterpret_cast<void*>(&castingSheathHook),reinterpret_cast<void**>(&castingSheathOriginal)},
         {0x712CB0,reinterpret_cast<void*>(&castingHasPointHook),reinterpret_cast<void**>(&castingHasPointOriginal)},
