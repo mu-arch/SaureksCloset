@@ -1,4 +1,4 @@
-# Building Saurek's Closet 4.3.1
+# Building Saurek's Closet 4.3.2
 
 The Lua addon is in `addon/SaureksCloset/`. The native renderer uses C++17 and MinHook; generated headers and build signatures are included.
 
@@ -216,3 +216,14 @@ attachment, remains separate from real equipment and the primary hat, and has
 independent preview ownership and per-look saving. Toggle Hair also saves with
 the current look. Native and Lua regression checks cover these paths, missing
 DLL support, lifecycle cleanup, and the second-hat button and picker.
+
+### Release 4.3.2
+
+Addon 4.3.2 and renderer 40302 correct stowed two-handed sword orientation in
+the Character window, retain the weapon grip when casting without a swing,
+restore tabard emblems, and match mount summon sounds to the cosmetic mount.
+Transmog sharing code is removed. Attachment filtering, cape checksums, mesh
+reads, armor inspection, and placement synchronization avoid redundant work
+while retaining appearance updates and recovery behavior. Regression checks
+cover those paths, byte-identical cape output, and placement dispatch ordering
+and retries. The upstream README and screenshots are packaged unchanged.

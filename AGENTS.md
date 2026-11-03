@@ -11,6 +11,9 @@
   documentation together. README is exempt. Preserve historical version references
   and minimum-compatible-renderer thresholds.
 - Build and run the release/package checks before pushing and publishing.
+- After every release push/publication, remind the user to update the version
+  number in the README to the published version. Include the exact new version
+  in the reminder. Leave the README version edit to the user.
 
 # Shared window layout
 

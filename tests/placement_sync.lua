@@ -6,7 +6,7 @@ function V:Copy(t) local r={};for k,v in pairs(t or {}) do r[k]=type(v)=="table"
 local supportedHat=true
 function V:HatTuningAvailable() return supportedHat end
 function V:NativeBody() return {race=1,sex=1} end
-SaureksClosetRendererVersion=function() return 40301 end
+SaureksClosetRendererVersion=function() return 40302 end
 SaureksClosetGetBagFitDefaults=function() return 1 end
 local calls,failed,liveCalls={},false,0
 SaureksClosetSetBagFit=function(...) local a=arg;table.insert(calls,table.concat(a,":"));return failed and -1 or 1 end

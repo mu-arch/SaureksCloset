@@ -14,7 +14,7 @@ local calls,fitVisits={},0
 local function native(name,result)
     return function() calls[name]=(calls[name] or 0)+1;return result or 1 end
 end
-for _,entry in ipairs({{'RendererVersion',40301},{'PhysicsVersion',4},{'CastingVersion',1},{'HairMaskVersion',3},
+for _,entry in ipairs({{'RendererVersion',40302},{'PhysicsVersion',4},{'CastingVersion',1},{'HairMaskVersion',3},
     {'GetBagFitDefaults'},{'SetBagFit'},{'SetWeaponPhysics'},{'SetWeaponSlotPhysics'},{'SetCapeMotion'},
     {'SetHaircraft'},{'SetHairMask'},{'SetSecondHat'},{'SetCasting'}}) do
     _G['SaureksCloset'..entry[1]]=native(entry[1],entry[2])
